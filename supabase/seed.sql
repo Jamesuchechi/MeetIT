@@ -1,0 +1,2 @@
+-- Authenticated users and their rooms are created through the application.
+-- Local database reset intentionally starts with an empty product dataset.
