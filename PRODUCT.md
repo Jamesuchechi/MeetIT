@@ -114,7 +114,11 @@ Join by link, lobby, mute/camera, screen share, chat, grid and speaker view, hos
 ### Tier 2: Differentiators (why people switch)
 
 - **Network resilience suite:** audio-first adaptation, data saver, audio-only, automatic ICE recovery, pre-call network test, live quality coaching ("Your upload is weak, switching to audio-only keeps you in the call").
-- **Meeting intelligence:** live captions, transcript, summary, decisions, action items, searchable meeting memory.
+- **Meeting Notes & Intelligence Suite:**
+  - **Automated AI Notes:** Structured post-meeting synthesis (TL;DR executive summary, timestamped key decisions, categorized action items with auto-assigned owners).
+  - **In-Call Collaborative Scratchpad:** Real-time shared notes dock where participants capture agenda items, thoughts, and live notes (Yjs/CRDT synced).
+  - **Notes & Meeting Memory Hub:** Dedicated Notes archive in both desktop sidebar and mobile navigation, enabling instant search across past meeting notes, summaries, and action checklists without downloading heavy video files.
+  - **Zero-Friction Export & Sync:** One-click markdown copy, email digest to attendees, and direct export to Notion, Linear, Slack, and Google Docs.
 - **FormIT-powered engagement:** launch forms as polls/quizzes, collect structured feedback, attach results to the meeting record.
 - **Embeddable platform:** SDK, API, webhooks, bots.
 - **Privacy tools:** E2EE rooms, relay-only mode, region choice, clear consent.

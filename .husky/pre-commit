@@ -1,1 +1,10 @@
+if ! command -v pnpm >/dev/null 2>&1; then
+  for bin in "$HOME"/.nvm/versions/node/*/bin; do
+    if [ -x "$bin/pnpm" ]; then
+      export PATH="$bin:$PATH"
+      break
+    fi
+  done
+fi
+
 pnpm exec lint-staged

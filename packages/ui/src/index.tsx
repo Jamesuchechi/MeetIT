@@ -23,6 +23,9 @@ export const tokens = {
   motion: { fast: '120ms', normal: '200ms', slow: '300ms' },
 } as const;
 
+export { Logo, LogoMark } from './Logo';
+export type { LogoProps } from './Logo';
+
 export function Button(props: ButtonHTMLAttributes<HTMLButtonElement>) {
   return (
     <button

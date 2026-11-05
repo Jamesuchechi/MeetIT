@@ -127,6 +127,13 @@ Every phase has an **exit criteria** block. Do not start the next phase until ex
 - [ ] [P1] Room title and description, shown in lobby
 - [ ] [P2] Room passcode option
 
+### Meeting Notes & Action Items Hub
+
+- [ ] [P0] Dedicated Notes view in web dashboard (search, filter by meeting, view summaries)
+- [ ] [P1] Action items manager: track open/completed tasks from past meetings with checkbox sync
+- [ ] [P1] Markdown export and quick-copy for notes & meeting summaries
+- [ ] [P1] Mobile bottom navigation and sidebar link for instant 1-tap Notes access
+
 ### Host controls
 
 - [ ] [P0] Roles: host, cohost, attendee, guest (server authoritative)
@@ -199,13 +206,15 @@ Every phase has an **exit criteria** block. Do not start the next phase until ex
 - [ ] [P1] Transcript export: TXT, SRT, VTT, DOCX
 - [ ] [P2] Custom vocabulary (names, jargon)
 
-### AI meeting notes
+### AI meeting notes & intelligence
 
+- [ ] [P0] Automated post-meeting notes generation (executive summary, key decisions, action items with owners)
 - [ ] [P1] Summary, decisions, action items with owners (LLM over transcript)
 - [ ] [P1] Chapters and highlights with timestamp links
-- [ ] [P1] Email summary to attendees after meeting
+- [ ] [P1] Searchable notes memory across all meetings in dashboard
+- [ ] [P1] Email summary and action items digest to attendees after meeting
 - [ ] [P2] "Ask the meeting": Q&A over transcript with citations to timestamps
-- [ ] [P2] Auto-create tasks in integrations (see Phase 9)
+- [ ] [P2] Auto-create tasks in integrations (Linear, Notion, Asana, Google Docs - see Phase 9)
 
 **Exit criteria:** Recording available within 5 minutes of meeting end; caption word error rate under 12% on a mixed-accent test set; summary accuracy rated 4/5 or better by internal reviewers.
 
@@ -363,6 +372,73 @@ Each bet starts as an `[R]` spike with a one-page writeup and a kill criterion.
 - [ ] [R] **Emotion and engagement analytics** (opt-in only, privacy-first, on-device) for presenters
 - [ ] [R] **Universal translator rooms:** every participant speaks and hears their own language with preserved voice and timing
 - [ ] [R] **Accessibility-first modes:** real-time sign-language avatar rendering, haptic cues for hard-of-hearing users, cognitive-load simplification
+
+---
+
+## Phase 14 - Expansion bets (after Phase 4 exit criteria pass)
+
+Do not start any bet until the SFU is stable (Phase 4). Every bet begins as a one-week `[R]` spike with a one-page writeup, a success metric, and a kill criterion. Work tiers in order, keep at most two bets in flight, and remove a shipped bet that misses its metric 90 days after launch.
+
+### Tier A: reinforce reliability (the differentiator)
+
+- [ ] [R] **Slides as data:** upload a PDF or PPTX and present it as a synced document (pages rendered once, page changes sent over the data channel) instead of screen share; viewers can flip back on their own; fall back to screen share if rendering fails
+  - Success: 40% of presenter sessions with a deck use it; page-change latency under 300 ms. Kill: under 10% adoption after 90 days.
+- [ ] [R] **Catch me up:** late joiners and anyone who dropped for 30 s or more get a short live summary of what they missed, with timestamp links (builds on Phase 5 captions and summaries)
+  - Success: 60% of late joiners open it and 70% rate it helpful. Kill: helpfulness under 50% after two prompt and model iterations.
+- [ ] [R] **Local double-ender recording:** each participant's browser records its own audio and video locally and uploads it after the call, so the recording stays clean even when the live call degraded (builds on Phase 5 ISO tracks)
+  - Success: upload success above 95%; used for 20% of recordings. Kill: upload failures above 15% or support load too high.
+- [ ] [R] **Dial-in and call-me-back:** phone number for audio-only participants (SIP trunk into LiveKit) plus a "call me" option when data fails
+  - Success: 5% of meetings include a phone participant; cost per dial-in minute stays under what it earns. Kill: under 1% usage or cost per minute above revenue.
+- [ ] [R] **Async-first meetings:** record a short video message or a meeting, then let people reply with video comments and reactions pinned to transcript moments
+  - Success: 25% of hosts send an async message monthly; reply rate above 50%. Kill: under 5% of hosts try it within 60 days.
+
+### Tier B: revenue and workflow
+
+- [ ] [R] **Booking pages with payments:** Calendly-style page where clients pick a slot and pay to book (Stripe, Paystack, Flutterwave); reuses Phase 3 scheduling and Phase 7 payments
+  - Success: 15% of Pro hosts publish a page; paid-booking conversion above 20%. Kill: under 3% adoption.
+- [ ] [R] **FormIT intake in the waiting room:** guests complete a FormIT form before the host admits them; answers show next to their name and attach to the meeting record (extends the Phase 6 FormIT integration)
+  - Success: 20% of hosts using a waiting room attach a form. Kill: under 5%.
+- [ ] [R] **Meeting templates:** presets for standups, 1:1s, retros, and client calls, each with agenda, timers, and a notes scaffold
+  - Success: 30% of scheduled meetings use a template. Kill: under 8%.
+- [ ] [R] **Action-item tracking across meetings:** the next meeting with the same people opens with the unfinished items from the last one
+  - Success: 50% of action items are acknowledged or closed within 7 days. Kill: under 15% of items ever touched.
+- [ ] [R] **Meeting analytics:** talk-time balance, meeting load per person, total time spent, and a "should this be a meeting?" nudge when scheduling
+  - Success: 30% of hosts view analytics monthly; nudge accepted above 10% of the time. Kill: under 5% view it.
+
+### Tier C: vertical bets (pick at most one, validate with pilots first)
+
+- [ ] [R] **Interviews:** shared code editor with execution, scorecards, question banks, ATS export
+- [ ] [R] **Telehealth and tutoring:** consent flows, session notes, payments, whiteboard
+- [ ] [R] **Creator studio:** backstage rooms, guest links, multi-destination streaming (builds on Phase 7)
+- [ ] [R] **Support:** embeddable click-to-call widget with co-browsing and annotations (builds on Phase 9 SDK)
+  - Success for any vertical: 10 paying accounts within 90 days of a pilot. Kill: fewer than 3 after the pilot.
+
+### Tier D: accessibility and language
+
+- [ ] [R] **Human interpreter channels:** separate audio channels per language with a "listen in" selector, alongside the AI translation planned in Phase 8
+- [ ] [R] **Local-language captions:** support under-served languages with a fine-tuned or specialist STT model
+  - Success: word error rate under 20% on a held-out set per language. Kill: cannot reach 25% after two model attempts.
+- [ ] [R] **Live human captioner (CART) and sign-interpreter slots:** invite roles with a dedicated caption input and pinned interpreter video
+- [ ] [R] **Whisper mode:** private side audio and text between two participants, for coaching and interpreters
+
+### Tier E: trust and platform
+
+- [ ] [R] **MCP server for meeting memory:** let AI agents query transcripts, decisions, and action items with scoped, revocable permission (extends Phase 9 API and bots)
+  - Success: 100 active connected agents or keys. Kill: under 10 after 90 days.
+- [ ] [R] **Signed, tamper-evident recordings and transcripts:** hash chain plus signatures with a public verify page, for legal, HR, and arbitration use
+  - Success: 3 pilot organizations adopt it; verification works 100% of the time. Kill: no pilot demand.
+- [ ] [R] **Verified identity and impersonation protection:** verified-org badges, voice-clone scam warnings, and a "confirm this is really them" check
+- [ ] [R] **One-command self-hosting:** Docker Compose and a Helm chart for NGOs and institutions that need their own infrastructure
+  - Success: fresh install running in under 15 minutes by someone outside the project. Kill: maintenance burden exceeds one day a month.
+- [ ] [R] **Watermarked and view-only shares:** visible and invisible watermarks on shared screens and recordings for leak deterrence
+
+### Deliberately deferred (parking lot, revisit only with evidence)
+
+- Gamification and meeting "wellness scores": novelty without retention.
+- Bonding Wi-Fi and cellular connections: browsers cannot do it, so it only works in native apps (revisit after Phase 11).
+- Federation between MeetIT instances: high effort, no demand yet.
+
+**Exit criteria:** every shipped bet meets its success metric within 90 days of launch or is removed; no more than two bets in flight at once; core SLOs from PRODUCT.md stay green while bets ship.
 
 ---
 

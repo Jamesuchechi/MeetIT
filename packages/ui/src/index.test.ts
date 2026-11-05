@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { tokens } from './index.js';
+import { tokens, Logo, LogoMark } from './index.js';
 
 describe('UI tokens', () => {
   it('defines the base design primitives', () => {
@@ -7,5 +7,10 @@ describe('UI tokens', () => {
     expect(tokens.spacing[4]).toBe('1rem');
     expect(tokens.radius.md).toBe('0.5rem');
     expect(tokens.motion.normal).toBe('200ms');
+  });
+
+  it('exports Logo and LogoMark components', () => {
+    expect(typeof Logo).toBe('function');
+    expect(typeof LogoMark).toBe('function');
   });
 });
