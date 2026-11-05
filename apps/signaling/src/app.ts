@@ -6,8 +6,14 @@ import {
   clientMessageSchema,
   normalizeRoomCode,
   type ErrorCode,
+  type RoomPermissions,
 } from '@meetit/protocol';
-import { RoomManager, type Peer, type Room } from './room.js';
+import {
+  RoomManager,
+  computeTokenFingerprint,
+  type Peer,
+  type Room,
+} from './room.js';
 import { TokenBucketRateLimiter } from './rateLimiter.js';
 import { buildIceServers, type IceServerEnvConfig } from './turn.js';
 import { issueGuestToken, verifyJoinToken } from './auth.js';
@@ -155,6 +161,8 @@ export function buildSignalingApp(
       title?: string;
       description?: string;
       passcode?: string;
+      waitingRoom?: boolean;
+      permissions?: Partial<RoomPermissions>;
       maxParticipants?: number;
       kind?: 'instant' | 'scheduled' | 'personal';
       ownerId?: string;
@@ -164,11 +172,18 @@ export function buildSignalingApp(
     const requestedCode = body.code ? normalizeRoomCode(body.code) : null;
     const room = roomManager.createRoom({
       ...(requestedCode ? { code: requestedCode } : {}),
+      ...(typeof body.ownerId === 'string' && body.ownerId.trim().length > 0
+        ? { ownerId: body.ownerId.trim() }
+        : {}),
       ...(typeof body.title === 'string' ? { title: body.title } : {}),
       ...(typeof body.description === 'string'
         ? { description: body.description }
         : {}),
       ...(typeof body.passcode === 'string' ? { passcode: body.passcode } : {}),
+      ...(typeof body.waitingRoom === 'boolean'
+        ? { waitingRoom: body.waitingRoom }
+        : {}),
+      ...(body.permissions ? { permissions: body.permissions } : {}),
       ...(typeof body.maxParticipants === 'number'
         ? { maxParticipants: body.maxParticipants }
         : {}),
@@ -188,6 +203,8 @@ export function buildSignalingApp(
       ...(room.title ? { title: room.title } : {}),
       ...(room.description ? { description: room.description } : {}),
       hasPasscode: room.hasPasscode,
+      waitingRoom: room.permissions.waitingRoom,
+      permissions: room.permissions,
       locked: room.locked,
       full: room.isFull,
       participantCount: room.participantCount,
@@ -211,6 +228,7 @@ export function buildSignalingApp(
           exists: false,
           code: normalized,
           hasPasscode: false,
+          waitingRoom: false,
           locked: false,
           full: false,
           participantCount: 0,
@@ -223,6 +241,8 @@ export function buildSignalingApp(
         ...(room.title ? { title: room.title } : {}),
         ...(room.description ? { description: room.description } : {}),
         hasPasscode: room.hasPasscode,
+        waitingRoom: room.permissions.waitingRoom,
+        permissions: room.permissions,
         locked: room.locked,
         full: room.isFull,
         participantCount: room.participantCount,
@@ -282,11 +302,67 @@ export function buildSignalingApp(
     violations: number;
     room: Room | null;
     peer: Peer | null;
+    waitingPeerId: string | null;
     explicitlyLeft: boolean;
     authTimer: ReturnType<typeof setTimeout> | null;
   }
 
   const socketContexts = new Map<WebSocket, SocketContext>();
+
+  const sendJoinedPayloadToPeer = (
+    room: Room,
+    peer: Peer,
+    requestMsgId?: string,
+  ): void => {
+    const iceServers = buildIceServers(peer.id, iceConfig);
+    peer.send({
+      v: 1,
+      ...(requestMsgId ? { id: requestMsgId } : {}),
+      ts: Date.now(),
+      type: 'joined',
+      payload: {
+        selfId: peer.id,
+        role: peer.role,
+        peers: room.listOtherPeerInfos(peer.id),
+        iceServers,
+        transport: 'mesh',
+        roomState: {
+          locked: room.locked,
+          hostId: room.hostId,
+          ...(room.title ? { title: room.title } : {}),
+          ...(room.description ? { description: room.description } : {}),
+          permissions: { ...room.permissions },
+          ...(peer.role === 'host' || peer.role === 'cohost'
+            ? { waitingPeers: room.listWaitingPeerInfos() }
+            : {}),
+        },
+      },
+    });
+  };
+
+  const finalizeWaitingPeerAdmission = (
+    room: Room,
+    admittedPeer: Peer,
+  ): void => {
+    if (admittedPeer.socket) {
+      const wCtx = socketContexts.get(admittedPeer.socket);
+      if (wCtx) {
+        wCtx.peer = admittedPeer;
+        wCtx.waitingPeerId = null;
+        wCtx.room = room;
+      }
+    }
+    persistence.recordPeerJoined({
+      roomCode: room.code,
+      ...(room.title ? { roomTitle: room.title } : {}),
+      peerId: admittedPeer.id,
+      ...(admittedPeer.userId ? { userId: admittedPeer.userId } : {}),
+      displayName: admittedPeer.displayName,
+      role: admittedPeer.role,
+      currentParticipantCount: room.participantCount,
+    });
+    sendJoinedPayloadToPeer(room, admittedPeer);
+  };
 
   wss.on('connection', (ws: WebSocket) => {
     metrics.activeConnections += 1;
@@ -300,9 +376,10 @@ export function buildSignalingApp(
       violations: 0,
       room: null,
       peer: null,
+      waitingPeerId: null,
       explicitlyLeft: false,
       authTimer: setTimeout(() => {
-        if (!ctx.peer) {
+        if (!ctx.peer && !ctx.waitingPeerId) {
           sendError(
             ws,
             'UNAUTHORIZED',
@@ -421,6 +498,8 @@ export function buildSignalingApp(
           return;
         }
 
+        const tokenFingerprint = computeTokenFingerprint(token);
+
         const joinRes = room.joinPeer({
           socket: ws,
           displayName,
@@ -428,6 +507,7 @@ export function buildSignalingApp(
           ...(verifiedCaller.userId !== undefined
             ? { userId: verifiedCaller.userId }
             : {}),
+          tokenFingerprint,
           ...(state !== undefined ? { initialState: state } : {}),
           ...(passcode !== undefined ? { passcode } : {}),
           isAuthenticatedUser: verifiedCaller.verified,
@@ -439,7 +519,30 @@ export function buildSignalingApp(
         }
 
         ctx.room = room;
+
+        if (joinRes.status === 'waiting') {
+          ctx.waitingPeerId = joinRes.waiting.id;
+          if (ws.readyState === 1) {
+            ws.send(
+              JSON.stringify({
+                v: 1,
+                ...(msg.id ? { id: msg.id } : {}),
+                ts: Date.now(),
+                type: 'waiting.room',
+                payload: {
+                  roomCode: room.code,
+                  ...(room.title ? { title: room.title } : {}),
+                  message:
+                    'Waiting room is enabled. The host will let you in shortly.',
+                },
+              }),
+            );
+          }
+          return;
+        }
+
         ctx.peer = joinRes.peer;
+        ctx.waitingPeerId = null;
 
         persistence.recordPeerJoined({
           roomCode: room.code,
@@ -451,7 +554,6 @@ export function buildSignalingApp(
           currentParticipantCount: room.participantCount,
         });
 
-        const iceServers = buildIceServers(joinRes.peer.id, iceConfig);
         app.log.info(
           {
             traceId: ctx.traceId,
@@ -462,29 +564,20 @@ export function buildSignalingApp(
           'peer joined room',
         );
 
-        joinRes.peer.send({
-          v: 1,
-          ...(msg.id ? { id: msg.id } : {}),
-          ts: Date.now(),
-          type: 'joined',
-          payload: {
-            selfId: joinRes.peer.id,
-            role: joinRes.peer.role,
-            peers: room.listOtherPeerInfos(joinRes.peer.id),
-            iceServers,
-            transport: 'mesh',
-            roomState: {
-              locked: room.locked,
-              hostId: room.hostId,
-              ...(room.title ? { title: room.title } : {}),
-              ...(room.description ? { description: room.description } : {}),
-            },
-          },
-        });
+        sendJoinedPayloadToPeer(room, joinRes.peer, msg.id);
         return;
       }
 
-      // All subsequent message types require an active room & peer
+      // Allow waiting peer to leave gracefully
+      if (msg.type === 'leave' && ctx.room && ctx.waitingPeerId && !ctx.peer) {
+        ctx.explicitlyLeft = true;
+        ctx.room.removeWaitingSocket(ws);
+        ctx.room = null;
+        ctx.waitingPeerId = null;
+        return;
+      }
+
+      // All subsequent message types require an active room & admitted peer
       if (!ctx.room || !ctx.peer) {
         sendError(ws, 'UNAUTHORIZED', 'Must join a room before signaling.');
         return;
@@ -514,7 +607,6 @@ export function buildSignalingApp(
         case 'signal.answer': {
           const target = room.getPeer(msg.payload.to);
           if (target) {
-            // Note: never log SDP contents
             app.log.debug(
               {
                 traceId: ctx.traceId,
@@ -557,7 +649,21 @@ export function buildSignalingApp(
         }
 
         case 'state.update': {
-          peer.state = { ...msg.payload };
+          const nextState = { ...msg.payload };
+          if (
+            peer.role === 'guest' &&
+            nextState.screen &&
+            !room.permissions.allowGuestScreenShare
+          ) {
+            nextState.screen = false;
+            sendError(
+              ws,
+              'FORBIDDEN',
+              'Screen sharing is disabled for guests in this room.',
+            );
+          }
+
+          peer.state = nextState;
           room.broadcast(
             {
               v: 1,
@@ -574,6 +680,15 @@ export function buildSignalingApp(
         }
 
         case 'chat.send': {
+          if (peer.role === 'guest' && !room.permissions.allowGuestChat) {
+            sendError(
+              ws,
+              'FORBIDDEN',
+              'Chat is disabled for guests in this room.',
+            );
+            break;
+          }
+
           const meta = room.nextChatMetadata();
           const chatMsg = {
             v: 1 as const,
@@ -599,6 +714,15 @@ export function buildSignalingApp(
         }
 
         case 'reaction.send': {
+          if (peer.role === 'guest' && !room.permissions.allowGuestReactions) {
+            sendError(
+              ws,
+              'FORBIDDEN',
+              'Reactions are disabled for guests in this room.',
+            );
+            break;
+          }
+
           const now = Date.now();
           if (now - peer.lastReactionAt < 300) {
             sendError(
@@ -623,6 +747,209 @@ export function buildSignalingApp(
           });
           break;
         }
+
+        case 'host.action': {
+          const actionPayload = msg.payload;
+          if (!room.canModerate(peer.id)) {
+            sendError(
+              ws,
+              'FORBIDDEN',
+              'Only hosts and cohosts can perform moderation actions.',
+            );
+            break;
+          }
+
+          switch (actionPayload.action) {
+            case 'mute': {
+              const target = room.getPeer(actionPayload.targetPeerId);
+              if (!target) break;
+              target.state = { ...target.state, audio: false };
+              target.send({
+                v: 1,
+                ts: Date.now(),
+                type: 'host.command',
+                payload: {
+                  command: 'mute',
+                  byPeerId: peer.id,
+                  byDisplayName: peer.displayName,
+                },
+              });
+              room.broadcast({
+                v: 1,
+                ts: Date.now(),
+                type: 'state.updated',
+                payload: {
+                  peerId: target.id,
+                  state: target.state,
+                },
+              });
+              break;
+            }
+
+            case 'mute_all': {
+              for (const other of room.listActivePeers()) {
+                if (other.id === peer.id) continue;
+                other.state = { ...other.state, audio: false };
+                other.send({
+                  v: 1,
+                  ts: Date.now(),
+                  type: 'host.command',
+                  payload: {
+                    command: 'mute',
+                    byPeerId: peer.id,
+                    byDisplayName: peer.displayName,
+                  },
+                });
+                room.broadcast({
+                  v: 1,
+                  ts: Date.now(),
+                  type: 'state.updated',
+                  payload: {
+                    peerId: other.id,
+                    state: other.state,
+                  },
+                });
+              }
+              break;
+            }
+
+            case 'ask_unmute': {
+              const target = room.getPeer(actionPayload.targetPeerId);
+              if (!target) break;
+              target.send({
+                v: 1,
+                ts: Date.now(),
+                type: 'host.command',
+                payload: {
+                  command: 'ask_unmute',
+                  byPeerId: peer.id,
+                  byDisplayName: peer.displayName,
+                },
+              });
+              break;
+            }
+
+            case 'remove': {
+              const target = room.getPeer(actionPayload.targetPeerId);
+              if (!target || target.id === peer.id) break;
+              if (target.role === 'host' && !room.isHost(peer.id)) {
+                sendError(ws, 'FORBIDDEN', 'Cohosts cannot remove the host.');
+                break;
+              }
+              const shouldBlock = Boolean(actionPayload.block);
+              if (shouldBlock) {
+                room.blockParticipant(target.userId, target.tokenFingerprint);
+              }
+              target.send({
+                v: 1,
+                ts: Date.now(),
+                type: 'host.command',
+                payload: {
+                  command: 'removed',
+                  byPeerId: peer.id,
+                  byDisplayName: peer.displayName,
+                  blocked: shouldBlock,
+                },
+              });
+              if (target.socket) {
+                const targetCtx = socketContexts.get(target.socket);
+                if (targetCtx) {
+                  targetCtx.explicitlyLeft = true;
+                  targetCtx.room = null;
+                  targetCtx.peer = null;
+                }
+              }
+              room.leavePeer(
+                target.id,
+                shouldBlock ? 'blocked' : 'removed_by_host',
+              );
+              persistence.recordPeerLeft({
+                roomCode: room.code,
+                peerId: target.id,
+                remainingParticipants: room.participantCount,
+              });
+              break;
+            }
+
+            case 'set_role': {
+              if (!room.isHost(peer.id)) {
+                sendError(
+                  ws,
+                  'FORBIDDEN',
+                  'Only the meeting host can change participant roles.',
+                );
+                break;
+              }
+              room.setPeerRole(actionPayload.targetPeerId, actionPayload.role);
+              break;
+            }
+
+            case 'set_locked': {
+              room.setLocked(actionPayload.locked);
+              break;
+            }
+
+            case 'set_permissions': {
+              room.updatePermissions(actionPayload.permissions);
+              break;
+            }
+
+            case 'admit': {
+              const admitted = room.admitWaitingPeer(
+                actionPayload.targetPeerId,
+              );
+              if (admitted) {
+                finalizeWaitingPeerAdmission(room, admitted);
+              }
+              break;
+            }
+
+            case 'deny': {
+              room.denyWaitingPeer(actionPayload.targetPeerId);
+              break;
+            }
+
+            case 'admit_all': {
+              const admittedList = room.admitAllWaitingPeers();
+              for (const admitted of admittedList) {
+                finalizeWaitingPeerAdmission(room, admitted);
+              }
+              break;
+            }
+
+            case 'end_meeting': {
+              if (!room.isHost(peer.id)) {
+                sendError(
+                  ws,
+                  'FORBIDDEN',
+                  'Only the host can end the meeting for everyone.',
+                );
+                break;
+              }
+              for (const activePeer of room.listActivePeers()) {
+                if (activePeer.socket) {
+                  const pCtx = socketContexts.get(activePeer.socket);
+                  if (pCtx) {
+                    pCtx.explicitlyLeft = true;
+                    pCtx.room = null;
+                    pCtx.peer = null;
+                  }
+                }
+              }
+              room.endMeetingForAll({
+                id: peer.id,
+                displayName: peer.displayName,
+              });
+              persistence.recordPeerLeft({
+                roomCode: room.code,
+                peerId: peer.id,
+                remainingParticipants: 0,
+              });
+              break;
+            }
+          }
+          break;
+        }
       }
     });
 
@@ -632,7 +959,9 @@ export function buildSignalingApp(
         clearTimeout(ctx.authTimer);
         ctx.authTimer = null;
       }
-      if (ctx.room && ctx.peer && !ctx.explicitlyLeft) {
+      if (ctx.room && ctx.waitingPeerId && !ctx.peer) {
+        ctx.room.removeWaitingSocket(ws);
+      } else if (ctx.room && ctx.peer && !ctx.explicitlyLeft) {
         const roomRef = ctx.room;
         // Hold slot for 30s so peer can reclaim with same selfId
         roomRef.detachSocket(ctx.peer.id, ws, (reapedPeerId) => {
@@ -665,9 +994,15 @@ export function buildSignalingApp(
 
   const close = async (): Promise<void> => {
     clearInterval(heartbeatTimer);
-    for (const [, ctx] of socketContexts) {
+    for (const [ws, ctx] of socketContexts) {
       if (ctx.authTimer) clearTimeout(ctx.authTimer);
+      try {
+        ws.terminate();
+      } catch {
+        // ignore
+      }
     }
+    socketContexts.clear();
     roomManager.clear();
     await new Promise<void>((resolve) => {
       wss.close(() => resolve());

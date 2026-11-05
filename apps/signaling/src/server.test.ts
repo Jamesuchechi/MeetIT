@@ -499,4 +499,198 @@ describe('Signaling server integration tests', () => {
 
     wsOk.close();
   });
+
+  it('enforces server-authoritative host controls: waiting room, roles, mute/ask-unmute, guest restrictions, remove-and-block, and end meeting', async () => {
+    instance = buildSignalingApp({ logger: false });
+    const address = await instance.app.listen({ port: 0, host: '127.0.0.1' });
+    const wsUrl = address.replace(/^http/, 'ws');
+
+    // Create a room with waiting room enabled
+    const createRes = await instance.app.inject({
+      method: 'POST',
+      url: '/rooms',
+      payload: {
+        title: 'Moderated Townhall',
+        waitingRoom: true,
+      },
+    });
+    const { code: roomCode } = createRes.json<{ code: string }>();
+
+    // 1. First caller joins and becomes Host immediately
+    const hostWs = new WebSocket(wsUrl);
+    await new Promise((r) => hostWs.once('open', r));
+    const hostJoinedPromise = waitForMessage(
+      hostWs,
+      (m) => m.type === 'joined',
+    );
+    hostWs.send(
+      JSON.stringify({
+        v: 1,
+        type: 'join',
+        payload: {
+          roomCode,
+          displayName: 'Host James',
+          token: 'host-token-1',
+        },
+      }),
+    );
+    const hostJoined = (await hostJoinedPromise).payload as {
+      selfId: string;
+      role: string;
+    };
+    expect(hostJoined.role).toBe('host');
+
+    // 2. Second caller joins with a guest token and is placed in the Waiting Room
+    const guestWs = new WebSocket(wsUrl);
+    await new Promise((r) => guestWs.once('open', r));
+    const waitingRoomPromise = waitForMessage(
+      guestWs,
+      (m) => m.type === 'waiting.room',
+    );
+    const hostWaitingUpdatePromise = waitForMessage(
+      hostWs,
+      (m) => m.type === 'waiting.updated',
+    );
+    guestWs.send(
+      JSON.stringify({
+        v: 1,
+        type: 'join',
+        payload: {
+          roomCode,
+          displayName: 'Guest Ada',
+          token: 'guest-token-ada',
+        },
+      }),
+    );
+    await waitingRoomPromise;
+    const waitingUpdate = (await hostWaitingUpdatePromise).payload as {
+      waitingPeers: Array<{ id: string; displayName: string }>;
+    };
+    expect(waitingUpdate.waitingPeers).toHaveLength(1);
+    const adaId = waitingUpdate.waitingPeers[0]!.id;
+
+    // 3. Host admits Guest Ada from waiting room
+    const adaJoinedPromise = waitForMessage(
+      guestWs,
+      (m) => m.type === 'joined',
+    );
+    hostWs.send(
+      JSON.stringify({
+        v: 1,
+        type: 'host.action',
+        payload: { action: 'admit', targetPeerId: adaId },
+      }),
+    );
+    const adaJoined = (await adaJoinedPromise).payload as {
+      selfId: string;
+      role: string;
+    };
+    expect(adaJoined.selfId).toBe(adaId);
+    expect(adaJoined.role).toBe('guest');
+
+    // 4. Host mutes Guest Ada and asks to unmute
+    const muteCmdPromise = waitForMessage(
+      guestWs,
+      (m) =>
+        m.type === 'host.command' &&
+        (m.payload as { command: string }).command === 'mute',
+    );
+    hostWs.send(
+      JSON.stringify({
+        v: 1,
+        type: 'host.action',
+        payload: { action: 'mute', targetPeerId: adaId },
+      }),
+    );
+    await muteCmdPromise;
+
+    const askUnmutePromise = waitForMessage(
+      guestWs,
+      (m) =>
+        m.type === 'host.command' &&
+        (m.payload as { command: string }).command === 'ask_unmute',
+    );
+    hostWs.send(
+      JSON.stringify({
+        v: 1,
+        type: 'host.action',
+        payload: { action: 'ask_unmute', targetPeerId: adaId },
+      }),
+    );
+    await askUnmutePromise;
+
+    // 5. Host disables guest chat -> Guest Ada's chat message is rejected with FORBIDDEN
+    const roomUpdatePromise = waitForMessage(
+      guestWs,
+      (m) => m.type === 'room.updated',
+    );
+    hostWs.send(
+      JSON.stringify({
+        v: 1,
+        type: 'host.action',
+        payload: {
+          action: 'set_permissions',
+          permissions: { allowGuestChat: false },
+        },
+      }),
+    );
+    await roomUpdatePromise;
+
+    const chatForbiddenPromise = waitForMessage(
+      guestWs,
+      (m) => m.type === 'error',
+    );
+    guestWs.send(
+      JSON.stringify({
+        v: 1,
+        type: 'chat.send',
+        payload: { text: 'Can guests chat?' },
+      }),
+    );
+    const chatErr = (await chatForbiddenPromise).payload as { code: string };
+    expect(chatErr.code).toBe('FORBIDDEN');
+
+    // 6. Host removes and blocks Guest Ada -> Ada cannot rejoin with the same token
+    const removedCmdPromise = waitForMessage(
+      guestWs,
+      (m) =>
+        m.type === 'host.command' &&
+        (m.payload as { command: string }).command === 'removed',
+    );
+    hostWs.send(
+      JSON.stringify({
+        v: 1,
+        type: 'host.action',
+        payload: { action: 'remove', targetPeerId: adaId, block: true },
+      }),
+    );
+    const removedPayload = (await removedCmdPromise).payload as {
+      blocked: boolean;
+    };
+    expect(removedPayload.blocked).toBe(true);
+    guestWs.close();
+
+    // Attempt rejoin with blocked token
+    const blockedWs = new WebSocket(wsUrl);
+    await new Promise((r) => blockedWs.once('open', r));
+    const blockedErrPromise = waitForMessage(
+      blockedWs,
+      (m) => m.type === 'error',
+    );
+    blockedWs.send(
+      JSON.stringify({
+        v: 1,
+        type: 'join',
+        payload: {
+          roomCode,
+          displayName: 'Guest Ada Again',
+          token: 'guest-token-ada',
+        },
+      }),
+    );
+    const blockedErr = (await blockedErrPromise).payload as { code: string };
+    expect(blockedErr.code).toBe('FORBIDDEN');
+    blockedWs.close();
+    hostWs.close();
+  });
 });

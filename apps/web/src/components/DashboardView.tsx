@@ -36,12 +36,21 @@ import {
   type SavedRoom,
   type ScheduledMeetingItem,
 } from '../lib/meetingsStore';
+import {
+  createActionItem,
+  loadActionItems,
+  loadMeetingNotes,
+  toggleActionItem,
+  type MeetingActionItem,
+  type MeetingNoteItem,
+} from '../lib/notesStore';
 import { Avatar } from './Avatar';
 import { ProfileView } from './ProfileView';
 import { ProfileEditView } from './ProfileEditView';
 import { SettingsView } from './SettingsView';
 import { MeetingsView } from './MeetingsView';
 import { ScheduleView } from './ScheduleView';
+import { NotesView } from './NotesView';
 
 interface DashboardViewProps {
   user?: AuthUser | null;
@@ -54,17 +63,11 @@ interface DashboardViewProps {
   onToast: (msg: string) => void;
 }
 
-interface ActionItem {
-  id: number;
-  text: string;
-  done: boolean;
-}
-
 const TAB_LABELS: Record<DashboardTab, string> = {
   home: 'Overview',
   meetings: 'Meetings & History',
   schedule: 'Schedule',
-  notes: 'Notes',
+  notes: 'Notes & Action Items',
   recordings: 'Recordings',
   settings: 'Settings',
   profile: 'Public Profile',
@@ -107,6 +110,13 @@ export function DashboardView({
   const [scheduled, setScheduled] = useState<ScheduledMeetingItem[]>(() =>
     loadScheduledMeetings(),
   );
+  const [notes, setNotes] = useState<MeetingNoteItem[]>(() =>
+    loadMeetingNotes(user?.id),
+  );
+  const [actionItems, setActionItems] = useState<MeetingActionItem[]>(() =>
+    loadActionItems(user?.id),
+  );
+  const [quickTaskDraft, setQuickTaskDraft] = useState('');
 
   const refreshMeetingsData = useCallback(() => {
     if (user) {
@@ -118,6 +128,8 @@ export function DashboardView({
     setRooms(loadLocalRooms(user?.id));
     setHistory(loadMeetingHistory());
     setScheduled(loadScheduledMeetings());
+    setNotes(loadMeetingNotes(user?.id));
+    setActionItems(loadActionItems(user?.id));
   }, [user]);
 
   useEffect(() => {
@@ -131,12 +143,6 @@ export function DashboardView({
   useEffect(() => {
     setProfileUserId(viewedProfileUserId);
   }, [viewedProfileUserId]);
-
-  const [tasks, setTasks] = useState<ActionItem[]>([
-    { id: 1, text: 'Ship lobby waiting room controls', done: true },
-    { id: 2, text: 'Verify audio fallback on low bandwidth', done: false },
-    { id: 3, text: 'Share webhook events schema with Mei', done: false },
-  ]);
 
   const displayName = user?.displayName || 'there';
   const personalRoomCode = personalRoomCodeForUser(user?.id ?? '');
@@ -216,10 +222,23 @@ export function DashboardView({
     onToast(`${feature} is coming in the next release.`);
   };
 
-  const toggleTask = (id: number) => {
-    setTasks((prev) =>
-      prev.map((t) => (t.id === id ? { ...t, done: !t.done } : t)),
-    );
+  const handleToggleContextTask = async (taskId: string) => {
+    await toggleActionItem(taskId);
+    refreshMeetingsData();
+  };
+
+  const handleQuickAddContextTask = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!quickTaskDraft.trim()) return;
+    await createActionItem({
+      ownerId: user?.id ?? '',
+      roomCode: personalRoomCode,
+      meetingTitle: `${firstName}'s Personal Studio`,
+      text: quickTaskDraft.trim(),
+    });
+    setQuickTaskDraft('');
+    refreshMeetingsData();
+    onToast('Follow-up action item added.');
   };
 
   // Compute real metrics from scheduled meetings and call history
@@ -325,8 +344,8 @@ export function DashboardView({
             onClick={() => {
               selectTab('notes');
               setIsNavDrawerOpen(false);
-              handleComingSoon('Meeting notes and AI summaries');
             }}
+            data-testid="sidebar-notes-btn"
           >
             <NotesIcon />
             <span>Notes</span>
@@ -647,6 +666,18 @@ export function DashboardView({
           ) : activeTab === 'schedule' ? (
             <ScheduleView
               user={user ?? null}
+              scheduled={scheduled}
+              onRefreshData={refreshMeetingsData}
+              onEnterRoom={onEnterRoom}
+              onToast={onToast}
+            />
+          ) : activeTab === 'notes' ? (
+            <NotesView
+              user={user ?? null}
+              notes={notes}
+              actionItems={actionItems}
+              rooms={rooms}
+              history={history}
               scheduled={scheduled}
               onRefreshData={refreshMeetingsData}
               onEnterRoom={onEnterRoom}
@@ -1050,29 +1081,68 @@ export function DashboardView({
               </div>
             </div>
 
-            {/* Follow-up Action Items */}
+            {/* Follow-up Action Items (Synced with Notes & Action Items Hub) */}
             <div className="context-sec">
               <div className="context-sec-head">
                 <span>Follow-up action items</span>
                 <span className="badge">
-                  {tasks.filter((t) => !t.done).length} pending
+                  {actionItems.filter((t) => !t.done).length} pending
                 </span>
               </div>
               <div className="task-list">
-                {tasks.map((task) => (
-                  <label
-                    key={task.id}
-                    className={`task-item ${task.done ? 'done' : ''}`}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={task.done}
-                      onChange={() => toggleTask(task.id)}
-                    />
-                    <span>{task.text}</span>
-                  </label>
-                ))}
+                {actionItems.length === 0 ? (
+                  <small style={{ color: 'var(--muted)', fontSize: 12.5 }}>
+                    No follow-up tasks yet. Add one below or in the Notes Hub.
+                  </small>
+                ) : (
+                  actionItems.slice(0, 5).map((task) => (
+                    <label
+                      key={task.id}
+                      className={`task-item ${task.done ? 'done' : ''}`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={task.done}
+                        onChange={() => void handleToggleContextTask(task.id)}
+                      />
+                      <span>{task.text}</span>
+                    </label>
+                  ))
+                )}
               </div>
+
+              <form
+                className="context-task-quick-form"
+                onSubmit={(e) => void handleQuickAddContextTask(e)}
+              >
+                <input
+                  type="text"
+                  value={quickTaskDraft}
+                  onChange={(e) => setQuickTaskDraft(e.target.value)}
+                  placeholder="+ Add follow-up task…"
+                  aria-label="Add follow-up action item"
+                />
+                <button
+                  type="submit"
+                  className="btn"
+                  disabled={!quickTaskDraft.trim()}
+                >
+                  Add
+                </button>
+              </form>
+
+              <button
+                type="button"
+                className="context-notes-link-btn"
+                onClick={() => {
+                  selectTab('notes');
+                  if (window.innerWidth < 1120) {
+                    setIsContextBarOpen(false);
+                  }
+                }}
+              >
+                Manage all in Notes Hub →
+              </button>
             </div>
           </aside>
         </>
@@ -1107,10 +1177,8 @@ export function DashboardView({
         <button
           type="button"
           className={activeTab === 'notes' ? 'active' : ''}
-          onClick={() => {
-            selectTab('notes');
-            handleComingSoon('Meeting notes and AI summaries');
-          }}
+          onClick={() => selectTab('notes')}
+          data-testid="mobile-nav-notes-btn"
         >
           <NotesIcon />
           <span>Notes</span>

@@ -4,11 +4,13 @@ import {
   generateRoomCode,
   serverMessageSchema,
   type ClientMessage,
+  type HostActionPayload,
   type IceCandidatePayload,
   type IceServerConfig,
   type PeerInfo,
   type PeerState,
   type ReactionEmoji,
+  type RoomPermissions,
   type SdpPayload,
   type ServerJoinedPayload,
   type ServerMessage,
@@ -28,6 +30,8 @@ export async function createRoomViaApi(options?: {
   title?: string;
   description?: string;
   passcode?: string;
+  waitingRoom?: boolean;
+  permissions?: Partial<RoomPermissions>;
   kind?: 'instant' | 'scheduled' | 'personal';
   ownerId?: string;
 }): Promise<string> {
@@ -57,6 +61,8 @@ export async function configureRoomViaApi(options: {
   title?: string;
   description?: string;
   passcode?: string;
+  waitingRoom?: boolean;
+  permissions?: Partial<RoomPermissions>;
   kind?: 'instant' | 'scheduled' | 'personal';
   ownerId?: string;
 }): Promise<void> {
@@ -206,8 +212,11 @@ export class SignalingClient implements SignalingChannel {
 
   private readonly listeners: ListenerMap = {
     joined: new Set(),
+    'waiting.room': new Set(),
+    'waiting.updated': new Set(),
     'peer.joined': new Set(),
     'peer.left': new Set(),
+    'peer.role.updated': new Set(),
     'signal.offer': new Set(),
     'signal.answer': new Set(),
     'signal.ice': new Set(),
@@ -215,6 +224,7 @@ export class SignalingClient implements SignalingChannel {
     'chat.message': new Set(),
     'reaction.received': new Set(),
     'room.updated': new Set(),
+    'host.command': new Set(),
     error: new Set(),
     pong: new Set(),
   };
@@ -479,11 +489,29 @@ export class SignalingClient implements SignalingChannel {
         this.emit('joined', p);
         break;
       }
+      case 'waiting.room':
+        this.emit(
+          'waiting.room',
+          msg.payload as SignalingEvents['waiting.room'],
+        );
+        break;
+      case 'waiting.updated':
+        this.emit(
+          'waiting.updated',
+          msg.payload as SignalingEvents['waiting.updated'],
+        );
+        break;
       case 'peer.joined':
         this.emit('peer.joined', msg.payload as SignalingEvents['peer.joined']);
         break;
       case 'peer.left':
         this.emit('peer.left', msg.payload as SignalingEvents['peer.left']);
+        break;
+      case 'peer.role.updated':
+        this.emit(
+          'peer.role.updated',
+          msg.payload as SignalingEvents['peer.role.updated'],
+        );
         break;
       case 'signal.offer':
         this.emit(
@@ -522,6 +550,12 @@ export class SignalingClient implements SignalingChannel {
         this.emit(
           'room.updated',
           msg.payload as SignalingEvents['room.updated'],
+        );
+        break;
+      case 'host.command':
+        this.emit(
+          'host.command',
+          msg.payload as SignalingEvents['host.command'],
         );
         break;
       case 'pong':
@@ -619,6 +653,14 @@ export class SignalingClient implements SignalingChannel {
       v: 1,
       type: 'reaction.send',
       payload: { emoji },
+    });
+  }
+
+  sendHostAction(payload: HostActionPayload): void {
+    this.send({
+      v: 1,
+      type: 'host.action',
+      payload,
     });
   }
 

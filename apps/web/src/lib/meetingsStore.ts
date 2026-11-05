@@ -181,6 +181,7 @@ export async function saveOrUpdateRoom(params: {
     title: updated.title,
     description: updated.description,
     ...(updated.passcode ? { passcode: updated.passcode } : {}),
+    waitingRoom: updated.waitingRoom,
     kind: updated.kind,
     ownerId: updated.ownerId,
   });

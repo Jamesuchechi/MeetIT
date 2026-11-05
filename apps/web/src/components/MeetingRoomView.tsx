@@ -6,7 +6,14 @@ import React, {
   useMemo,
 } from 'react';
 import { MeshTransport, type ConnectionState } from '@meetit/media';
-import type { PeerInfo, PeerState, ReactionEmoji } from '@meetit/protocol';
+import type {
+  PeerInfo,
+  PeerRole,
+  PeerState,
+  ReactionEmoji,
+  RoomPermissions,
+  WaitingPeer,
+} from '@meetit/protocol';
 import { Logo } from './Logo';
 import { Avatar } from './Avatar';
 import {
@@ -21,6 +28,7 @@ import {
   SetIcon,
   CloseIcon,
   InfoIcon,
+  UsrIcon,
 } from './Icons';
 import {
   acquireDisplayMedia,
@@ -49,6 +57,7 @@ import {
   recordCompletedMeetingSession,
   type MeetingAttendeeRecord,
 } from '../lib/meetingsStore';
+import { ensureNoteForCompletedMeeting } from '../lib/notesStore';
 import { copyToClipboard, type AuthUser } from '../types';
 
 interface MeetingRoomViewProps {
@@ -91,13 +100,21 @@ function RemoteVideoTile({
   participant,
   isSpeaking,
   isPinned,
+  canModerate,
   onTogglePin,
+  onMutePeer,
+  onAskUnmutePeer,
+  onRemovePeer,
   onToast,
 }: {
   participant: RemoteParticipant;
   isSpeaking: boolean;
   isPinned: boolean;
+  canModerate: boolean;
   onTogglePin: () => void;
+  onMutePeer: () => void;
+  onAskUnmutePeer: () => void;
+  onRemovePeer: () => void;
   onToast: (msg: string) => void;
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -153,7 +170,7 @@ function RemoteVideoTile({
         </div>
       )}
 
-      {/* Top-right tile quick actions: Pin, PiP, Hand Raised */}
+      {/* Top-right tile quick actions: Pin, PiP, Moderation, Hand Raised */}
       <div className="tile-top-bar">
         <div className="tile-badges-left">
           {participant.state.handRaised && (
@@ -170,6 +187,37 @@ function RemoteVideoTile({
         </div>
 
         <div className="tile-hover-actions">
+          {canModerate && (
+            <>
+              {participant.state.audio ? (
+                <button
+                  type="button"
+                  className="tile-icon-btn"
+                  onClick={onMutePeer}
+                  title={`Mute ${participant.displayName}`}
+                >
+                  Mute
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className="tile-icon-btn"
+                  onClick={onAskUnmutePeer}
+                  title={`Ask ${participant.displayName} to unmute`}
+                >
+                  Ask unmute
+                </button>
+              )}
+              <button
+                type="button"
+                className="tile-icon-btn"
+                onClick={onRemovePeer}
+                title={`Remove ${participant.displayName}`}
+              >
+                Remove
+              </button>
+            </>
+          )}
           <button
             type="button"
             className={`tile-icon-btn ${isPinned ? 'active' : ''}`}
@@ -198,6 +246,9 @@ function RemoteVideoTile({
           <span>{participant.displayName}</span>
           {participant.role === 'host' && (
             <span className="role-pill">Host</span>
+          )}
+          {participant.role === 'cohost' && (
+            <span className="role-pill">Cohost</span>
           )}
           {participant.verified || participant.role !== 'guest' ? (
             <span
@@ -291,7 +342,28 @@ export function MeetingRoomView({
   onNavigateHome,
   onToast,
 }: MeetingRoomViewProps) {
-  const [stage, setStage] = useState<'lobby' | 'call'>('lobby');
+  const localMeta = useMemo(() => findRoomMetadataByCode(roomCode), [roomCode]);
+  const [stage, setStage] = useState<'lobby' | 'waiting_room' | 'call'>(
+    'lobby',
+  );
+  const [selfRole, setSelfRole] = useState<PeerRole>(
+    user ? 'attendee' : 'guest',
+  );
+  const [roomPermissions, setRoomPermissions] = useState<RoomPermissions>(
+    () => ({
+      waitingRoom: Boolean(localMeta?.waitingRoom),
+      allowGuestChat: true,
+      allowGuestScreenShare: true,
+      allowGuestReactions: true,
+    }),
+  );
+  const [waitingPeers, setWaitingPeers] = useState<WaitingPeer[]>([]);
+  const [waitingRoomMessage, setWaitingRoomMessage] = useState<string>(
+    'Waiting for the host to admit you…',
+  );
+  const [showHostPanel, setShowHostPanel] = useState(false);
+  const [showLeaveMenu, setShowLeaveMenu] = useState(false);
+  const [unmutePromptFrom, setUnmutePromptFrom] = useState<string | null>(null);
   const [displayName, setDisplayName] = useState<string>(() => {
     if (user?.displayName) return user.displayName;
     try {
@@ -343,7 +415,6 @@ export function MeetingRoomView({
   const [isAcquiringMedia, setIsAcquiringMedia] = useState(false);
 
   // Room status & call state
-  const localMeta = useMemo(() => findRoomMetadataByCode(roomCode), [roomCode]);
   const [roomTitle, setRoomTitle] = useState<string>(
     () => localMeta?.title || `Room ${roomCode}`,
   );
@@ -1092,7 +1163,38 @@ export function MeetingRoomView({
       }
     });
 
+    signaling.on('waiting.room', (payload) => {
+      if (payload.title) {
+        setRoomTitle(payload.title);
+      }
+      setWaitingRoomMessage(payload.message);
+      setStage('waiting_room');
+      announce(payload.message);
+    });
+
+    signaling.on('waiting.updated', ({ waitingPeers: nextWaiting }) => {
+      setWaitingPeers((prev) => {
+        if (nextWaiting.length > prev.length) {
+          const newest = nextWaiting[nextWaiting.length - 1];
+          if (newest) {
+            onToast(`${newest.displayName} is waiting in the lobby.`);
+            announce(`${newest.displayName} is waiting to be admitted`);
+          }
+        }
+        return nextWaiting;
+      });
+    });
+
     signaling.on('joined', (payload) => {
+      setStage('call');
+      setSelfRole(payload.role);
+      setRoomLocked(payload.roomState.locked);
+      if (payload.roomState.permissions) {
+        setRoomPermissions(payload.roomState.permissions);
+      }
+      if (payload.roomState.waitingPeers) {
+        setWaitingPeers(payload.roomState.waitingPeers);
+      }
       if (payload.roomState.title) {
         setRoomTitle(payload.roomState.title);
       }
@@ -1144,6 +1246,68 @@ export function MeetingRoomView({
           }
         }
       })();
+    });
+
+    signaling.on('peer.role.updated', ({ peerId, role }) => {
+      if (peerId === signaling.getSelfId()) {
+        setSelfRole(role);
+        onToast(`Your role in this meeting is now ${role.toUpperCase()}.`);
+        announce(`Your role is now ${role}`);
+      } else {
+        setRemotePeers((prev) => {
+          const target = prev[peerId];
+          if (!target) return prev;
+          onToast(`${target.displayName} is now ${role}.`);
+          return {
+            ...prev,
+            [peerId]: {
+              ...target,
+              role,
+            },
+          };
+        });
+      }
+    });
+
+    signaling.on('room.updated', ({ locked, permissions }) => {
+      setRoomLocked(locked);
+      if (permissions) {
+        setRoomPermissions(permissions);
+      }
+    });
+
+    signaling.on('host.command', (cmd) => {
+      if (cmd.command === 'mute') {
+        setAudioMuted(true);
+        if (localStreamRef.current) {
+          for (const track of localStreamRef.current.getAudioTracks()) {
+            track.enabled = false;
+          }
+        }
+        signaling.updateState({ audio: false });
+        onToast(`You were muted by ${cmd.byDisplayName}.`);
+        announce(`You were muted by ${cmd.byDisplayName}`);
+      } else if (cmd.command === 'ask_unmute') {
+        setUnmutePromptFrom(cmd.byDisplayName);
+        announce(`${cmd.byDisplayName} asked you to unmute your microphone`);
+      } else if (cmd.command === 'removed') {
+        setLobbyError(
+          cmd.blocked
+            ? `You were removed and blocked from this meeting by ${cmd.byDisplayName}.`
+            : `You were removed from the meeting by ${cmd.byDisplayName}.`,
+        );
+        signaling.disconnect();
+        void transport.disconnect();
+        setStage('lobby');
+        onToast(
+          cmd.blocked
+            ? 'Removed and blocked by the host.'
+            : 'You were removed from the call by the host.',
+        );
+      } else if (cmd.command === 'meeting_ended') {
+        onToast(`${cmd.byDisplayName} ended the meeting for everyone.`);
+        handleHangUp();
+      }
     });
 
     signaling.on('peer.joined', ({ peer }) => {
@@ -1253,11 +1417,17 @@ export function MeetingRoomView({
         setStage('lobby');
         signaling.disconnect();
         void transport.disconnect();
-      } else if (err.code === 'FORBIDDEN' || err.code === 'UNAUTHORIZED') {
-        setLobbyError(err.message);
-        setStage('lobby');
-        signaling.disconnect();
-        void transport.disconnect();
+      } else if (
+        err.code === 'FORBIDDEN' ||
+        err.code === 'UNAUTHORIZED' ||
+        err.code === 'NOT_ADMITTED'
+      ) {
+        if (err.code !== 'FORBIDDEN' || stage !== 'call') {
+          setLobbyError(err.message);
+          setStage('lobby');
+          signaling.disconnect();
+          void transport.disconnect();
+        }
       }
       onToast(err.message);
     });
@@ -1270,12 +1440,17 @@ export function MeetingRoomView({
 
   const handleHangUp = () => {
     if (callStartedAtRef.current) {
-      recordCompletedMeetingSession({
+      const historyItem = recordCompletedMeetingSession({
         roomCode,
         roomTitle,
         startedAtMs: callStartedAtRef.current,
         endedAtMs: Date.now(),
         attendees: Array.from(seenAttendeesRef.current.values()),
+      });
+      ensureNoteForCompletedMeeting({
+        ownerId: user?.id ?? '',
+        historyItem,
+        chatTranscript: chatMessages,
       });
       callStartedAtRef.current = null;
     }
@@ -1344,6 +1519,132 @@ export function MeetingRoomView({
       }),
     [totalParticipantCount, effectiveSpotlightId, isPortrait],
   );
+
+  const canModerate = selfRole === 'host' || selfRole === 'cohost';
+  const isHost = selfRole === 'host';
+
+  const handleHostMutePeer = (targetPeerId: string) => {
+    signalingRef.current?.sendHostAction({
+      action: 'mute',
+      targetPeerId,
+    });
+    onToast('Participant muted.');
+  };
+
+  const handleHostMuteAll = () => {
+    signalingRef.current?.sendHostAction({ action: 'mute_all' });
+    onToast('Muted all other participants.');
+  };
+
+  const handleHostAskUnmute = (targetPeerId: string, name: string) => {
+    signalingRef.current?.sendHostAction({
+      action: 'ask_unmute',
+      targetPeerId,
+    });
+    onToast(`Asked ${name} to unmute.`);
+  };
+
+  const handleHostRemovePeer = (
+    targetPeerId: string,
+    name: string,
+    block = false,
+  ) => {
+    signalingRef.current?.sendHostAction({
+      action: 'remove',
+      targetPeerId,
+      block,
+    });
+    onToast(
+      block
+        ? `Removed and blocked ${name} from rejoining.`
+        : `Removed ${name} from the meeting.`,
+    );
+  };
+
+  const handleHostSetRole = (
+    targetPeerId: string,
+    role: 'host' | 'cohost' | 'attendee',
+  ) => {
+    signalingRef.current?.sendHostAction({
+      action: 'set_role',
+      targetPeerId,
+      role,
+    });
+  };
+
+  const handleHostToggleLock = () => {
+    const nextLocked = !roomLocked;
+    setRoomLocked(nextLocked);
+    signalingRef.current?.sendHostAction({
+      action: 'set_locked',
+      locked: nextLocked,
+    });
+    onToast(
+      nextLocked
+        ? 'Room locked. New participants cannot join.'
+        : 'Room unlocked.',
+    );
+  };
+
+  const handleHostUpdatePermission = (partial: Partial<RoomPermissions>) => {
+    setRoomPermissions((prev) => ({ ...prev, ...partial }));
+    signalingRef.current?.sendHostAction({
+      action: 'set_permissions',
+      permissions: partial,
+    });
+    onToast('Room permissions updated.');
+  };
+
+  const handleHostAdmit = (targetPeerId: string) => {
+    signalingRef.current?.sendHostAction({
+      action: 'admit',
+      targetPeerId,
+    });
+  };
+
+  const handleHostDeny = (targetPeerId: string) => {
+    signalingRef.current?.sendHostAction({
+      action: 'deny',
+      targetPeerId,
+    });
+  };
+
+  const handleHostAdmitAll = () => {
+    signalingRef.current?.sendHostAction({ action: 'admit_all' });
+    onToast('Admitted all waiting participants.');
+  };
+
+  const handleHostEndMeeting = () => {
+    signalingRef.current?.sendHostAction({ action: 'end_meeting' });
+    handleHangUp();
+  };
+
+  if (stage === 'waiting_room') {
+    return (
+      <div className="lobby-shell" data-view="waiting-room">
+        <div className="status-card-wrap">
+          <div className="status-card" data-testid="waiting-room-card">
+            <span className="eyebrow">Waiting Room · {roomCode}</span>
+            <h1>{roomTitle}</h1>
+            <p>{waitingRoomMessage}</p>
+            <div className="status-actions">
+              <button
+                type="button"
+                className="btn"
+                onClick={() => {
+                  signalingRef.current?.disconnect();
+                  void transportRef.current?.disconnect();
+                  setStage('lobby');
+                }}
+              >
+                Leave waiting room
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (stage === 'lobby') {
     return (
@@ -1771,8 +2072,10 @@ export function MeetingRoomView({
         </div>
       </header>
 
-      {/* Center workspace: full-stage video canvas + optional side chat panel */}
-      <div className={`call-body ${showChatPanel ? 'with-chat' : ''}`}>
+      {/* Center workspace: full-stage video canvas + optional side chat or host panel */}
+      <div
+        className={`call-body ${showChatPanel || showHostPanel ? 'with-chat' : ''}`}
+      >
         <main
           className={`call-stage mode-${layout.mode}`}
           style={{
@@ -1783,6 +2086,101 @@ export function MeetingRoomView({
           }}
           data-layout-mode={layout.mode}
         >
+          {/* Host Waiting Room Admission Floating Banner */}
+          {canModerate && waitingPeers.length > 0 && (
+            <div
+              className="call-waiting-admit-banner"
+              role="region"
+              aria-label="Waiting room admission"
+              data-testid="waiting-admit-banner"
+            >
+              <div className="waiting-admit-text">
+                <strong>
+                  {waitingPeers.length === 1
+                    ? `${waitingPeers[0]!.displayName} wants to join this call`
+                    : `${waitingPeers.length} people are waiting to join`}
+                </strong>
+              </div>
+              <div className="waiting-admit-actions">
+                {waitingPeers.length === 1 ? (
+                  <>
+                    <button
+                      type="button"
+                      className="btn"
+                      onClick={() => handleHostDeny(waitingPeers[0]!.id)}
+                    >
+                      Deny
+                    </button>
+                    <button
+                      type="button"
+                      className="btn primary"
+                      onClick={() => handleHostAdmit(waitingPeers[0]!.id)}
+                      data-testid="admit-waiting-btn"
+                    >
+                      Admit
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <button
+                      type="button"
+                      className="btn"
+                      onClick={() => {
+                        setShowHostPanel(true);
+                        setShowChatPanel(false);
+                      }}
+                    >
+                      Review queue
+                    </button>
+                    <button
+                      type="button"
+                      className="btn primary"
+                      onClick={handleHostAdmitAll}
+                    >
+                      Admit all ({waitingPeers.length})
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Ask-to-Unmute Prompt Banner from Host */}
+          {unmutePromptFrom && (
+            <div
+              className="call-waiting-admit-banner"
+              role="alertdialog"
+              aria-label="Host requested unmute"
+              data-testid="ask-unmute-banner"
+            >
+              <div className="waiting-admit-text">
+                <strong>
+                  {unmutePromptFrom} asked you to unmute your microphone
+                </strong>
+              </div>
+              <div className="waiting-admit-actions">
+                <button
+                  type="button"
+                  className="btn"
+                  onClick={() => setUnmutePromptFrom(null)}
+                >
+                  Stay muted
+                </button>
+                <button
+                  type="button"
+                  className="btn primary"
+                  onClick={() => {
+                    setUnmutePromptFrom(null);
+                    if (audioMuted) {
+                      handleToggleMic();
+                    }
+                  }}
+                >
+                  Unmute now
+                </button>
+              </div>
+            </div>
+          )}
           {/* Floating ephemeral reactions overlay */}
           {floatingReactions.length > 0 && (
             <div
@@ -1855,8 +2253,16 @@ export function MeetingRoomView({
               participant={peer}
               isSpeaking={activeSpeakerId === peer.id}
               isPinned={effectiveSpotlightId === peer.id}
+              canModerate={canModerate}
               onTogglePin={() =>
                 setPinnedTargetId((curr) => (curr === peer.id ? null : peer.id))
+              }
+              onMutePeer={() => handleHostMutePeer(peer.id)}
+              onAskUnmutePeer={() =>
+                handleHostAskUnmute(peer.id, peer.displayName)
+              }
+              onRemovePeer={() =>
+                handleHostRemovePeer(peer.id, peer.displayName, false)
               }
               onToast={onToast}
             />
@@ -1924,6 +2330,10 @@ export function MeetingRoomView({
             <div className="tile-meta-bar">
               <div className="tile-name-badge">
                 <span>{displayName || 'You'}</span>
+                {selfRole === 'host' && <span className="role-pill">Host</span>}
+                {selfRole === 'cohost' && (
+                  <span className="role-pill">Cohost</span>
+                )}
                 {user ? (
                   <span
                     className="role-pill verified-tile-pill"
@@ -1946,6 +2356,273 @@ export function MeetingRoomView({
             </div>
           </div>
         </main>
+
+        {/* People & Host Controls Side Panel */}
+        {showHostPanel && (
+          <aside
+            className="call-chat-panel call-host-panel"
+            aria-label="People and host controls"
+            data-testid="host-panel"
+          >
+            <div className="chat-panel-header">
+              <h3>
+                {canModerate
+                  ? 'Host Controls & People'
+                  : `People (${totalParticipantCount})`}
+              </h3>
+              <button
+                type="button"
+                className="btn-icon-subtle"
+                onClick={() => setShowHostPanel(false)}
+                aria-label="Close people and host controls"
+              >
+                <CloseIcon />
+              </button>
+            </div>
+
+            <div className="host-panel-scroll">
+              {canModerate && (
+                <section className="host-panel-sec">
+                  <h4>Room Moderation &amp; Security</h4>
+                  <div className="host-quick-buttons">
+                    <button
+                      type="button"
+                      className={`btn ${roomLocked ? 'primary' : ''}`}
+                      onClick={handleHostToggleLock}
+                      data-testid="host-lock-btn"
+                    >
+                      {roomLocked ? '🔒 Unlock room' : '🔓 Lock room'}
+                    </button>
+                    <button
+                      type="button"
+                      className="btn"
+                      onClick={handleHostMuteAll}
+                      disabled={remoteList.length === 0}
+                      data-testid="host-mute-all-btn"
+                    >
+                      Mute all
+                    </button>
+                    {isHost && (
+                      <button
+                        type="button"
+                        className="btn danger-outline-btn"
+                        onClick={handleHostEndMeeting}
+                        data-testid="host-end-all-btn"
+                      >
+                        End meeting for all
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="host-toggles-list">
+                    <label className="popover-checkbox-row">
+                      <input
+                        type="checkbox"
+                        checked={roomPermissions.waitingRoom}
+                        onChange={(e) =>
+                          handleHostUpdatePermission({
+                            waitingRoom: e.target.checked,
+                          })
+                        }
+                      />
+                      <span>Waiting room (require host admission)</span>
+                    </label>
+                    <label className="popover-checkbox-row">
+                      <input
+                        type="checkbox"
+                        checked={roomPermissions.allowGuestChat}
+                        onChange={(e) =>
+                          handleHostUpdatePermission({
+                            allowGuestChat: e.target.checked,
+                          })
+                        }
+                      />
+                      <span>Allow guest chat messages</span>
+                    </label>
+                    <label className="popover-checkbox-row">
+                      <input
+                        type="checkbox"
+                        checked={roomPermissions.allowGuestScreenShare}
+                        onChange={(e) =>
+                          handleHostUpdatePermission({
+                            allowGuestScreenShare: e.target.checked,
+                          })
+                        }
+                      />
+                      <span>Allow guest screen sharing</span>
+                    </label>
+                    <label className="popover-checkbox-row">
+                      <input
+                        type="checkbox"
+                        checked={roomPermissions.allowGuestReactions}
+                        onChange={(e) =>
+                          handleHostUpdatePermission({
+                            allowGuestReactions: e.target.checked,
+                          })
+                        }
+                      />
+                      <span>Allow guest emoji reactions</span>
+                    </label>
+                  </div>
+                </section>
+              )}
+
+              {/* Waiting Room Queue */}
+              {canModerate && waitingPeers.length > 0 && (
+                <section
+                  className="host-panel-sec"
+                  data-testid="waiting-queue-sec"
+                >
+                  <div className="host-sec-head">
+                    <h4>Waiting Room ({waitingPeers.length})</h4>
+                    <button
+                      type="button"
+                      className="btn primary"
+                      style={{ padding: '4px 10px', fontSize: 12 }}
+                      onClick={handleHostAdmitAll}
+                    >
+                      Admit all
+                    </button>
+                  </div>
+                  <div className="host-peer-list">
+                    {waitingPeers.map((wp) => (
+                      <div key={wp.id} className="host-peer-row">
+                        <div className="host-peer-info">
+                          <strong>{wp.displayName}</strong>
+                          <small>
+                            {wp.verified ? '✓ Verified' : 'Guest'} · Waiting
+                          </small>
+                        </div>
+                        <div className="host-peer-actions">
+                          <button
+                            type="button"
+                            className="btn"
+                            onClick={() => handleHostDeny(wp.id)}
+                          >
+                            Deny
+                          </button>
+                          <button
+                            type="button"
+                            className="btn primary"
+                            onClick={() => handleHostAdmit(wp.id)}
+                          >
+                            Admit
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              )}
+
+              {/* Active Participants Roster */}
+              <section className="host-panel-sec">
+                <h4>In Call ({totalParticipantCount})</h4>
+                <div className="host-peer-list">
+                  {/* Self row */}
+                  <div className="host-peer-row">
+                    <div className="host-peer-info">
+                      <strong>{displayName || 'You'} (You)</strong>
+                      <small>
+                        Role: {selfRole.toUpperCase()} ·{' '}
+                        {audioMuted ? 'Muted' : 'Mic on'}
+                      </small>
+                    </div>
+                  </div>
+
+                  {/* Remote peers */}
+                  {remoteList.map((peer) => (
+                    <div
+                      key={peer.id}
+                      className="host-peer-row"
+                      data-testid="roster-peer-row"
+                    >
+                      <div className="host-peer-info">
+                        <strong>{peer.displayName}</strong>
+                        <small>
+                          Role: {peer.role.toUpperCase()} ·{' '}
+                          {peer.state.audio ? 'Mic on' : 'Muted'}
+                        </small>
+                      </div>
+
+                      {canModerate && (
+                        <div className="host-peer-actions">
+                          {peer.state.audio ? (
+                            <button
+                              type="button"
+                              className="btn"
+                              onClick={() => handleHostMutePeer(peer.id)}
+                            >
+                              Mute
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              className="btn"
+                              onClick={() =>
+                                handleHostAskUnmute(peer.id, peer.displayName)
+                              }
+                            >
+                              Ask unmute
+                            </button>
+                          )}
+
+                          {isHost && peer.role !== 'guest' && (
+                            <select
+                              className="host-role-select"
+                              value={peer.role}
+                              aria-label={`Change role for ${peer.displayName}`}
+                              onChange={(e) =>
+                                handleHostSetRole(
+                                  peer.id,
+                                  e.target.value as
+                                    'host' | 'cohost' | 'attendee',
+                                )
+                              }
+                            >
+                              <option value="attendee">Attendee</option>
+                              <option value="cohost">Cohost</option>
+                              <option value="host">Transfer Host</option>
+                            </select>
+                          )}
+
+                          <button
+                            type="button"
+                            className="btn"
+                            onClick={() =>
+                              handleHostRemovePeer(
+                                peer.id,
+                                peer.displayName,
+                                false,
+                              )
+                            }
+                            title="Remove from call"
+                          >
+                            Remove
+                          </button>
+                          <button
+                            type="button"
+                            className="btn danger-outline-btn"
+                            onClick={() =>
+                              handleHostRemovePeer(
+                                peer.id,
+                                peer.displayName,
+                                true,
+                              )
+                            }
+                            title="Remove and block from rejoining this room"
+                          >
+                            Block
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </section>
+            </div>
+          </aside>
+        )}
 
         {/* In-call text chat panel */}
         {showChatPanel && (
@@ -2206,24 +2883,89 @@ export function MeetingRoomView({
             )}
           </div>
 
-          <button
-            type="button"
-            className="dock-btn end"
-            onClick={handleHangUp}
-            aria-label="Leave call"
-            title="Leave call"
-            data-testid="leave-call-btn"
-          >
-            <EndIcon />
-          </button>
+          {/* Leave Call or End Meeting for All (when Host) */}
+          <div className="dock-popover-anchor">
+            <button
+              type="button"
+              className="dock-btn end"
+              onClick={() => {
+                if (isHost && remoteList.length > 0) {
+                  setShowLeaveMenu((v) => !v);
+                } else {
+                  handleHangUp();
+                }
+              }}
+              aria-label="Leave call"
+              title="Leave call"
+              data-testid="leave-call-btn"
+            >
+              <EndIcon />
+            </button>
+
+            {showLeaveMenu && isHost && (
+              <div
+                className="call-device-popover"
+                role="dialog"
+                aria-label="Leave or end meeting"
+              >
+                <button
+                  type="button"
+                  className="btn"
+                  style={{ width: '100%', justifyContent: 'center' }}
+                  onClick={handleHangUp}
+                >
+                  Leave call (transfer host)
+                </button>
+                <button
+                  type="button"
+                  className="btn primary"
+                  style={{
+                    width: '100%',
+                    justifyContent: 'center',
+                    background: '#ea4335',
+                    borderColor: '#ea4335',
+                    color: '#fff',
+                  }}
+                  onClick={handleHostEndMeeting}
+                >
+                  End meeting for all
+                </button>
+              </div>
+            )}
+          </div>
         </div>
 
         <div className="call-dock-right">
+          {/* People & Host Controls toggle button with waiting room badge */}
+          <button
+            type="button"
+            className={`call-side-btn ${showHostPanel ? 'active-panel' : ''}`}
+            onClick={() => {
+              setShowHostPanel((v) => !v);
+              setShowChatPanel(false);
+            }}
+            aria-pressed={showHostPanel}
+            aria-label="Toggle people and host controls"
+            title="People & Host Controls"
+            data-testid="call-host-btn"
+          >
+            <UsrIcon />
+            <span>{canModerate ? 'Host' : 'People'}</span>
+            {waitingPeers.length > 0 && (
+              <span className="unread-chat-badge" data-testid="waiting-badge">
+                {waitingPeers.length}
+              </span>
+            )}
+          </button>
+
           {/* In-call Chat toggle button with unread badge */}
           <button
             type="button"
             className={`call-side-btn ${showChatPanel ? 'active-panel' : ''}`}
-            onClick={() => setShowChatPanel((v) => !v)}
+            onClick={() => {
+              setShowChatPanel((v) => !v);
+              setShowHostPanel(false);
+            }}
             aria-pressed={showChatPanel}
             aria-label="Toggle in-call chat (C)"
             title="Toggle in-call chat (C)"

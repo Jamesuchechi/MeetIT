@@ -8,6 +8,12 @@ import { classifyMediaError } from './lib/devices';
 import { computeLayout } from './lib/layout';
 import { ActiveSpeakerSelector } from './lib/activeSpeaker';
 import { formatRecurrenceLabel, generateIcsContent } from './lib/meetingsStore';
+import {
+  formatAllNotesAsMarkdown,
+  formatNoteAsMarkdown,
+  type MeetingActionItem,
+  type MeetingNoteItem,
+} from './lib/notesStore';
 
 describe('Room Code Utilities', () => {
   it('generates a 3-4-3 room code with hyphen separators', () => {
@@ -176,5 +182,69 @@ describe('Personal Room & Scheduled Meetings (.ics + RRULE)', () => {
     expect(ics).toContain('ATTENDEE;CN=mei@example.com:mailto:mei@example.com');
     expect(ics).toContain('END:VCALENDAR');
     expect(formatRecurrenceLabel('FREQ=WEEKLY')).toBe('Repeats weekly');
+  });
+});
+
+describe('Meeting Notes & Action Items Hub (Markdown export & task sync)', () => {
+  const sampleNote: MeetingNoteItem = {
+    id: 'note-101',
+    ownerId: 'user-1',
+    roomCode: 'abc-defg-hij',
+    meetingTitle: 'Architecture Sync',
+    meetingDate: '2026-11-05T15:00:00.000Z',
+    summary: 'Aligned on mesh-to-SFU threshold and waiting room policies.',
+    content: '- Finalized 4-peer mesh limit\n- Verified TURN fallback',
+    attendees: ['James Uchechi', 'Mei Lin'],
+    tags: ['architecture', 'webrtc'],
+    createdAt: '2026-11-05T15:45:00.000Z',
+    updatedAt: '2026-11-05T15:45:00.000Z',
+  };
+
+  const sampleTasks: MeetingActionItem[] = [
+    {
+      id: 'task-1',
+      ownerId: 'user-1',
+      noteId: 'note-101',
+      roomCode: 'abc-defg-hij',
+      meetingTitle: 'Architecture Sync',
+      text: 'Ship waiting room admit/deny controls',
+      assignee: 'James',
+      priority: 'high',
+      done: false,
+      createdAt: '2026-11-05T15:46:00.000Z',
+    },
+    {
+      id: 'task-2',
+      ownerId: 'user-1',
+      noteId: 'note-101',
+      roomCode: 'abc-defg-hij',
+      meetingTitle: 'Architecture Sync',
+      text: 'Verify .ics RRULE export',
+      priority: 'medium',
+      done: true,
+      createdAt: '2026-11-05T15:47:00.000Z',
+      completedAt: '2026-11-05T16:00:00.000Z',
+    },
+  ];
+
+  it('formats a meeting note with executive summary and action item checkboxes as Markdown', () => {
+    const md = formatNoteAsMarkdown(sampleNote, sampleTasks);
+    expect(md).toContain('# Architecture Sync');
+    expect(md).toContain('- **Room Code:** `abc-defg-hij`');
+    expect(md).toContain('- **Attendees:** James Uchechi, Mei Lin');
+    expect(md).toContain('## Executive Summary');
+    expect(md).toContain(
+      'Aligned on mesh-to-SFU threshold and waiting room policies.',
+    );
+    expect(md).toContain(
+      '- [ ] Ship waiting room admit/deny controls _(@James · priority:high)_',
+    );
+    expect(md).toContain('- [x] Verify .ics RRULE export');
+  });
+
+  it('formats multiple meeting notes into a combined Markdown document', () => {
+    const combined = formatAllNotesAsMarkdown([sampleNote], sampleTasks);
+    expect(combined).toContain('# Architecture Sync');
+    expect(combined).toContain('## Action Items');
   });
 });

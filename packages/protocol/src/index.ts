@@ -69,6 +69,23 @@ export const peerInfoSchema = z.object({
 });
 export type PeerInfo = z.infer<typeof peerInfoSchema>;
 
+export const roomPermissionsSchema = z.object({
+  waitingRoom: z.boolean(),
+  allowGuestChat: z.boolean(),
+  allowGuestScreenShare: z.boolean(),
+  allowGuestReactions: z.boolean(),
+});
+export type RoomPermissions = z.infer<typeof roomPermissionsSchema>;
+
+export const waitingPeerSchema = z.object({
+  id: z.string().uuid(),
+  displayName: z.string().trim().min(1).max(80),
+  role: peerRoleSchema,
+  verified: z.boolean().optional(),
+  requestedAt: z.number(),
+});
+export type WaitingPeer = z.infer<typeof waitingPeerSchema>;
+
 export const sdpSchema = z.object({
   type: z.enum(['offer', 'answer', 'pranswer', 'rollback']),
   sdp: z.string().optional(),
@@ -102,6 +119,53 @@ export const errorCodeSchema = z.enum([
   'PROTOCOL_VERSION',
 ]);
 export type ErrorCode = z.infer<typeof errorCodeSchema>;
+
+export const hostActionPayloadSchema = z.discriminatedUnion('action', [
+  z.object({
+    action: z.literal('mute'),
+    targetPeerId: z.string().uuid(),
+  }),
+  z.object({
+    action: z.literal('mute_all'),
+  }),
+  z.object({
+    action: z.literal('ask_unmute'),
+    targetPeerId: z.string().uuid(),
+  }),
+  z.object({
+    action: z.literal('remove'),
+    targetPeerId: z.string().uuid(),
+    block: z.boolean().optional(),
+  }),
+  z.object({
+    action: z.literal('set_role'),
+    targetPeerId: z.string().uuid(),
+    role: z.enum(['host', 'cohost', 'attendee']),
+  }),
+  z.object({
+    action: z.literal('set_locked'),
+    locked: z.boolean(),
+  }),
+  z.object({
+    action: z.literal('set_permissions'),
+    permissions: roomPermissionsSchema.partial(),
+  }),
+  z.object({
+    action: z.literal('admit'),
+    targetPeerId: z.string().uuid(),
+  }),
+  z.object({
+    action: z.literal('deny'),
+    targetPeerId: z.string().uuid(),
+  }),
+  z.object({
+    action: z.literal('admit_all'),
+  }),
+  z.object({
+    action: z.literal('end_meeting'),
+  }),
+]);
+export type HostActionPayload = z.infer<typeof hostActionPayloadSchema>;
 
 export const clientMessageSchema = z.discriminatedUnion('type', [
   z.object({
@@ -170,6 +234,13 @@ export const clientMessageSchema = z.discriminatedUnion('type', [
     v: z.literal(1),
     id: z.string().uuid().optional(),
     ts: z.number().optional(),
+    type: z.literal('host.action'),
+    payload: hostActionPayloadSchema,
+  }),
+  z.object({
+    v: z.literal(1),
+    id: z.string().uuid().optional(),
+    ts: z.number().optional(),
     type: z.literal('ping'),
     payload: z.object({}),
   }),
@@ -186,6 +257,8 @@ export const serverJoinedPayloadSchema = z.object({
     hostId: z.string().uuid().nullable(),
     title: z.string().optional(),
     description: z.string().optional(),
+    permissions: roomPermissionsSchema.optional(),
+    waitingPeers: z.array(waitingPeerSchema).optional(),
   }),
 });
 
@@ -204,10 +277,30 @@ export type ClientMessage = z.infer<typeof clientMessageSchema>;
 export type ServerMessage = z.infer<typeof serverMessageSchema>;
 export type Envelope = z.infer<typeof envelopeSchema>;
 
+export interface HostCommandEvent {
+  command: 'mute' | 'ask_unmute' | 'removed' | 'meeting_ended';
+  byPeerId: string;
+  byDisplayName: string;
+  blocked?: boolean;
+}
+
 export interface SignalingEvents {
   joined: ServerJoinedPayload;
+  'waiting.room': {
+    roomCode: string;
+    title?: string;
+    message: string;
+  };
+  'waiting.updated': {
+    waitingPeers: WaitingPeer[];
+  };
   'peer.joined': { peer: PeerInfo };
   'peer.left': { peerId: string; reason: string };
+  'peer.role.updated': {
+    peerId: string;
+    role: PeerRole;
+    hostId: string | null;
+  };
   'signal.offer': { from: string; to: string; sdp: SdpPayload };
   'signal.answer': { from: string; to: string; sdp: SdpPayload };
   'signal.ice': { from: string; to: string; candidate: IceCandidatePayload };
@@ -227,7 +320,12 @@ export interface SignalingEvents {
     emoji: ReactionEmoji;
     ts: number;
   };
-  'room.updated': { locked: boolean; hostId: string | null };
+  'room.updated': {
+    locked: boolean;
+    hostId: string | null;
+    permissions?: RoomPermissions;
+  };
+  'host.command': HostCommandEvent;
   error: { code: ErrorCode; message: string };
   pong: Record<string, never>;
 }

@@ -129,21 +129,21 @@ Every phase has an **exit criteria** block. Do not start the next phase until ex
 
 ### Meeting Notes & Action Items Hub
 
-- [ ] [P0] Dedicated Notes view in web dashboard (search, filter by meeting, view summaries)
-- [ ] [P1] Action items manager: track open/completed tasks from past meetings with checkbox sync
-- [ ] [P1] Markdown export and quick-copy for notes & meeting summaries
-- [ ] [P1] Mobile bottom navigation and sidebar link for instant 1-tap Notes access
+- [x] [P0] Dedicated Notes view in web dashboard (search, filter by meeting, view summaries)
+- [x] [P1] Action items manager: track open/completed tasks from past meetings with checkbox sync
+- [x] [P1] Markdown export and quick-copy for notes & meeting summaries
+- [x] [P1] Mobile bottom navigation and sidebar link for instant 1-tap Notes access
 
 ### Host controls
 
-- [ ] [P0] Roles: host, cohost, attendee, guest (server authoritative)
-- [ ] [P0] Mute participant, mute all, remove participant
-- [ ] [P0] Lock / unlock room
-- [ ] [P0] Waiting room with admit / deny / admit all
-- [ ] [P0] Host transfer on host leave; end meeting for all
-- [ ] [P1] Disable guest chat / screen share / reactions per room
-- [ ] [P1] Remove-and-block (per-room blocklist by user ID or token fingerprint)
-- [ ] [P1] Ask-to-unmute request from host
+- [x] [P0] Roles: host, cohost, attendee, guest (server authoritative)
+- [x] [P0] Mute participant, mute all, remove participant
+- [x] [P0] Lock / unlock room
+- [x] [P0] Waiting room with admit / deny / admit all
+- [x] [P0] Host transfer on host leave; end meeting for all
+- [x] [P1] Disable guest chat / screen share / reactions per room
+- [x] [P1] Remove-and-block (per-room blocklist by user ID or token fingerprint)
+- [x] [P1] Ask-to-unmute request from host
 
 ### Resilience and UX
 

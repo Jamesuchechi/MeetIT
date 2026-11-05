@@ -49,7 +49,7 @@ export function verifyJoinToken(
   if (!trimmed) return null;
 
   // 1. Legacy/test guest token
-  if (trimmed === 'guest-token') {
+  if (trimmed === 'guest-token' || trimmed.startsWith('guest-token-')) {
     return { kind: 'guest', verified: false };
   }
 
