@@ -11,10 +11,13 @@
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
-    "fastify": "^5.4.0"
+    "@meetit/protocol": "workspace:*",
+    "fastify": "^5.4.0",
+    "ws": "^8.18.0"
   },
   "devDependencies": {
     "@types/node": "^22.15.30",
+    "@types/ws": "^8.18.0",
     "tsx": "^4.20.3",
     "vitest": "^3.2.4"
   }

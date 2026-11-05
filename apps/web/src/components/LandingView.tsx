@@ -2,15 +2,18 @@ import React, { useState, useRef, useEffect } from 'react';
 import { VidIcon, LnkIcon, CalIcon, HomeIcon, KbIcon } from './Icons';
 import { CallPreview } from './CallPreview';
 import { Logo } from './Logo';
-import { generateRoomCode, normalizeRoomCode, copyToClipboard } from '../types';
+import { normalizeRoomCode, copyToClipboard } from '../types';
+import { createRoomViaApi } from '../lib/signalingClient';
 
 interface LandingViewProps {
   onNavigateDashboard: () => void;
+  onEnterRoom: (code: string) => void;
   onToast: (message: string) => void;
 }
 
 export function LandingView({
   onNavigateDashboard,
+  onEnterRoom,
   onToast,
 }: LandingViewProps) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -48,19 +51,27 @@ export function LandingView({
 
   const handleInstantMeeting = async () => {
     setIsMenuOpen(false);
-    const code = generateRoomCode();
-    const url = `https://meetit.app/m/${code}`;
+    const code = await createRoomViaApi();
+    const url = `${window.location.origin}/m/${code}`;
     const copied = await copyToClipboard(url);
     if (copied) {
-      onToast(`Room ${code} is ready. Link copied.`);
+      onToast(`Room ${code} created. Invite link copied.`);
     } else {
-      onToast(`Room ${code} is ready.`);
+      onToast(`Room ${code} created.`);
     }
+    onEnterRoom(code);
   };
 
-  const handleScheduleLater = () => {
+  const handleScheduleLater = async () => {
     setIsMenuOpen(false);
-    onToast('Scheduling opens here.');
+    const code = await createRoomViaApi();
+    const url = `${window.location.origin}/m/${code}`;
+    const copied = await copyToClipboard(url);
+    if (copied) {
+      onToast(`Meeting link ${code} copied for later.`);
+    } else {
+      onToast(`Meeting code for later: ${code}`);
+    }
   };
 
   const handleOpenDashboard = () => {
@@ -70,8 +81,8 @@ export function LandingView({
 
   const handleJoin = () => {
     if (normalizedCode) {
-      onToast(`Joining ${normalizedCode}…`);
       setMeetingInput('');
+      onEnterRoom(normalizedCode);
     }
   };
 
@@ -111,7 +122,7 @@ export function LandingView({
                     <button
                       type="button"
                       role="menuitem"
-                      onClick={handleInstantMeeting}
+                      onClick={() => void handleInstantMeeting()}
                     >
                       <LnkIcon />
                       <span>Start an instant meeting</span>
@@ -119,7 +130,7 @@ export function LandingView({
                     <button
                       type="button"
                       role="menuitem"
-                      onClick={handleScheduleLater}
+                      onClick={() => void handleScheduleLater()}
                     >
                       <CalIcon />
                       <span>Create a meeting for later</span>

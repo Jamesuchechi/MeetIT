@@ -10,6 +10,8 @@
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
+    "@meetit/media": "workspace:*",
+    "@meetit/protocol": "workspace:*",
     "@meetit/ui": "workspace:*",
     "@supabase/supabase-js": "^2.119.0",
     "react": "^18.3.1",

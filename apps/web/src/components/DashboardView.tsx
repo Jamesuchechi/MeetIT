@@ -17,12 +17,8 @@ import {
   SunIcon,
   MoonIcon,
 } from './Icons';
-import {
-  generateRoomCode,
-  normalizeRoomCode,
-  copyToClipboard,
-  type AuthUser,
-} from '../types';
+import { normalizeRoomCode, copyToClipboard, type AuthUser } from '../types';
+import { createRoomViaApi } from '../lib/signalingClient';
 
 interface DashboardViewProps {
   user?: AuthUser | null;
@@ -30,6 +26,7 @@ interface DashboardViewProps {
   currentTheme?: 'light' | 'dark';
   onToggleTheme?: () => void;
   onNavigateHome: () => void;
+  onEnterRoom: (code: string) => void;
   onToast: (msg: string) => void;
 }
 
@@ -45,6 +42,7 @@ export function DashboardView({
   currentTheme = 'dark',
   onToggleTheme,
   onNavigateHome,
+  onEnterRoom,
   onToast,
 }: DashboardViewProps) {
   const [activeTab, setActiveTab] = useState<
@@ -83,25 +81,26 @@ export function DashboardView({
   const isDashJoinDisabled = !normalizedDashCode;
 
   const handleInstantMeeting = async () => {
-    const code = generateRoomCode();
-    const url = `https://meetit.app/m/${code}`;
+    const code = await createRoomViaApi();
+    const url = `${window.location.origin}/m/${code}`;
     const copied = await copyToClipboard(url);
     if (copied) {
       onToast(`Room ${code} is ready. Link copied.`);
     } else {
       onToast(`Room ${code} is ready.`);
     }
+    onEnterRoom(code);
   };
 
   const handleJoinDash = () => {
     if (normalizedDashCode) {
-      onToast(`Joining ${normalizedDashCode}…`);
       setDashInput('');
+      onEnterRoom(normalizedDashCode);
     }
   };
 
   const handleCopyPersonalRoom = async () => {
-    const url = 'https://meetit.app/m/ada-okafor';
+    const url = `${window.location.origin}/m/ada-okafor-rmk`;
     const copied = await copyToClipboard(url);
     if (copied) {
       setCopiedRoom(true);
@@ -113,7 +112,8 @@ export function DashboardView({
   };
 
   const handleJoinMeeting = (name: string) => {
-    onToast(`Connecting to ${name}…`);
+    onToast(`Entering ${name}…`);
+    onEnterRoom('ada-okafor-rmk');
   };
 
   const handleComingSoon = (feature: string) => {
@@ -395,7 +395,7 @@ export function DashboardView({
                 <button
                   type="button"
                   className="btn primary"
-                  onClick={handleInstantMeeting}
+                  onClick={() => void handleInstantMeeting()}
                 >
                   <PlusIcon />
                   <span>New meeting</span>

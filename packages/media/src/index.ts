@@ -1,3 +1,9 @@
+import type {
+  IceCandidatePayload,
+  SdpPayload,
+  SignalingChannel,
+} from '@meetit/protocol';
+
 export type TrackSource = 'camera' | 'microphone' | 'screen' | 'screen_audio';
 export type ConnectionState =
   'new' | 'connecting' | 'connected' | 'reconnecting' | 'failed' | 'closed';
@@ -6,6 +12,15 @@ export interface ConnectOptions {
   roomId: string;
   selfId: string;
   iceServers: RTCIceServer[];
+  signaling?: SignalingChannel;
+  peerIds?: string[];
+}
+
+export interface RemoteTrackEvent {
+  peerId: string;
+  source: TrackSource;
+  track: MediaStreamTrack;
+  stream?: MediaStream;
 }
 
 export interface TransportStats {
@@ -16,6 +31,8 @@ export interface TransportStats {
 }
 
 export interface TransportEvents {
+  trackSubscribed: RemoteTrackEvent;
+  trackUnsubscribed: { peerId: string; source: TrackSource };
   connectionStateChanged: { peerId: string; state: ConnectionState };
   error: Error;
 }
@@ -26,7 +43,7 @@ export interface MediaTransport {
   publish(
     track: MediaStreamTrack,
     source: TrackSource,
-    options?: { peerId?: string },
+    options?: { peerId?: string; stream?: MediaStream },
   ): Promise<void>;
   unpublish(source: TrackSource): Promise<void>;
   replaceTrack(source: TrackSource, track: MediaStreamTrack): Promise<void>;
@@ -35,6 +52,735 @@ export interface MediaTransport {
     event: E,
     callback: (payload: TransportEvents[E]) => void,
   ): () => void;
+}
+
+/**
+ * Computes per-stream max video bitrate (bps) based on participant count.
+ */
+export function computeMaxVideoBitrate(participantCount: number): number {
+  if (participantCount <= 2) return 1_500_000;
+  if (participantCount <= 4) return 800_000;
+  return 300_000;
+}
+
+/**
+ * Tunes Opus SDP parameters to enable DTX and in-band FEC (`usedtx=1;useinbandfec=1`).
+ */
+export function tuneOpusSdp(sdp: string | undefined): string | undefined {
+  if (!sdp) return sdp;
+  const lines = sdp.split(/\r?\n/);
+  let opusPayloadType: string | null = null;
+
+  for (const line of lines) {
+    const match = line.match(/^a=rtpmap:(\d+)\s+opus\/48000/i);
+    if (match?.[1]) {
+      opusPayloadType = match[1];
+      break;
+    }
+  }
+
+  if (!opusPayloadType) return sdp;
+
+  const fmtpPrefix = `a=fmtp:${opusPayloadType} `;
+  let foundFmtp = false;
+
+  const updated = lines.map((line) => {
+    if (line.startsWith(fmtpPrefix)) {
+      foundFmtp = true;
+      let params = line.slice(fmtpPrefix.length);
+      if (!/useinbandfec=/i.test(params)) {
+        params += ';useinbandfec=1';
+      }
+      if (!/usedtx=/i.test(params)) {
+        params += ';usedtx=1';
+      }
+      return `${fmtpPrefix}${params}`;
+    }
+    return line;
+  });
+
+  if (!foundFmtp) {
+    const rtpmapIndex = updated.findIndex((l) =>
+      l.startsWith(`a=rtpmap:${opusPayloadType} `),
+    );
+    if (rtpmapIndex !== -1) {
+      updated.splice(
+        rtpmapIndex + 1,
+        0,
+        `${fmtpPrefix}minptime=10;useinbandfec=1;usedtx=1`,
+      );
+    }
+  }
+
+  return updated.join('\r\n');
+}
+
+/**
+ * Normalizes a WebRTC stats iterable/map into `TransportStats`.
+ */
+export function normalizeRtcStats(
+  reports: Iterable<Record<string, unknown>>,
+): TransportStats {
+  let bytesReceived = 0;
+  let bytesSent = 0;
+  let packetsLost = 0;
+  let roundTripTimeMs: number | undefined;
+
+  for (const stat of reports) {
+    const type = stat.type;
+    if (type === 'inbound-rtp') {
+      if (typeof stat.bytesReceived === 'number') {
+        bytesReceived += stat.bytesReceived;
+      }
+      if (typeof stat.packetsLost === 'number') {
+        packetsLost += Math.max(0, stat.packetsLost);
+      }
+    } else if (type === 'outbound-rtp') {
+      if (typeof stat.bytesSent === 'number') {
+        bytesSent += stat.bytesSent;
+      }
+    } else if (
+      type === 'candidate-pair' &&
+      stat.state === 'succeeded' &&
+      typeof stat.currentRoundTripTime === 'number'
+    ) {
+      roundTripTimeMs = Math.round(stat.currentRoundTripTime * 1000);
+    }
+  }
+
+  return {
+    bytesReceived,
+    bytesSent,
+    packetsLost,
+    ...(roundTripTimeMs !== undefined ? { roundTripTimeMs } : {}),
+  };
+}
+
+interface PeerSession {
+  peerId: string;
+  pc: RTCPeerConnection;
+  makingOffer: boolean;
+  ignoreOffer: boolean;
+  isSettingRemoteAnswerPending: boolean;
+  remoteDescriptionSet: boolean;
+  queuedCandidates: IceCandidatePayload[];
+  senders: Map<TrackSource, RTCRtpSender>;
+  receivedVideoTrackIds: Set<string>;
+  state: ConnectionState;
+  disconnectTimer: ReturnType<typeof setTimeout> | null;
+  renegotiateTimer: ReturnType<typeof setTimeout> | null;
+}
+
+export interface MeshTransportOptions {
+  PeerConnectionImpl?: typeof RTCPeerConnection;
+  SessionDescriptionImpl?: typeof RTCSessionDescription;
+  IceCandidateImpl?: typeof RTCIceCandidate;
+  iceRestartGraceMs?: number;
+  renegotiateTimeoutMs?: number;
+}
+
+export class MeshTransport implements MediaTransport {
+  private readonly listeners = new Map<
+    keyof TransportEvents,
+    Set<(payload: never) => void>
+  >();
+
+  private readonly publishedTracks = new Map<
+    TrackSource,
+    { track: MediaStreamTrack; stream?: MediaStream }
+  >();
+  private readonly peers = new Map<string, PeerSession>();
+  private readonly unsubscribers: Array<() => void> = [];
+
+  private selfId = '';
+  private iceServers: RTCIceServer[] = [];
+  private signaling: SignalingChannel | null = null;
+  private connected = false;
+
+  private readonly PeerConnectionCtor: typeof RTCPeerConnection | undefined;
+  private readonly iceRestartGraceMs: number;
+  private readonly renegotiateTimeoutMs: number;
+
+  constructor(options: MeshTransportOptions = {}) {
+    this.PeerConnectionCtor =
+      options.PeerConnectionImpl ??
+      (typeof globalThis.RTCPeerConnection !== 'undefined'
+        ? globalThis.RTCPeerConnection
+        : undefined);
+    this.iceRestartGraceMs = options.iceRestartGraceMs ?? 3000;
+    this.renegotiateTimeoutMs = options.renegotiateTimeoutMs ?? 15000;
+  }
+
+  isPoliteWith(remotePeerId: string): boolean {
+    // Lexicographically lower peerId is impolite; higher is polite
+    return this.selfId > remotePeerId;
+  }
+
+  async connect(options: ConnectOptions): Promise<void> {
+    this.selfId = options.selfId;
+    this.iceServers = options.iceServers;
+    this.signaling = options.signaling ?? null;
+    this.connected = true;
+
+    if (this.signaling) {
+      this.unsubscribers.push(
+        this.signaling.on('peer.joined', ({ peer }) => {
+          if (peer.id !== this.selfId) {
+            this.ensurePeer(peer.id, true);
+          }
+        }),
+        this.signaling.on('peer.left', ({ peerId }) => {
+          this.removePeer(peerId);
+        }),
+        this.signaling.on('signal.offer', ({ from, sdp }) => {
+          void this.handleRemoteDescription(from, sdp);
+        }),
+        this.signaling.on('signal.answer', ({ from, sdp }) => {
+          void this.handleRemoteDescription(from, sdp);
+        }),
+        this.signaling.on('signal.ice', ({ from, candidate }) => {
+          void this.handleRemoteCandidate(from, candidate);
+        }),
+      );
+    }
+
+    if (options.peerIds) {
+      for (const peerId of options.peerIds) {
+        if (peerId !== this.selfId) {
+          this.ensurePeer(peerId, true);
+        }
+      }
+    }
+  }
+
+  async disconnect(): Promise<void> {
+    this.connected = false;
+    for (const unsub of this.unsubscribers.splice(0)) {
+      unsub();
+    }
+    for (const peerId of Array.from(this.peers.keys())) {
+      this.removePeer(peerId);
+    }
+    this.publishedTracks.clear();
+  }
+
+  async publish(
+    track: MediaStreamTrack,
+    source: TrackSource,
+    options?: { peerId?: string; stream?: MediaStream },
+  ): Promise<void> {
+    this.assertConnected();
+    this.publishedTracks.set(source, {
+      track,
+      ...(options?.stream ? { stream: options.stream } : {}),
+    });
+
+    for (const session of this.peers.values()) {
+      this.attachTrackToSession(session, source, track, options?.stream);
+      void this.negotiate(session);
+    }
+  }
+
+  async unpublish(source: TrackSource): Promise<void> {
+    this.publishedTracks.delete(source);
+    for (const session of this.peers.values()) {
+      const sender = session.senders.get(source);
+      if (sender) {
+        try {
+          session.pc.removeTrack(sender);
+        } catch {
+          // ignore if already closed
+        }
+        session.senders.delete(source);
+        void this.negotiate(session);
+      }
+    }
+  }
+
+  async replaceTrack(
+    source: TrackSource,
+    track: MediaStreamTrack,
+  ): Promise<void> {
+    this.assertConnected();
+    const existing = this.publishedTracks.get(source);
+    if (!existing) {
+      throw new Error(`No published track for source "${source}"`);
+    }
+    this.publishedTracks.set(source, {
+      track,
+      ...(existing.stream ? { stream: existing.stream } : {}),
+    });
+
+    for (const session of this.peers.values()) {
+      const sender = session.senders.get(source);
+      if (sender && typeof sender.replaceTrack === 'function') {
+        await sender.replaceTrack(track);
+      }
+    }
+  }
+
+  async getStats(): Promise<TransportStats> {
+    const allReports: Array<Record<string, unknown>> = [];
+    for (const session of this.peers.values()) {
+      if (typeof session.pc.getStats === 'function') {
+        const stats = await session.pc.getStats();
+        stats.forEach((report: Record<string, unknown>) => {
+          allReports.push(report);
+        });
+      }
+    }
+    return normalizeRtcStats(allReports);
+  }
+
+  on<E extends keyof TransportEvents>(
+    event: E,
+    callback: (payload: TransportEvents[E]) => void,
+  ): () => void {
+    const set = this.listeners.get(event) ?? new Set();
+    set.add(callback as (payload: never) => void);
+    this.listeners.set(event, set);
+    return () => {
+      set.delete(callback as (payload: never) => void);
+    };
+  }
+
+  addPeer(peerId: string): void {
+    if (peerId !== this.selfId) {
+      this.ensurePeer(peerId, true);
+    }
+  }
+
+  private emit<E extends keyof TransportEvents>(
+    event: E,
+    payload: TransportEvents[E],
+  ): void {
+    const set = this.listeners.get(event);
+    if (!set) return;
+    for (const cb of set) {
+      (cb as (p: TransportEvents[E]) => void)(payload);
+    }
+  }
+
+  private ensurePeer(peerId: string, initiateIfImpolite = false): PeerSession {
+    const existing = this.peers.get(peerId);
+    if (existing) return existing;
+
+    if (!this.PeerConnectionCtor) {
+      throw new Error('RTCPeerConnection is not available in this environment');
+    }
+
+    const pc = new this.PeerConnectionCtor({ iceServers: this.iceServers });
+    const session: PeerSession = {
+      peerId,
+      pc,
+      makingOffer: false,
+      ignoreOffer: false,
+      isSettingRemoteAnswerPending: false,
+      remoteDescriptionSet: false,
+      queuedCandidates: [],
+      senders: new Map(),
+      receivedVideoTrackIds: new Set(),
+      state: 'new',
+      disconnectTimer: null,
+      renegotiateTimer: null,
+    };
+
+    this.peers.set(peerId, session);
+    this.updateAllPeersBitrateCap();
+
+    // Attach already-published local tracks
+    for (const [source, { track, stream }] of this.publishedTracks.entries()) {
+      this.attachTrackToSession(session, source, track, stream);
+    }
+
+    pc.onnegotiationneeded = () => {
+      void this.negotiate(session);
+    };
+
+    pc.onicecandidate = (event: RTCPeerConnectionIceEvent) => {
+      if (event.candidate && this.signaling) {
+        this.signaling.send({
+          v: 1,
+          type: 'signal.ice',
+          payload: {
+            to: peerId,
+            candidate: {
+              candidate: event.candidate.candidate,
+              sdpMid: event.candidate.sdpMid ?? null,
+              sdpMLineIndex: event.candidate.sdpMLineIndex ?? null,
+              usernameFragment: event.candidate.usernameFragment ?? null,
+            },
+          },
+        });
+      }
+    };
+
+    pc.ontrack = (event: RTCTrackEvent) => {
+      const track = event.track;
+      const stream = event.streams?.[0];
+      let source: TrackSource = 'camera';
+      if (track.kind === 'audio') {
+        source = 'microphone';
+      } else {
+        const labelLower = (track.label || '').toLowerCase();
+        const streamIdLower = (stream?.id || '').toLowerCase();
+        const isSecondVideo =
+          session.receivedVideoTrackIds.size > 0 &&
+          !session.receivedVideoTrackIds.has(track.id);
+        session.receivedVideoTrackIds.add(track.id);
+        if (
+          labelLower.includes('screen') ||
+          labelLower.includes('window') ||
+          labelLower.includes('display') ||
+          streamIdLower.includes('screen') ||
+          isSecondVideo
+        ) {
+          source = 'screen';
+        }
+      }
+
+      this.emit('trackSubscribed', {
+        peerId,
+        source,
+        track,
+        ...(stream ? { stream } : {}),
+      });
+
+      track.onended = () => {
+        session.receivedVideoTrackIds.delete(track.id);
+        this.emit('trackUnsubscribed', { peerId, source });
+      };
+    };
+
+    const handleStateChange = () => {
+      this.handleConnectionStateUpdate(session);
+    };
+
+    pc.oniceconnectionstatechange = handleStateChange;
+    pc.onconnectionstatechange = handleStateChange;
+
+    // If impolite (or if local tracks already attached), start negotiation
+    if (
+      initiateIfImpolite &&
+      (!this.isPoliteWith(peerId) || this.publishedTracks.size > 0)
+    ) {
+      void this.negotiate(session);
+    }
+
+    return session;
+  }
+
+  private attachTrackToSession(
+    session: PeerSession,
+    source: TrackSource,
+    track: MediaStreamTrack,
+    stream?: MediaStream,
+  ): void {
+    if (session.senders.has(source)) return;
+    const streams = stream ? [stream] : [];
+    const sender = session.pc.addTrack(track, ...streams);
+    session.senders.set(source, sender);
+    void this.applyBitrateCap(sender, track.kind);
+  }
+
+  private updateAllPeersBitrateCap(): void {
+    for (const session of this.peers.values()) {
+      for (const [source, sender] of session.senders.entries()) {
+        if (source === 'camera' || source === 'screen') {
+          void this.applyBitrateCap(sender, 'video');
+        }
+      }
+    }
+  }
+
+  private async applyBitrateCap(
+    sender: RTCRtpSender,
+    kind: string,
+  ): Promise<void> {
+    if (
+      kind !== 'video' ||
+      typeof sender.getParameters !== 'function' ||
+      typeof sender.setParameters !== 'function'
+    ) {
+      return;
+    }
+    try {
+      const params = sender.getParameters();
+      if (!params.encodings || params.encodings.length === 0) {
+        params.encodings = [{}];
+      }
+      const maxBitrate = computeMaxVideoBitrate(this.peers.size + 1);
+      for (const enc of params.encodings) {
+        enc.maxBitrate = maxBitrate;
+      }
+      await sender.setParameters(params);
+    } catch {
+      // ignore if browser does not allow setting parameters before negotiation
+    }
+  }
+
+  private async negotiate(
+    session: PeerSession,
+    iceRestart = false,
+  ): Promise<void> {
+    if (!this.connected || session.makingOffer) return;
+    try {
+      session.makingOffer = true;
+      this.updateSessionState(
+        session,
+        session.state === 'reconnecting' ? 'reconnecting' : 'connecting',
+      );
+
+      const offer = await session.pc.createOffer(
+        iceRestart ? { iceRestart: true } : undefined,
+      );
+      if (session.pc.signalingState !== 'stable') return;
+
+      const tunedSdp = tuneOpusSdp(offer.sdp);
+      const finalOffer: RTCSessionDescriptionInit = {
+        type: offer.type,
+        ...(tunedSdp !== undefined ? { sdp: tunedSdp } : {}),
+      };
+
+      await session.pc.setLocalDescription(finalOffer);
+      if (this.signaling && session.pc.localDescription) {
+        this.signaling.send({
+          v: 1,
+          type: 'signal.offer',
+          payload: {
+            to: session.peerId,
+            sdp: {
+              type: session.pc.localDescription.type,
+              ...(session.pc.localDescription.sdp
+                ? { sdp: session.pc.localDescription.sdp }
+                : {}),
+            },
+          },
+        });
+      }
+    } catch (err) {
+      this.emit('error', err instanceof Error ? err : new Error(String(err)));
+    } finally {
+      session.makingOffer = false;
+    }
+  }
+
+  private async handleRemoteDescription(
+    peerId: string,
+    description: SdpPayload,
+  ): Promise<void> {
+    const session = this.ensurePeer(peerId, false);
+    const polite = this.isPoliteWith(peerId);
+
+    try {
+      const offerCollision =
+        description.type === 'offer' &&
+        (session.makingOffer ||
+          (session.pc.signalingState !== 'stable' &&
+            !session.isSettingRemoteAnswerPending));
+
+      session.ignoreOffer = !polite && offerCollision;
+      if (session.ignoreOffer) {
+        return;
+      }
+
+      session.isSettingRemoteAnswerPending = description.type === 'answer';
+      const rtcDesc: RTCSessionDescriptionInit = {
+        type: description.type,
+        ...(description.sdp !== undefined ? { sdp: description.sdp } : {}),
+      };
+      if (offerCollision && polite) {
+        await Promise.all([
+          session.pc.setLocalDescription({ type: 'rollback' }),
+          session.pc.setRemoteDescription(rtcDesc),
+        ]);
+      } else {
+        await session.pc.setRemoteDescription(rtcDesc);
+      }
+      session.isSettingRemoteAnswerPending = false;
+      session.remoteDescriptionSet = true;
+
+      // Flush any ICE candidates that arrived before remoteDescription was set
+      while (session.queuedCandidates.length > 0) {
+        const next = session.queuedCandidates.shift();
+        if (next) {
+          await session.pc.addIceCandidate(this.toRtcCandidate(next));
+        }
+      }
+
+      if (description.type === 'offer') {
+        const answer = await session.pc.createAnswer();
+        const tunedSdp = tuneOpusSdp(answer.sdp);
+        const finalAnswer: RTCSessionDescriptionInit = {
+          type: answer.type,
+          ...(tunedSdp !== undefined ? { sdp: tunedSdp } : {}),
+        };
+        await session.pc.setLocalDescription(finalAnswer);
+
+        if (this.signaling && session.pc.localDescription) {
+          this.signaling.send({
+            v: 1,
+            type: 'signal.answer',
+            payload: {
+              to: peerId,
+              sdp: {
+                type: session.pc.localDescription.type,
+                ...(session.pc.localDescription.sdp
+                  ? { sdp: session.pc.localDescription.sdp }
+                  : {}),
+              },
+            },
+          });
+        }
+      }
+    } catch (err) {
+      session.isSettingRemoteAnswerPending = false;
+      this.emit('error', err instanceof Error ? err : new Error(String(err)));
+    }
+  }
+
+  private toRtcCandidate(candidate: IceCandidatePayload): RTCIceCandidateInit {
+    return {
+      candidate: candidate.candidate,
+      ...(candidate.sdpMid !== undefined ? { sdpMid: candidate.sdpMid } : {}),
+      ...(candidate.sdpMLineIndex !== undefined
+        ? { sdpMLineIndex: candidate.sdpMLineIndex }
+        : {}),
+      ...(candidate.usernameFragment !== undefined
+        ? { usernameFragment: candidate.usernameFragment }
+        : {}),
+    };
+  }
+
+  private async handleRemoteCandidate(
+    peerId: string,
+    candidate: IceCandidatePayload,
+  ): Promise<void> {
+    const session = this.ensurePeer(peerId, false);
+    try {
+      if (!session.remoteDescriptionSet || !session.pc.remoteDescription) {
+        session.queuedCandidates.push(candidate);
+        return;
+      }
+      await session.pc.addIceCandidate(this.toRtcCandidate(candidate));
+    } catch (err) {
+      if (!session.ignoreOffer) {
+        this.emit('error', err instanceof Error ? err : new Error(String(err)));
+      }
+    }
+  }
+
+  private handleConnectionStateUpdate(session: PeerSession): void {
+    const iceState = session.pc.iceConnectionState;
+    const connState = session.pc.connectionState;
+
+    if (
+      connState === 'connected' ||
+      iceState === 'connected' ||
+      iceState === 'completed'
+    ) {
+      this.clearRecoveryTimers(session);
+      this.updateSessionState(session, 'connected');
+      return;
+    }
+
+    if (iceState === 'disconnected' || connState === 'disconnected') {
+      if (!session.disconnectTimer) {
+        // 3s grace period before ICE restart
+        session.disconnectTimer = setTimeout(() => {
+          session.disconnectTimer = null;
+          this.triggerIceRestart(session);
+        }, this.iceRestartGraceMs);
+      }
+      if (!session.renegotiateTimer) {
+        // 15s full renegotiation fallback
+        session.renegotiateTimer = setTimeout(() => {
+          session.renegotiateTimer = null;
+          this.triggerFullRenegotiation(session.peerId);
+        }, this.renegotiateTimeoutMs);
+      }
+      return;
+    }
+
+    if (iceState === 'failed' || connState === 'failed') {
+      this.clearRecoveryTimers(session);
+      this.updateSessionState(session, 'failed');
+      this.triggerFullRenegotiation(session.peerId);
+      return;
+    }
+
+    if (connState === 'closed' || iceState === 'closed') {
+      this.clearRecoveryTimers(session);
+      this.updateSessionState(session, 'closed');
+    }
+  }
+
+  private triggerIceRestart(session: PeerSession): void {
+    if (!this.connected) return;
+    this.updateSessionState(session, 'reconnecting');
+    if (typeof session.pc.restartIce === 'function') {
+      session.pc.restartIce();
+    }
+    void this.negotiate(session, true);
+  }
+
+  private triggerFullRenegotiation(peerId: string): void {
+    if (!this.connected) return;
+    this.removePeer(peerId, false);
+    const rebuilt = this.ensurePeer(peerId, false);
+    this.updateSessionState(rebuilt, 'reconnecting');
+    void this.negotiate(rebuilt, true);
+  }
+
+  private clearRecoveryTimers(session: PeerSession): void {
+    if (session.disconnectTimer) {
+      clearTimeout(session.disconnectTimer);
+      session.disconnectTimer = null;
+    }
+    if (session.renegotiateTimer) {
+      clearTimeout(session.renegotiateTimer);
+      session.renegotiateTimer = null;
+    }
+  }
+
+  private updateSessionState(
+    session: PeerSession,
+    next: ConnectionState,
+  ): void {
+    if (session.state === next) return;
+    session.state = next;
+    this.emit('connectionStateChanged', {
+      peerId: session.peerId,
+      state: next,
+    });
+  }
+
+  private removePeer(peerId: string, emitClosed = true): void {
+    const session = this.peers.get(peerId);
+    if (!session) return;
+    this.clearRecoveryTimers(session);
+    try {
+      session.pc.onnegotiationneeded = null;
+      session.pc.onicecandidate = null;
+      session.pc.ontrack = null;
+      session.pc.oniceconnectionstatechange = null;
+      session.pc.onconnectionstatechange = null;
+      session.pc.close();
+    } catch {
+      // ignore close errors
+    }
+    this.peers.delete(peerId);
+    this.updateAllPeersBitrateCap();
+    if (emitClosed) {
+      this.emit('connectionStateChanged', { peerId, state: 'closed' });
+    }
+  }
+
+  private assertConnected(): void {
+    if (!this.connected) {
+      throw new Error('MeshTransport must be connected before publishing');
+    }
+  }
 }
 
 export class FakeTransport implements MediaTransport {

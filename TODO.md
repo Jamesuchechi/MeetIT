@@ -41,46 +41,46 @@ Every phase has an **exit criteria** block. Do not start the next phase until ex
 
 ### Signaling server
 
-- [ ] [P0] Fastify app, `/healthz`, `/readyz`
-- [ ] [P0] WebSocket endpoint with 5 s auth timeout, Origin check
-- [ ] [P0] Zod validation on every inbound frame, drop + count invalid
-- [ ] [P0] In-memory `Room` and `Peer` classes; join, leave, relay offer/answer/ice
-- [ ] [P0] Slot reclaim: same `selfId` rejoin within 30 s
-- [ ] [P0] Keepalive ping/pong, dead-socket reaping
-- [ ] [P0] Per-connection token-bucket rate limiter, max frame size
-- [ ] [P0] TURN credential generator (HMAC, TTL)
-- [ ] [P0] `POST /rooms` (create room, returns code), `GET /rooms/:code` (exists/locked)
-- [ ] [P0] Room code generator (`xxx-xxxx-xxx`), collision retry
-- [ ] [P1] Structured logging (pino), request IDs, no SDP in logs
-- [ ] [P1] Integration tests: two fake clients exchange signaling
+- [x] [P0] Fastify app, `/healthz`, `/readyz`
+- [x] [P0] WebSocket endpoint with 5 s auth timeout, Origin check
+- [x] [P0] Zod validation on every inbound frame, drop + count invalid
+- [x] [P0] In-memory `Room` and `Peer` classes; join, leave, relay offer/answer/ice
+- [x] [P0] Slot reclaim: same `selfId` rejoin within 30 s
+- [x] [P0] Keepalive ping/pong, dead-socket reaping
+- [x] [P0] Per-connection token-bucket rate limiter, max frame size
+- [x] [P0] TURN credential generator (HMAC, TTL)
+- [x] [P0] `POST /rooms` (create room, returns code), `GET /rooms/:code` (exists/locked)
+- [x] [P0] Room code generator (`xxx-xxxx-xxx`), collision retry
+- [x] [P1] Structured logging (pino), request IDs, no SDP in logs
+- [x] [P1] Integration tests: two fake clients exchange signaling
 
 ### Mesh transport
 
-- [ ] [P0] `MeshTransport` with perfect negotiation (polite/impolite)
-- [ ] [P0] ICE candidate queueing before remote description
-- [ ] [P0] Track add/remove, `replaceTrack` for device switches
-- [ ] [P0] Connection state mapping + events
-- [ ] [P0] ICE restart on `disconnected` after 3 s grace
-- [ ] [P0] Full renegotiation fallback after 15 s
-- [ ] [P1] Opus tuning (DTX, FEC), bitrate caps per participant count
-- [ ] [P1] `getStats()` normalizer into `TransportStats`
+- [x] [P0] `MeshTransport` with perfect negotiation (polite/impolite)
+- [x] [P0] ICE candidate queueing before remote description
+- [x] [P0] Track add/remove, `replaceTrack` for device switches
+- [x] [P0] Connection state mapping + events
+- [x] [P0] ICE restart on `disconnected` after 3 s grace
+- [x] [P0] Full renegotiation fallback after 15 s
+- [x] [P1] Opus tuning (DTX, FEC), bitrate caps per participant count
+- [x] [P1] `getStats()` normalizer into `TransportStats`
 
 ### Web app
 
-- [ ] [P0] Routing: `/`, `/m/:code` (lobby then call), `/ended`, `/404`
-- [ ] [P0] Landing: "New meeting" and "Join with code"
-- [ ] [P0] Device manager: enumerate, select, persist choice, handle `devicechange`
-- [ ] [P0] Lobby: camera preview, mic level meter, display name, join button
-- [ ] [P0] Permission denied / no device flows with clear recovery steps
-- [ ] [P0] Call screen: local + remote tile, mute, camera, leave
-- [ ] [P0] Responsive layout (desktop and mobile portrait)
-- [ ] [P1] Connection status toasts (reconnecting, restored, failed)
-- [ ] [P1] Copy invite link button
+- [x] [P0] Routing: `/`, `/m/:code` (lobby then call), `/ended`, `/404`
+- [x] [P0] Landing: "New meeting" and "Join with code"
+- [x] [P0] Device manager: enumerate, select, persist choice, handle `devicechange`
+- [x] [P0] Lobby: camera preview, mic level meter, display name, join button
+- [x] [P0] Permission denied / no device flows with clear recovery steps
+- [x] [P0] Call screen: local + remote tile, mute, camera, leave
+- [x] [P0] Responsive layout (desktop and mobile portrait)
+- [x] [P1] Connection status toasts (reconnecting, restored, failed)
+- [x] [P1] Copy invite link button
 
 ### Quality
 
-- [ ] [P0] Playwright e2e: two contexts join, verify remote video `videoWidth > 0` and inbound bytes increase
-- [ ] [P1] Unit tests: protocol schemas, backoff, credential generator
+- [~] [P0] Playwright e2e: two contexts join, verify remote video `videoWidth > 0` and inbound bytes increase
+- [x] [P1] Unit tests: protocol schemas, backoff, credential generator
 
 **Exit criteria:** two people on different networks (one behind a mobile hotspot) hold a stable 15-minute call; kill Wi-Fi for 5 s and the call recovers; e2e passes in CI.
 
@@ -88,20 +88,20 @@ Every phase has an **exit criteria** block. Do not start the next phase until ex
 
 ## Phase 2 - Multi-party mesh (v0.2, weeks 4 to 5)
 
-- [ ] [P0] Full-mesh up to 4 participants, hard cap and clear "room full" UX
-- [ ] [P0] Dynamic grid layout (`computeLayout`, unit tested for 1 to 4)
-- [ ] [P0] Remote participant state sync (audio/video/hand) via `state.update`
-- [ ] [P0] Screen sharing (`getDisplayMedia`), separate track, pin-on-share layout
-- [ ] [P0] Stop-sharing from browser UI detected and synced
-- [ ] [P0] In-call chat panel (text only), unread badge, server-ordered IDs
-- [ ] [P1] Active speaker detection (AnalyserNode, hysteresis) and highlight ring
-- [ ] [P1] Raise hand + reactions (rate limited, ephemeral)
-- [ ] [P1] Per-participant bitrate adaptation by peer count
-- [ ] [P1] Pin / spotlight a participant locally
-- [ ] [P1] Keyboard shortcuts + help overlay
-- [ ] [P1] Join/leave sounds (toggle), `aria-live` announcements
-- [ ] [P2] Picture-in-Picture for remote video
-- [ ] [P2] Mirror self-view toggle
+- [x] [P0] Full-mesh up to 4 participants, hard cap and clear "room full" UX
+- [x] [P0] Dynamic grid layout (`computeLayout`, unit tested for 1 to 4)
+- [x] [P0] Remote participant state sync (audio/video/hand) via `state.update`
+- [x] [P0] Screen sharing (`getDisplayMedia`), separate track, pin-on-share layout
+- [x] [P0] Stop-sharing from browser UI detected and synced
+- [x] [P0] In-call chat panel (text only), unread badge, server-ordered IDs
+- [x] [P1] Active speaker detection (AnalyserNode, hysteresis) and highlight ring
+- [x] [P1] Raise hand + reactions (rate limited, ephemeral)
+- [x] [P1] Per-participant bitrate adaptation by peer count
+- [x] [P1] Pin / spotlight a participant locally
+- [x] [P1] Keyboard shortcuts + help overlay
+- [x] [P1] Join/leave sounds (toggle), `aria-live` announcements
+- [x] [P2] Picture-in-Picture for remote video
+- [x] [P2] Mirror self-view toggle
 
 **Exit criteria:** 4-person call for 30 minutes with screen share, no tile freezes; CPU on a mid laptop stays under 60%; chat ordering identical for all peers.
 
