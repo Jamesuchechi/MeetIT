@@ -18,8 +18,10 @@ const DEFAULT_PEER_STATE: PeerState = {
 
 export class Peer {
   readonly id: string;
+  userId?: string;
   displayName: string;
   role: PeerRole;
+  verified: boolean;
   state: PeerState;
   socket: WebSocket | null;
   isAlive = true;
@@ -28,14 +30,20 @@ export class Peer {
 
   constructor(params: {
     id: string;
+    userId?: string;
     displayName: string;
     role: PeerRole;
+    verified?: boolean;
     state?: PeerState;
     socket: WebSocket;
   }) {
     this.id = params.id;
+    if (params.userId !== undefined) {
+      this.userId = params.userId;
+    }
     this.displayName = params.displayName;
     this.role = params.role;
+    this.verified = params.verified ?? false;
     this.state = params.state ? { ...params.state } : { ...DEFAULT_PEER_STATE };
     this.socket = params.socket;
   }
@@ -54,6 +62,7 @@ export class Peer {
       id: this.id,
       displayName: this.displayName,
       role: this.role,
+      verified: this.verified,
       state: { ...this.state },
     };
   }
@@ -65,7 +74,9 @@ export type JoinResult =
 
 export class Room {
   readonly code: string;
-  title?: string;
+  title?: string | undefined;
+  description?: string | undefined;
+  passcode?: string | undefined;
   locked = false;
   hostId: string | null = null;
   readonly maxParticipants: number;
@@ -79,6 +90,8 @@ export class Room {
     code: string,
     options: {
       title?: string;
+      description?: string;
+      passcode?: string;
       maxParticipants?: number;
       reclaimSlotMs?: number;
     } = {},
@@ -87,8 +100,18 @@ export class Room {
     if (options.title !== undefined) {
       this.title = options.title;
     }
+    if (options.description !== undefined) {
+      this.description = options.description;
+    }
+    if (options.passcode !== undefined && options.passcode.trim().length > 0) {
+      this.passcode = options.passcode.trim();
+    }
     this.maxParticipants = options.maxParticipants ?? 4;
     this.reclaimSlotMs = options.reclaimSlotMs ?? 30_000;
+  }
+
+  get hasPasscode(): boolean {
+    return Boolean(this.passcode && this.passcode.length > 0);
   }
 
   get participantCount(): number {
@@ -140,8 +163,10 @@ export class Room {
     socket: WebSocket;
     displayName: string;
     requestedSelfId?: string;
+    userId?: string;
     initialState?: PeerState;
     isAuthenticatedUser?: boolean;
+    passcode?: string;
   }): JoinResult {
     // 1. Check slot reclaim (same selfId within 30s grace window)
     if (params.requestedSelfId) {
@@ -180,7 +205,16 @@ export class Room {
       }
     }
 
-    // 2. Check room lock & capacity
+    // 2. Check room passcode if configured
+    if (this.passcode && (params.passcode ?? '').trim() !== this.passcode) {
+      return {
+        ok: false,
+        code: 'FORBIDDEN',
+        message: 'Incorrect or missing room passcode.',
+      };
+    }
+
+    // 3. Check room lock & capacity
     if (this.locked) {
       return {
         ok: false,
@@ -207,8 +241,10 @@ export class Room {
 
     const peer = new Peer({
       id: peerId,
+      ...(params.userId !== undefined ? { userId: params.userId } : {}),
       displayName: params.displayName,
       role,
+      verified: Boolean(params.isAuthenticatedUser),
       ...(params.initialState ? { state: params.initialState } : {}),
       socket: params.socket,
     });
@@ -235,7 +271,11 @@ export class Room {
    * Called when a socket disconnects without an explicit `leave`.
    * Holds the peer slot for `reclaimSlotMs` (default 30s) before reaping.
    */
-  detachSocket(peerId: string, socket: WebSocket): void {
+  detachSocket(
+    peerId: string,
+    socket: WebSocket,
+    onReaped?: (peerId: string) => void,
+  ): void {
     const peer = this.peers.get(peerId);
     if (!peer || peer.socket !== socket) return;
 
@@ -247,6 +287,7 @@ export class Room {
     peer.reclaimTimer = setTimeout(() => {
       peer.reclaimTimer = null;
       this.leavePeer(peerId, 'timeout');
+      onReaped?.(peerId);
     }, this.reclaimSlotMs);
   }
 
@@ -327,6 +368,8 @@ export class RoomManager {
     options: {
       code?: string;
       title?: string;
+      description?: string;
+      passcode?: string;
       maxParticipants?: number;
       randomFn?: () => number;
     } = {},
@@ -347,10 +390,25 @@ export class RoomManager {
     }
 
     const existing = this.rooms.get(code);
-    if (existing) return existing;
+    if (existing) {
+      if (options.title !== undefined) existing.title = options.title;
+      if (options.description !== undefined)
+        existing.description = options.description;
+      if (options.passcode !== undefined) {
+        existing.passcode =
+          options.passcode.trim().length > 0
+            ? options.passcode.trim()
+            : undefined;
+      }
+      return existing;
+    }
 
     const room = new Room(code, {
       ...(options.title !== undefined ? { title: options.title } : {}),
+      ...(options.description !== undefined
+        ? { description: options.description }
+        : {}),
+      ...(options.passcode !== undefined ? { passcode: options.passcode } : {}),
       ...(options.maxParticipants !== undefined
         ? { maxParticipants: options.maxParticipants }
         : {}),

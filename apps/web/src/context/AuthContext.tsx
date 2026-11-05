@@ -5,6 +5,7 @@ import React, {
   useEffect,
   useCallback,
 } from 'react';
+import type { User } from '@supabase/supabase-js';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import type { AuthUser } from '../types';
 
@@ -23,100 +24,98 @@ interface AuthContextValue {
   ) => Promise<{ error?: string; confirmationSent?: boolean }>;
   signInWithMagicLink: (email: string) => Promise<{ error?: string }>;
   signInWithGoogle: () => Promise<{ error?: string }>;
-  signInDemo: () => void;
   signOut: () => Promise<void>;
+  updateProfile: (changes: {
+    displayName?: string;
+    headline?: string;
+    bio?: string;
+    organization?: string;
+    location?: string;
+    timezone?: string;
+    avatarFile?: File | null;
+    removeAvatar?: boolean;
+  }) => Promise<{ error?: string }>;
 }
 
-const STORAGE_KEY = 'meetit_auth_user';
+const MAX_AVATAR_BYTES = 2 * 1024 * 1024;
+const ALLOWED_AVATAR_TYPES = [
+  'image/png',
+  'image/jpeg',
+  'image/webp',
+  'image/gif',
+];
 
-export const DEMO_USER: AuthUser = {
-  id: '00000000-0000-0000-0000-000000000001',
-  email: 'ada@brightline.design',
-  displayName: 'Ada Okafor',
-  isPro: true,
-};
+const NOT_CONFIGURED_ERROR =
+  'Authentication is not configured. Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.';
 
 const AuthContext = createContext<AuthContextValue | null>(null);
+
+function mapSupabaseUser(u: User): AuthUser {
+  const meta = u.user_metadata as
+    | {
+        display_name?: string;
+        full_name?: string;
+        avatar_url?: string;
+        headline?: string;
+        bio?: string;
+        organization?: string;
+        location?: string;
+        timezone?: string;
+      }
+    | undefined;
+  return {
+    id: u.id,
+    email: u.email ?? '',
+    displayName:
+      meta?.display_name || meta?.full_name || u.email?.split('@')[0] || 'User',
+    ...(meta?.avatar_url ? { avatarUrl: meta.avatar_url } : {}),
+    ...(meta?.headline ? { headline: meta.headline } : {}),
+    ...(meta?.bio ? { bio: meta.bio } : {}),
+    ...(meta?.organization ? { organization: meta.organization } : {}),
+    ...(meta?.location ? { location: meta.location } : {}),
+    ...(meta?.timezone ? { timezone: meta.timezone } : {}),
+    ...(u.created_at ? { createdAt: u.created_at } : {}),
+  };
+}
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Initialize session from Supabase or localStorage
+  // Restore the persisted Supabase session and keep it in sync afterwards.
   useEffect(() => {
-    let mounted = true;
-
-    async function initAuth() {
-      if (isSupabaseConfigured && supabase) {
-        try {
-          const {
-            data: { session },
-          } = await supabase.auth.getSession();
-          if (session?.user && mounted) {
-            setUser({
-              id: session.user.id,
-              email: session.user.email || '',
-              displayName:
-                session.user.user_metadata?.display_name ||
-                session.user.email?.split('@')[0] ||
-                'User',
-              avatarUrl: session.user.user_metadata?.avatar_url,
-              isPro: true,
-            });
-            setIsLoading(false);
-            return;
-          }
-        } catch (err) {
-          console.warn('[MeetIT Auth] Supabase session check error:', err);
-        }
-
-        // Listen for auth changes
-        const {
-          data: { subscription },
-        } = supabase.auth.onAuthStateChange((_event, session) => {
-          if (!mounted) return;
-          if (session?.user) {
-            setUser({
-              id: session.user.id,
-              email: session.user.email || '',
-              displayName:
-                session.user.user_metadata?.display_name ||
-                session.user.email?.split('@')[0] ||
-                'User',
-              avatarUrl: session.user.user_metadata?.avatar_url,
-              isPro: true,
-            });
-          } else {
-            setUser(null);
-          }
-          setIsLoading(false);
-        });
-
-        return () => {
-          subscription.unsubscribe();
-        };
-      }
-
-      // Fallback: check localStorage for saved session
-      try {
-        const stored = localStorage.getItem(STORAGE_KEY);
-        if (stored && mounted) {
-          const parsed = JSON.parse(stored) as AuthUser;
-          setUser(parsed);
-        }
-      } catch {
-        // ignore parse errors
-      }
-
-      if (mounted) {
-        setIsLoading(false);
-      }
+    if (!isSupabaseConfigured || !supabase) {
+      setIsLoading(false);
+      return;
     }
 
-    initAuth();
+    let mounted = true;
+    const client = supabase;
+
+    void client.auth
+      .getSession()
+      .then(({ data: { session } }) => {
+        if (!mounted) return;
+        setUser(session?.user ? mapSupabaseUser(session.user) : null);
+      })
+      .catch((err: unknown) => {
+        console.warn('[MeetIT Auth] session restore failed:', err);
+      })
+      .finally(() => {
+        if (mounted) setIsLoading(false);
+      });
+
+    const {
+      data: { subscription },
+    } = client.auth.onAuthStateChange((_event, session) => {
+      if (!mounted) return;
+      setUser(session?.user ? mapSupabaseUser(session.user) : null);
+      setIsLoading(false);
+    });
 
     return () => {
       mounted = false;
+      subscription.unsubscribe();
     };
   }, []);
 
@@ -125,30 +124,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (!email || !password) {
         return { error: 'Please enter both email and password.' };
       }
-
-      if (isSupabaseConfigured && supabase) {
-        try {
-          const { error } = await supabase.auth.signInWithPassword({
-            email,
-            password,
-          });
-          if (error) return { error: error.message };
-          return {};
-        } catch (err) {
-          return { error: (err as Error).message || 'Failed to sign in.' };
-        }
+      if (!isSupabaseConfigured || !supabase) {
+        return { error: NOT_CONFIGURED_ERROR };
       }
-
-      // Demo / offline mode
-      const mockUser: AuthUser = {
-        id: `usr_${Date.now()}`,
-        email,
-        displayName: email.split('@')[0] || 'User',
-        isPro: true,
-      };
-      setUser(mockUser);
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(mockUser));
-      return {};
+      try {
+        const { error } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        });
+        return error ? { error: error.message } : {};
+      } catch (err) {
+        return { error: (err as Error).message || 'Failed to sign in.' };
+      }
     },
     [],
   );
@@ -161,36 +148,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (password.length < 6) {
         return { error: 'Password must be at least 6 characters.' };
       }
-
-      if (isSupabaseConfigured && supabase) {
-        try {
-          const { data, error } = await supabase.auth.signUp({
-            email,
-            password,
-            options: {
-              data: { display_name: displayName || email.split('@')[0] },
-            },
-          });
-          if (error) return { error: error.message };
-          if (data.session === null) {
-            return { confirmationSent: true };
-          }
-          return {};
-        } catch (err) {
-          return { error: (err as Error).message || 'Failed to sign up.' };
-        }
+      if (!isSupabaseConfigured || !supabase) {
+        return { error: NOT_CONFIGURED_ERROR };
       }
-
-      // Demo / offline mode
-      const mockUser: AuthUser = {
-        id: `usr_${Date.now()}`,
-        email,
-        displayName: displayName.trim() || email.split('@')[0] || 'User',
-        isPro: true,
-      };
-      setUser(mockUser);
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(mockUser));
-      return {};
+      try {
+        const { data, error } = await supabase.auth.signUp({
+          email,
+          password,
+          options: {
+            data: { display_name: displayName.trim() || email.split('@')[0] },
+            emailRedirectTo: window.location.origin,
+          },
+        });
+        if (error) return { error: error.message };
+        if (data.session === null) {
+          return { confirmationSent: true };
+        }
+        return {};
+      } catch (err) {
+        return { error: (err as Error).message || 'Failed to sign up.' };
+      }
     },
     [],
   );
@@ -199,74 +176,147 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (!email) {
       return { error: 'Please enter an email address.' };
     }
-
-    if (isSupabaseConfigured && supabase) {
-      try {
-        const { error } = await supabase.auth.signInWithOtp({
-          email,
-          options: {
-            emailRedirectTo: window.location.origin,
-          },
-        });
-        if (error) return { error: error.message };
-        return {};
-      } catch (err) {
-        return {
-          error: (err as Error).message || 'Failed to send magic link.',
-        };
-      }
+    if (!isSupabaseConfigured || !supabase) {
+      return { error: NOT_CONFIGURED_ERROR };
     }
-
-    // Demo / offline mode: instantly sign in with link simulation
-    const mockUser: AuthUser = {
-      id: `usr_${Date.now()}`,
-      email,
-      displayName: email.split('@')[0] || 'User',
-      isPro: true,
-    };
-    setUser(mockUser);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(mockUser));
-    return {};
+    try {
+      const { error } = await supabase.auth.signInWithOtp({
+        email,
+        options: { emailRedirectTo: window.location.origin },
+      });
+      return error ? { error: error.message } : {};
+    } catch (err) {
+      return {
+        error: (err as Error).message || 'Failed to send magic link.',
+      };
+    }
   }, []);
 
   const signInWithGoogle = useCallback(async () => {
-    if (isSupabaseConfigured && supabase) {
+    if (!isSupabaseConfigured || !supabase) {
+      return { error: NOT_CONFIGURED_ERROR };
+    }
+    try {
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: { redirectTo: window.location.origin },
+      });
+      return error ? { error: error.message } : {};
+    } catch (err) {
+      return {
+        error: (err as Error).message || 'Failed to sign in with Google.',
+      };
+    }
+  }, []);
+
+  const updateProfile = useCallback(
+    async (changes: {
+      displayName?: string;
+      headline?: string;
+      bio?: string;
+      organization?: string;
+      location?: string;
+      timezone?: string;
+      avatarFile?: File | null;
+      removeAvatar?: boolean;
+    }) => {
+      if (!isSupabaseConfigured || !supabase) {
+        return { error: NOT_CONFIGURED_ERROR };
+      }
+      if (!user) {
+        return { error: 'You must be signed in to update your profile.' };
+      }
+
+      const metadata: Record<string, string | null> = {};
+      let nextName = user.displayName;
+      let nextAvatar: string | null = user.avatarUrl ?? null;
+
+      if (changes.displayName !== undefined) {
+        const trimmed = changes.displayName.trim();
+        if (trimmed.length < 1 || trimmed.length > 80) {
+          return { error: 'Display name must be 1 to 80 characters.' };
+        }
+        metadata.display_name = trimmed;
+        nextName = trimmed;
+      }
+
+      if (changes.headline !== undefined) {
+        metadata.headline = changes.headline.trim().slice(0, 120);
+      }
+      if (changes.bio !== undefined) {
+        metadata.bio = changes.bio.trim().slice(0, 600);
+      }
+      if (changes.organization !== undefined) {
+        metadata.organization = changes.organization.trim().slice(0, 100);
+      }
+      if (changes.location !== undefined) {
+        metadata.location = changes.location.trim().slice(0, 100);
+      }
+      if (changes.timezone !== undefined) {
+        metadata.timezone = changes.timezone.trim().slice(0, 80);
+      }
+
       try {
-        const { error } = await supabase.auth.signInWithOAuth({
-          provider: 'google',
-          options: {
-            redirectTo: window.location.origin,
-          },
+        if (changes.avatarFile) {
+          const file = changes.avatarFile;
+          if (!ALLOWED_AVATAR_TYPES.includes(file.type)) {
+            return { error: 'Avatar must be a PNG, JPEG, WebP or GIF image.' };
+          }
+          if (file.size > MAX_AVATAR_BYTES) {
+            return { error: 'Avatar must be 2 MB or smaller.' };
+          }
+          const ext = file.type.split('/')[1] ?? 'png';
+          const path = `${user.id}/avatar-${Date.now()}.${ext}`;
+          const { error: uploadError } = await supabase.storage
+            .from('avatars')
+            .upload(path, file, { contentType: file.type, upsert: true });
+          if (uploadError) {
+            return { error: `Avatar upload failed: ${uploadError.message}` };
+          }
+          const { data } = supabase.storage.from('avatars').getPublicUrl(path);
+          nextAvatar = data.publicUrl;
+          metadata.avatar_url = nextAvatar;
+        } else if (changes.removeAvatar) {
+          nextAvatar = null;
+          metadata.avatar_url = null;
+        }
+
+        if (Object.keys(metadata).length === 0) {
+          return {};
+        }
+
+        const { data: updated, error: authError } =
+          await supabase.auth.updateUser({ data: metadata });
+        if (authError) return { error: authError.message };
+
+        const { error: profileError } = await supabase.from('profiles').upsert({
+          id: user.id,
+          display_name: nextName,
+          avatar_url: nextAvatar,
         });
-        if (error) return { error: error.message };
+        if (profileError) {
+          console.warn('[MeetIT Auth] profiles upsert failed:', profileError);
+        }
+
+        if (updated.user) {
+          setUser(mapSupabaseUser(updated.user));
+        }
         return {};
       } catch (err) {
-        return {
-          error: (err as Error).message || 'Failed to sign in with Google.',
-        };
+        return { error: (err as Error).message || 'Failed to update profile.' };
       }
-    }
-
-    // Demo / offline mode
-    setUser(DEMO_USER);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(DEMO_USER));
-    return {};
-  }, []);
-
-  const signInDemo = useCallback(() => {
-    setUser(DEMO_USER);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(DEMO_USER));
-  }, []);
+    },
+    [user],
+  );
 
   const signOut = useCallback(async () => {
     if (isSupabaseConfigured && supabase) {
       try {
         await supabase.auth.signOut();
       } catch {
-        // ignore
+        // ignore network errors; local session is cleared by supabase-js
       }
     }
-    localStorage.removeItem(STORAGE_KEY);
     setUser(null);
   }, []);
 
@@ -280,8 +330,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         signUpWithEmail,
         signInWithMagicLink,
         signInWithGoogle,
-        signInDemo,
         signOut,
+        updateProfile,
       }}
     >
       {children}

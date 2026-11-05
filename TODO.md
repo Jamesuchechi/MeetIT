@@ -111,21 +111,21 @@ Every phase has an **exit criteria** block. Do not start the next phase until ex
 
 ### Identity
 
-- [ ] [P0] Supabase Auth: email magic link + Google
-- [ ] [P0] Profile page (name, avatar upload)
-- [ ] [P0] Guest flow: signed guest token, display name required
-- [ ] [P0] JWT verification in signaling (JWKS or shared secret)
-- [ ] [P1] Verified badge vs guest label on tiles
+- [x] [P0] Supabase Auth: email magic link + Google
+- [x] [P0] Profile page (name, avatar upload)
+- [x] [P0] Guest flow: signed guest token, display name required
+- [x] [P0] JWT verification in signaling (JWKS or shared secret)
+- [x] [P1] Verified badge vs guest label on tiles
 
 ### Rooms and meetings
 
-- [ ] [P0] Persist rooms, meetings, participants (service role writes only)
-- [ ] [P0] Personal room (permanent code) per user
-- [ ] [P0] Meeting history page (date, duration, attendees)
-- [ ] [P1] Scheduled meetings with calendar `.ics` download
-- [ ] [P1] Recurring meetings (RRULE)
-- [ ] [P1] Room title and description, shown in lobby
-- [ ] [P2] Room passcode option
+- [x] [P0] Persist rooms, meetings, participants (service role writes only)
+- [x] [P0] Personal room (permanent code) per user
+- [x] [P0] Meeting history page (date, duration, attendees)
+- [x] [P1] Scheduled meetings with calendar `.ics` download
+- [x] [P1] Recurring meetings (RRULE)
+- [x] [P1] Room title and description, shown in lobby
+- [x] [P2] Room passcode option
 
 ### Meeting Notes & Action Items Hub
 

@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { Logo } from './Logo';
 import {
   HomeIcon,
@@ -17,15 +17,39 @@ import {
   SunIcon,
   MoonIcon,
 } from './Icons';
-import { normalizeRoomCode, copyToClipboard, type AuthUser } from '../types';
+import {
+  normalizeRoomCode,
+  copyToClipboard,
+  personalRoomCodeForUser,
+  type AuthUser,
+  type DashboardTab,
+} from '../types';
 import { createRoomViaApi } from '../lib/signalingClient';
+import {
+  downloadIcsFile,
+  ensurePersonalRoomForUser,
+  formatRecurrenceLabel,
+  loadLocalRooms,
+  loadMeetingHistory,
+  loadScheduledMeetings,
+  type MeetingHistoryItem,
+  type SavedRoom,
+  type ScheduledMeetingItem,
+} from '../lib/meetingsStore';
+import { Avatar } from './Avatar';
+import { ProfileView } from './ProfileView';
+import { ProfileEditView } from './ProfileEditView';
+import { SettingsView } from './SettingsView';
+import { MeetingsView } from './MeetingsView';
+import { ScheduleView } from './ScheduleView';
 
 interface DashboardViewProps {
   user?: AuthUser | null;
+  initialTab?: DashboardTab;
+  viewedProfileUserId?: string | null;
   onSignOut?: () => void;
   currentTheme?: 'light' | 'dark';
   onToggleTheme?: () => void;
-  onNavigateHome: () => void;
   onEnterRoom: (code: string) => void;
   onToast: (msg: string) => void;
 }
@@ -36,29 +60,77 @@ interface ActionItem {
   done: boolean;
 }
 
+const TAB_LABELS: Record<DashboardTab, string> = {
+  home: 'Overview',
+  meetings: 'Meetings & History',
+  schedule: 'Schedule',
+  notes: 'Notes',
+  recordings: 'Recordings',
+  settings: 'Settings',
+  profile: 'Public Profile',
+  'profile-edit': 'Edit Profile',
+};
+
 export function DashboardView({
   user,
+  initialTab = 'home',
+  viewedProfileUserId = null,
   onSignOut,
   currentTheme = 'dark',
   onToggleTheme,
-  onNavigateHome,
   onEnterRoom,
   onToast,
 }: DashboardViewProps) {
-  const [activeTab, setActiveTab] = useState<
-    'home' | 'meetings' | 'schedule' | 'notes' | 'recordings' | 'settings'
-  >('home');
+  const [activeTab, setActiveTab] = useState<DashboardTab>(initialTab);
+  const [profileUserId, setProfileUserId] = useState<string | null>(
+    viewedProfileUserId,
+  );
   const [dashInput, setDashInput] = useState('');
+  const [topbarCodeInput, setTopbarCodeInput] = useState('');
   const [copiedRoom, setCopiedRoom] = useState(false);
   const [isAudioFirst, setIsAudioFirst] = useState(true);
   const [isDataSaver, setIsDataSaver] = useState(false);
   const [isNavDrawerOpen, setIsNavDrawerOpen] = useState(false);
   const [isContextBarOpen, setIsContextBarOpen] = useState(() => {
     if (typeof window !== 'undefined') {
-      return window.innerWidth >= 1040;
+      return window.innerWidth >= 1120;
     }
     return true;
   });
+
+  const [rooms, setRooms] = useState<SavedRoom[]>(() =>
+    loadLocalRooms(user?.id),
+  );
+  const [history, setHistory] = useState<MeetingHistoryItem[]>(() =>
+    loadMeetingHistory(),
+  );
+  const [scheduled, setScheduled] = useState<ScheduledMeetingItem[]>(() =>
+    loadScheduledMeetings(),
+  );
+
+  const refreshMeetingsData = useCallback(() => {
+    if (user) {
+      ensurePersonalRoomForUser({
+        id: user.id,
+        displayName: user.displayName,
+      });
+    }
+    setRooms(loadLocalRooms(user?.id));
+    setHistory(loadMeetingHistory());
+    setScheduled(loadScheduledMeetings());
+  }, [user]);
+
+  useEffect(() => {
+    refreshMeetingsData();
+  }, [refreshMeetingsData]);
+
+  useEffect(() => {
+    setActiveTab(initialTab);
+  }, [initialTab]);
+
+  useEffect(() => {
+    setProfileUserId(viewedProfileUserId);
+  }, [viewedProfileUserId]);
 
   const [tasks, setTasks] = useState<ActionItem[]>([
     { id: 1, text: 'Ship lobby waiting room controls', done: true },
@@ -66,9 +138,9 @@ export function DashboardView({
     { id: 3, text: 'Share webhook events schema with Mei', done: false },
   ]);
 
-  const displayName = user?.displayName || 'Ada Okafor';
-  const initial = (displayName[0] || 'A').toUpperCase();
-  const firstName = displayName.split(' ')[0] || 'Ada';
+  const displayName = user?.displayName || 'there';
+  const personalRoomCode = personalRoomCodeForUser(user?.id ?? '');
+  const firstName = displayName.split(' ')[0] || 'there';
 
   const greeting = useMemo(() => {
     const hour = new Date().getHours();
@@ -80,8 +152,25 @@ export function DashboardView({
   const normalizedDashCode = normalizeRoomCode(dashInput);
   const isDashJoinDisabled = !normalizedDashCode;
 
+  const normalizedTopbarCode = normalizeRoomCode(topbarCodeInput);
+  const isTopbarJoinDisabled = !normalizedTopbarCode;
+
+  const selectTab = (tab: DashboardTab, nextProfileUserId?: string | null) => {
+    setActiveTab(tab);
+    if (nextProfileUserId !== undefined) {
+      setProfileUserId(nextProfileUserId);
+    } else if (tab === 'profile' || tab === 'profile-edit') {
+      setProfileUserId(user?.id ?? null);
+    }
+    window.scrollTo(0, 0);
+  };
+
   const handleInstantMeeting = async () => {
-    const code = await createRoomViaApi();
+    const code = await createRoomViaApi({
+      title: `${firstName}'s Instant Meeting`,
+      kind: 'instant',
+      ...(user?.id ? { ownerId: user.id } : {}),
+    });
     const url = `${window.location.origin}/m/${code}`;
     const copied = await copyToClipboard(url);
     if (copied) {
@@ -99,8 +188,15 @@ export function DashboardView({
     }
   };
 
+  const handleJoinTopbar = () => {
+    if (normalizedTopbarCode) {
+      setTopbarCodeInput('');
+      onEnterRoom(normalizedTopbarCode);
+    }
+  };
+
   const handleCopyPersonalRoom = async () => {
-    const url = `${window.location.origin}/m/ada-okafor-rmk`;
+    const url = `${window.location.origin}/m/${personalRoomCode}`;
     const copied = await copyToClipboard(url);
     if (copied) {
       setCopiedRoom(true);
@@ -111,9 +207,9 @@ export function DashboardView({
     }
   };
 
-  const handleJoinMeeting = (name: string) => {
+  const handleJoinMeeting = (name: string, code = personalRoomCode) => {
     onToast(`Entering ${name}…`);
-    onEnterRoom('ada-okafor-rmk');
+    onEnterRoom(code);
   };
 
   const handleComingSoon = (feature: string) => {
@@ -125,6 +221,17 @@ export function DashboardView({
       prev.map((t) => (t.id === id ? { ...t, done: !t.done } : t)),
     );
   };
+
+  // Compute real metrics from scheduled meetings and call history
+  const nextScheduled = scheduled[0] ?? null;
+  const totalScheduledMinutes = scheduled.reduce(
+    (sum, m) => sum + m.durationMinutes,
+    0,
+  );
+  const scheduledHoursLabel =
+    totalScheduledMinutes > 0
+      ? `${(totalScheduledMinutes / 60).toFixed(1)} Hours`
+      : '0 Hours';
 
   return (
     <div
@@ -151,9 +258,9 @@ export function DashboardView({
             className="brand-btn"
             onClick={() => {
               setIsNavDrawerOpen(false);
-              onNavigateHome();
+              selectTab('home');
             }}
-            aria-label="Back to MeetIT Home"
+            aria-label="MeetIT Dashboard Home"
             style={{
               background: 'none',
               border: 0,
@@ -183,7 +290,7 @@ export function DashboardView({
             type="button"
             aria-current={activeTab === 'home' ? 'page' : undefined}
             onClick={() => {
-              setActiveTab('home');
+              selectTab('home');
               setIsNavDrawerOpen(false);
             }}
           >
@@ -194,9 +301,8 @@ export function DashboardView({
             type="button"
             aria-current={activeTab === 'meetings' ? 'page' : undefined}
             onClick={() => {
-              setActiveTab('meetings');
+              selectTab('meetings');
               setIsNavDrawerOpen(false);
-              handleComingSoon('Meetings directory');
             }}
           >
             <UsrIcon />
@@ -206,9 +312,8 @@ export function DashboardView({
             type="button"
             aria-current={activeTab === 'schedule' ? 'page' : undefined}
             onClick={() => {
-              setActiveTab('schedule');
+              selectTab('schedule');
               setIsNavDrawerOpen(false);
-              handleComingSoon('Schedule view');
             }}
           >
             <CalIcon />
@@ -218,7 +323,7 @@ export function DashboardView({
             type="button"
             aria-current={activeTab === 'notes' ? 'page' : undefined}
             onClick={() => {
-              setActiveTab('notes');
+              selectTab('notes');
               setIsNavDrawerOpen(false);
               handleComingSoon('Meeting notes and AI summaries');
             }}
@@ -230,7 +335,7 @@ export function DashboardView({
             type="button"
             aria-current={activeTab === 'recordings' ? 'page' : undefined}
             onClick={() => {
-              setActiveTab('recordings');
+              selectTab('recordings');
               setIsNavDrawerOpen(false);
               handleComingSoon('Recordings archive');
             }}
@@ -242,9 +347,8 @@ export function DashboardView({
             type="button"
             aria-current={activeTab === 'settings' ? 'page' : undefined}
             onClick={() => {
-              setActiveTab('settings');
+              selectTab('settings');
               setIsNavDrawerOpen(false);
-              handleComingSoon('Account settings');
             }}
           >
             <SetIcon />
@@ -253,28 +357,40 @@ export function DashboardView({
         </nav>
 
         <div className="me">
-          <div className="av">{initial}</div>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div
-              style={{
-                fontWeight: 600,
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap',
-              }}
-            >
-              {displayName}
+          <button
+            type="button"
+            className={`me-profile-trigger ${activeTab === 'profile' || activeTab === 'profile-edit' ? 'active' : ''}`}
+            onClick={() => {
+              selectTab('profile', user?.id ?? null);
+              setIsNavDrawerOpen(false);
+            }}
+            title="View your public profile"
+            aria-label="View your public profile"
+          >
+            <Avatar name={displayName} src={user?.avatarUrl} className="av" />
+            <div style={{ flex: 1, minWidth: 0, textAlign: 'left' }}>
+              <div
+                style={{
+                  fontWeight: 600,
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {displayName}
+              </div>
+              <small
+                style={{
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                View profile
+              </small>
             </div>
-            <small
-              style={{
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap',
-              }}
-            >
-              {user?.email || 'Pro plan'}
-            </small>
-          </div>
+          </button>
+
           {onSignOut && (
             <button
               type="button"
@@ -298,23 +414,122 @@ export function DashboardView({
               </svg>
             </button>
           )}
-          {onToggleTheme && (
-            <button
-              type="button"
-              className="theme-toggle"
-              onClick={onToggleTheme}
-              aria-label={`Switch to ${currentTheme === 'dark' ? 'light' : 'dark'} mode`}
-              title={`Switch to ${currentTheme === 'dark' ? 'light' : 'dark'} mode`}
-              style={{ width: '32px', height: '32px' }}
-            >
-              {currentTheme === 'dark' ? <SunIcon /> : <MoonIcon />}
-            </button>
-          )}
         </div>
       </aside>
 
       {/* 2. Center Main Content Area */}
       <div className="dash-center">
+        {/* Desktop Top Bar */}
+        <header
+          className="dash-desktop-topbar"
+          aria-label="Workspace top bar"
+          data-testid="desktop-topbar"
+        >
+          <div className="topbar-left">
+            <div className="topbar-breadcrumb">
+              <button
+                type="button"
+                className="breadcrumb-root"
+                onClick={() => selectTab('home')}
+              >
+                Dashboard
+              </button>
+              <span className="breadcrumb-sep" aria-hidden="true">
+                /
+              </span>
+              <span className="breadcrumb-current">
+                {TAB_LABELS[activeTab]}
+              </span>
+            </div>
+
+            <div className="topbar-quick-join">
+              <KbIcon
+                style={{ color: 'var(--muted)', width: 15, height: 15 }}
+              />
+              <input
+                type="text"
+                value={topbarCodeInput}
+                onChange={(e) => setTopbarCodeInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !isTopbarJoinDisabled) {
+                    handleJoinTopbar();
+                  }
+                }}
+                placeholder="Join with code or link…"
+                aria-label="Quick join meeting code"
+                maxLength={80}
+              />
+              <button
+                type="button"
+                className="topbar-join-btn"
+                disabled={isTopbarJoinDisabled}
+                onClick={handleJoinTopbar}
+              >
+                Join
+              </button>
+            </div>
+          </div>
+
+          <div className="topbar-right">
+            <button
+              type="button"
+              className="btn primary topbar-new-btn"
+              onClick={() => void handleInstantMeeting()}
+            >
+              <PlusIcon />
+              <span>New meeting</span>
+            </button>
+
+            {onToggleTheme && (
+              <button
+                type="button"
+                className="theme-toggle"
+                onClick={onToggleTheme}
+                aria-label={`Switch to ${currentTheme === 'dark' ? 'light' : 'dark'} mode`}
+                title={`Switch to ${currentTheme === 'dark' ? 'light' : 'dark'} mode`}
+              >
+                {currentTheme === 'dark' ? <SunIcon /> : <MoonIcon />}
+              </button>
+            )}
+
+            <button
+              type="button"
+              className={`topbar-context-btn ${isContextBarOpen ? 'active' : ''}`}
+              onClick={() => setIsContextBarOpen((prev) => !prev)}
+              aria-pressed={isContextBarOpen}
+              aria-label={
+                isContextBarOpen
+                  ? 'Hide Room & Tools panel'
+                  : 'Show Room & Tools panel'
+              }
+              title={
+                isContextBarOpen
+                  ? 'Hide Room & Tools panel'
+                  : 'Show Room & Tools panel'
+              }
+            >
+              <PanelRightIcon />
+              <span>Room &amp; Tools</span>
+            </button>
+
+            <button
+              type="button"
+              className={`topbar-profile-chip ${activeTab === 'profile' || activeTab === 'profile-edit' ? 'active' : ''}`}
+              onClick={() => selectTab('profile', user?.id ?? null)}
+              aria-label="Open your public profile"
+              title="View your public profile"
+              data-testid="topbar-profile-chip"
+            >
+              <Avatar
+                name={displayName}
+                src={user?.avatarUrl}
+                className="av-topbar"
+              />
+              <span>{firstName}</span>
+            </button>
+          </div>
+        </header>
+
         {/* Mobile Header Bar */}
         <header className="dash-mobile-header" aria-label="Mobile header">
           <div className="dash-mobile-header-left">
@@ -331,8 +546,8 @@ export function DashboardView({
             <button
               type="button"
               className="brand-btn"
-              onClick={onNavigateHome}
-              aria-label="Back to MeetIT Home"
+              onClick={() => selectTab('home')}
+              aria-label="MeetIT Dashboard Home"
               style={{
                 background: 'none',
                 border: 0,
@@ -369,206 +584,337 @@ export function DashboardView({
               <span className="dot-indicator" />
             </button>
 
-            <div
-              className="av-mobile"
-              onClick={() => setIsNavDrawerOpen(true)}
-              role="button"
-              tabIndex={0}
-              aria-label="Open user navigation drawer"
-              title={`${displayName} · ${user?.email || 'Pro plan'}`}
-              style={{ cursor: 'pointer' }}
+            <button
+              type="button"
+              className="av-mobile-btn"
+              onClick={() => selectTab('profile', user?.id ?? null)}
+              aria-label="Open your public profile"
+              title={`${displayName} · Public profile`}
+              style={{
+                background: 'none',
+                border: 0,
+                padding: 0,
+                cursor: 'pointer',
+              }}
             >
-              {initial}
-            </div>
+              <Avatar
+                name={displayName}
+                src={user?.avatarUrl}
+                className="av-mobile"
+              />
+            </button>
           </div>
         </header>
 
         <main className="dash">
-          <div className="head">
-            <div>
-              <h2 id="greet">{greeting}</h2>
-              <p>You have 2 meetings today.</p>
-            </div>
+          {activeTab === 'profile' ? (
+            <ProfileView
+              currentUser={user ?? null}
+              viewedUserId={profileUserId ?? user?.id ?? null}
+              onEditProfile={() => selectTab('profile-edit', user?.id ?? null)}
+              onEnterRoom={onEnterRoom}
+              onToast={onToast}
+            />
+          ) : activeTab === 'profile-edit' ? (
+            <ProfileEditView
+              currentUser={user ?? null}
+              targetUserId={profileUserId ?? user?.id ?? null}
+              onCancel={() => selectTab('profile', user?.id ?? null)}
+              onSaved={() => selectTab('profile', user?.id ?? null)}
+              onToast={onToast}
+            />
+          ) : activeTab === 'settings' ? (
+            <SettingsView
+              user={user ?? null}
+              currentTheme={currentTheme}
+              {...(onToggleTheme ? { onToggleTheme } : {})}
+              onOpenProfile={() => selectTab('profile', user?.id ?? null)}
+              onOpenProfileEdit={() =>
+                selectTab('profile-edit', user?.id ?? null)
+              }
+              {...(onSignOut ? { onSignOut } : {})}
+              onToast={onToast}
+            />
+          ) : activeTab === 'meetings' ? (
+            <MeetingsView
+              user={user ?? null}
+              rooms={rooms}
+              history={history}
+              onRefreshData={refreshMeetingsData}
+              onEnterRoom={onEnterRoom}
+              onToast={onToast}
+            />
+          ) : activeTab === 'schedule' ? (
+            <ScheduleView
+              user={user ?? null}
+              scheduled={scheduled}
+              onRefreshData={refreshMeetingsData}
+              onEnterRoom={onEnterRoom}
+              onToast={onToast}
+            />
+          ) : (
+            <>
+              <div className="head">
+                <div>
+                  <h2 id="greet">{greeting}</h2>
+                  <p>
+                    {scheduled.length === 0
+                      ? 'Your personal room is ready for instant or scheduled calls.'
+                      : `You have ${scheduled.length} scheduled ${scheduled.length === 1 ? 'meeting' : 'meetings'}.`}
+                  </p>
+                </div>
 
-            <div className="head-actions">
-              <div className="start" style={{ margin: 0 }}>
-                <button
-                  type="button"
-                  className="btn primary"
-                  onClick={() => void handleInstantMeeting()}
-                >
-                  <PlusIcon />
-                  <span>New meeting</span>
-                </button>
-                <div className="code">
-                  <KbIcon style={{ color: 'var(--muted)' }} />
-                  <input
-                    id="codeIn2"
-                    type="text"
-                    value={dashInput}
-                    onChange={(e) => setDashInput(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' && !isDashJoinDisabled) {
-                        handleJoinDash();
-                      }
-                    }}
-                    placeholder="Enter a code or link"
-                    aria-label="Meeting code or link"
-                    autoComplete="off"
-                    spellCheck={false}
-                    maxLength={80}
-                  />
-                  <button
-                    type="button"
-                    className="btn"
-                    id="joinBtn2"
-                    disabled={isDashJoinDisabled}
-                    onClick={handleJoinDash}
-                  >
-                    Join
-                  </button>
+                <div className="head-actions">
+                  <div className="start" style={{ margin: 0 }}>
+                    <button
+                      type="button"
+                      className="btn primary"
+                      onClick={() => void handleInstantMeeting()}
+                    >
+                      <PlusIcon />
+                      <span>New meeting</span>
+                    </button>
+                    <div className="code">
+                      <KbIcon style={{ color: 'var(--muted)' }} />
+                      <input
+                        id="codeIn2"
+                        type="text"
+                        value={dashInput}
+                        onChange={(e) => setDashInput(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' && !isDashJoinDisabled) {
+                            handleJoinDash();
+                          }
+                        }}
+                        placeholder="Enter a code or link"
+                        aria-label="Meeting code or link"
+                        autoComplete="off"
+                        spellCheck={false}
+                        maxLength={80}
+                      />
+                      <button
+                        type="button"
+                        className="btn"
+                        id="joinBtn2"
+                        disabled={isDashJoinDisabled}
+                        onClick={handleJoinDash}
+                      >
+                        Join
+                      </button>
+                    </div>
+                  </div>
                 </div>
               </div>
-            </div>
-          </div>
 
-          {/* Quick Metrics Ribbon */}
-          <div className="stats-ribbon" aria-label="Daily summary metrics">
-            <div className="stat-card">
-              <small>Today&apos;s Schedule</small>
-              <strong>2 Meetings</strong>
-            </div>
-            <div className="stat-card">
-              <small>Weekly Scheduled</small>
-              <strong>4.5 Hours</strong>
-            </div>
-            <div className="stat-card">
-              <small>Audio Resilience</small>
-              <strong>100% Protected</strong>
-            </div>
-          </div>
+              {/* Quick Metrics Ribbon */}
+              <div className="stats-ribbon" aria-label="Daily summary metrics">
+                <div className="stat-card">
+                  <small>Scheduled Sessions</small>
+                  <strong>
+                    {scheduled.length}{' '}
+                    {scheduled.length === 1 ? 'Meeting' : 'Meetings'}
+                  </strong>
+                </div>
+                <div className="stat-card">
+                  <small>Scheduled Duration</small>
+                  <strong>{scheduledHoursLabel}</strong>
+                </div>
+                <div className="stat-card">
+                  <small>Completed Calls</small>
+                  <strong>
+                    {history.length}{' '}
+                    {history.length === 1 ? 'Session' : 'Sessions'}
+                  </strong>
+                </div>
+              </div>
 
-          {/* Spotlight Next Meeting */}
-          <div className="sec">
-            <div className="next">
-              <div>
-                <small>Starts in 12 minutes</small>
-                <h4>Client review: Brightline</h4>
-                <small>2:00 PM, 45 min, 4 guests</small>
+              {/* Spotlight Next Meeting or Personal Room Card */}
+              <div className="sec">
+                {nextScheduled ? (
+                  <div className="next">
+                    <div>
+                      <small>
+                        Next scheduled ·{' '}
+                        {new Date(nextScheduled.startsAt).toLocaleString(
+                          undefined,
+                          {
+                            dateStyle: 'medium',
+                            timeStyle: 'short',
+                          },
+                        )}
+                      </small>
+                      <h4>{nextScheduled.title}</h4>
+                      <small>
+                        {nextScheduled.durationMinutes} min · Room{' '}
+                        {nextScheduled.roomCode}
+                        {nextScheduled.rrule
+                          ? ` · ${formatRecurrenceLabel(nextScheduled.rrule)}`
+                          : ''}
+                      </small>
+                    </div>
+                    <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                      <button
+                        type="button"
+                        className="btn"
+                        onClick={() => downloadIcsFile(nextScheduled)}
+                      >
+                        .ics Invite
+                      </button>
+                      <button
+                        type="button"
+                        className="btn"
+                        onClick={() =>
+                          handleJoinMeeting(
+                            nextScheduled.title,
+                            nextScheduled.roomCode,
+                          )
+                        }
+                      >
+                        Join meeting
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="next">
+                    <div>
+                      <small>Permanent Personal Room · Always ready</small>
+                      <h4>{firstName}&apos;s Personal Studio</h4>
+                      <small>
+                        meetit.app/m/{personalRoomCode} · Up to 4 HD mesh peers
+                      </small>
+                    </div>
+                    <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                      <button
+                        type="button"
+                        className="btn"
+                        onClick={() => selectTab('schedule')}
+                      >
+                        Schedule a call
+                      </button>
+                      <button
+                        type="button"
+                        className="btn"
+                        onClick={() =>
+                          handleJoinMeeting(
+                            'your personal room',
+                            personalRoomCode,
+                          )
+                        }
+                      >
+                        Start in my room
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
-              <button
-                type="button"
-                className="btn"
-                onClick={() => handleJoinMeeting('Client review: Brightline')}
-              >
-                Join meeting
-              </button>
-            </div>
-          </div>
 
-          {/* Today's Schedule */}
-          <div className="sec">
-            <h3>
-              <span>Today</span>
-              <button
-                type="button"
-                onClick={() => handleComingSoon('Full schedule')}
-              >
-                Open schedule
-              </button>
-            </h3>
-            <div className="row">
-              <time>2:00 PM</time>
-              <div>
-                Client review: Brightline
-                <small>Waiting room on</small>
+              {/* Upcoming Schedule */}
+              <div className="sec">
+                <h3>
+                  <span>Upcoming schedule</span>
+                  <button type="button" onClick={() => selectTab('schedule')}>
+                    {scheduled.length > 0
+                      ? 'Manage schedule'
+                      : '+ Schedule meeting'}
+                  </button>
+                </h3>
+                {scheduled.length === 0 ? (
+                  <div className="empty-state-box">
+                    <p>
+                      No upcoming meetings scheduled. Click{' '}
+                      <strong>+ Schedule meeting</strong> to create a one-time
+                      or recurring session with a downloadable `.ics` invite.
+                    </p>
+                  </div>
+                ) : (
+                  scheduled.slice(0, 4).map((item) => {
+                    const start = new Date(item.startsAt);
+                    const timeStr = start.toLocaleTimeString(undefined, {
+                      hour: 'numeric',
+                      minute: '2-digit',
+                    });
+                    return (
+                      <div key={item.id} className="row">
+                        <time>{timeStr}</time>
+                        <div>
+                          {item.title}
+                          <small>
+                            {start.toLocaleDateString(undefined, {
+                              month: 'short',
+                              day: 'numeric',
+                            })}{' '}
+                            · {item.durationMinutes} min ·{' '}
+                            <code>{item.roomCode}</code>
+                            {item.rrule
+                              ? ` · ${formatRecurrenceLabel(item.rrule)}`
+                              : ''}
+                          </small>
+                        </div>
+                        <button
+                          type="button"
+                          className="btn"
+                          onClick={() =>
+                            handleJoinMeeting(item.title, item.roomCode)
+                          }
+                        >
+                          Join
+                        </button>
+                      </div>
+                    );
+                  })
+                )}
               </div>
-              <button
-                type="button"
-                className="btn"
-                onClick={() => handleJoinMeeting('Client review: Brightline')}
-              >
-                Join
-              </button>
-            </div>
-            <div className="row">
-              <time>4:30 PM</time>
-              <div>
-                Cohort 7 office hours
-                <small>23 registered</small>
-              </div>
-              <button
-                type="button"
-                className="btn"
-                onClick={() => handleJoinMeeting('Cohort 7 office hours')}
-              >
-                Join
-              </button>
-            </div>
-          </div>
 
-          {/* Recent Meetings */}
-          <div className="sec">
-            <h3>
-              <span>Recent meetings</span>
-              <button
-                type="button"
-                onClick={() => handleComingSoon('Past meetings history')}
-              >
-                View all
-              </button>
-            </h3>
-            <div className="row">
-              <time>Mon</time>
-              <div>
-                Design sync
-                <p className="sum">
-                  Ship the lobby first and defer breakout rooms. Three action
-                  items assigned.
-                </p>
+              {/* Recent Meetings History */}
+              <div className="sec">
+                <h3>
+                  <span>Recent meetings</span>
+                  <button type="button" onClick={() => selectTab('meetings')}>
+                    View all history
+                  </button>
+                </h3>
+                {history.length === 0 ? (
+                  <div className="empty-state-box">
+                    <p>
+                      No past calls recorded yet. Once you complete a call, its
+                      duration and attendee list will appear here automatically.
+                    </p>
+                  </div>
+                ) : (
+                  history.slice(0, 4).map((item) => {
+                    const dateLabel = new Date(
+                      item.startedAt,
+                    ).toLocaleDateString(undefined, {
+                      month: 'short',
+                      day: 'numeric',
+                    });
+                    return (
+                      <div key={item.id} className="row">
+                        <time>{dateLabel}</time>
+                        <div>
+                          {item.roomTitle}
+                          <p className="sum">
+                            {item.durationMinutes} min ·{' '}
+                            {item.attendees
+                              .map((a) => a.displayName)
+                              .join(', ') || 'Solo session'}
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          className="btn"
+                          onClick={() => onEnterRoom(item.roomCode)}
+                        >
+                          Rejoin
+                        </button>
+                      </div>
+                    );
+                  })
+                )}
               </div>
-              <span className="chip">Summary ready</span>
-            </div>
-            <div className="row">
-              <time>Fri</time>
-              <div>
-                Onboarding call: Mei
-                <p className="sum">
-                  Agreed on the embed timeline and the webhook events to build
-                  first.
-                </p>
-              </div>
-              <span className="chip">Summary ready</span>
-            </div>
-            <div className="row">
-              <time>Thu</time>
-              <div>
-                Weekly check-in
-                <p className="sum">Recording is processing.</p>
-              </div>
-              <span
-                className="chip"
-                style={{ background: 'var(--line)', color: 'var(--muted)' }}
-              >
-                Processing
-              </span>
-            </div>
-          </div>
+            </>
+          )}
         </main>
-
-        {/* Reopen context bar tab (shown when context bar is collapsed on desktop) */}
-        {!isContextBarOpen && (
-          <button
-            type="button"
-            className="context-reopen-tab"
-            onClick={() => setIsContextBarOpen(true)}
-            aria-label="Open Room & Tools panel"
-            title="Open Room & Tools panel"
-          >
-            <PanelRightIcon />
-            <span>Room &amp; Tools</span>
-          </button>
-        )}
       </div>
 
       {/* 3. Right Context Bar (Desktop Sidebar & Mobile Drawer) */}
@@ -619,7 +965,7 @@ export function DashboardView({
               <h3>Your personal room</h3>
               <div className="link">
                 <LnkIcon />
-                <span id="roomLink">meetit.app/m/ada-okafor</span>
+                <span id="roomLink">{`meetit.app/m/${personalRoomCode}`}</span>
                 <button
                   type="button"
                   id="copyBtn"
@@ -636,7 +982,7 @@ export function DashboardView({
               <button
                 type="button"
                 className="btn primary"
-                onClick={() => handleJoinMeeting('Ada Okafor Personal Room')}
+                onClick={() => handleJoinMeeting('your personal room')}
                 style={{ width: '100%', justifyContent: 'center' }}
               >
                 Start in my room
@@ -737,7 +1083,7 @@ export function DashboardView({
         <button
           type="button"
           className={activeTab === 'home' ? 'active' : ''}
-          onClick={() => setActiveTab('home')}
+          onClick={() => selectTab('home')}
         >
           <HomeIcon />
           <span>Home</span>
@@ -745,10 +1091,7 @@ export function DashboardView({
         <button
           type="button"
           className={activeTab === 'meetings' ? 'active' : ''}
-          onClick={() => {
-            setActiveTab('meetings');
-            handleComingSoon('Meetings directory');
-          }}
+          onClick={() => selectTab('meetings')}
         >
           <UsrIcon />
           <span>Meetings</span>
@@ -756,10 +1099,7 @@ export function DashboardView({
         <button
           type="button"
           className={activeTab === 'schedule' ? 'active' : ''}
-          onClick={() => {
-            setActiveTab('schedule');
-            handleComingSoon('Schedule view');
-          }}
+          onClick={() => selectTab('schedule')}
         >
           <CalIcon />
           <span>Schedule</span>
@@ -768,7 +1108,7 @@ export function DashboardView({
           type="button"
           className={activeTab === 'notes' ? 'active' : ''}
           onClick={() => {
-            setActiveTab('notes');
+            selectTab('notes');
             handleComingSoon('Meeting notes and AI summaries');
           }}
         >

@@ -397,4 +397,106 @@ describe('Signaling server integration tests', () => {
       ws.close();
     }
   });
+
+  it('supports room title/description, passcode enforcement, signed guest tokens, and meeting history', async () => {
+    instance = buildSignalingApp({ logger: false });
+    const address = await instance.app.listen({ port: 0, host: '127.0.0.1' });
+    const wsUrl = address.replace(/^http/, 'ws');
+
+    // 1. Issue signed guest token
+    const guestRes = await instance.app.inject({
+      method: 'POST',
+      url: '/auth/guest',
+      payload: { displayName: 'Chidi Guest' },
+    });
+    expect(guestRes.statusCode).toBe(200);
+    const { token: signedGuestToken } = guestRes.json<{
+      token: string;
+      expiresAt: number;
+    }>();
+    expect(signedGuestToken.startsWith('guest.')).toBe(true);
+
+    // 2. Create room with title, description, and passcode
+    const createRes = await instance.app.inject({
+      method: 'POST',
+      url: '/rooms',
+      payload: {
+        title: 'Design Architecture Sync',
+        description: 'Reviewing Phase 3 rooms and meetings.',
+        passcode: '4242',
+      },
+    });
+    expect(createRes.statusCode).toBe(201);
+    const created = createRes.json<{
+      code: string;
+      title: string;
+      description: string;
+      hasPasscode: boolean;
+    }>();
+    expect(created.title).toBe('Design Architecture Sync');
+    expect(created.description).toBe('Reviewing Phase 3 rooms and meetings.');
+    expect(created.hasPasscode).toBe(true);
+
+    // 3. Joining without passcode fails with FORBIDDEN
+    const wsWrong = new WebSocket(wsUrl);
+    await new Promise((r) => wsWrong.once('open', r));
+    const errPromise = waitForMessage(wsWrong, (m) => m.type === 'error');
+    wsWrong.send(
+      JSON.stringify({
+        v: 1,
+        type: 'join',
+        payload: {
+          roomCode: created.code,
+          displayName: 'Chidi Guest',
+          token: signedGuestToken,
+          passcode: '0000',
+        },
+      }),
+    );
+    const errMsg = (await errPromise).payload as { code: string };
+    expect(errMsg.code).toBe('FORBIDDEN');
+    wsWrong.close();
+
+    // 4. Joining with correct passcode succeeds and records meeting history
+    const wsOk = new WebSocket(wsUrl);
+    await new Promise((r) => wsOk.once('open', r));
+    const joinedPromise = waitForMessage(wsOk, (m) => m.type === 'joined');
+    wsOk.send(
+      JSON.stringify({
+        v: 1,
+        type: 'join',
+        payload: {
+          roomCode: created.code,
+          displayName: 'Chidi Guest',
+          token: signedGuestToken,
+          passcode: '4242',
+        },
+      }),
+    );
+    const joined = (await joinedPromise).payload as {
+      roomState: { title?: string; description?: string };
+    };
+    expect(joined.roomState.title).toBe('Design Architecture Sync');
+
+    wsOk.send(JSON.stringify({ v: 1, type: 'leave', payload: {} }));
+    await new Promise((r) => setTimeout(r, 40));
+
+    const historyRes = await instance.app.inject({
+      method: 'GET',
+      url: '/meetings/history',
+    });
+    expect(historyRes.statusCode).toBe(200);
+    const historyData = historyRes.json<{
+      meetings: Array<{ roomCode: string; roomTitle?: string }>;
+    }>();
+    expect(
+      historyData.meetings.some(
+        (m) =>
+          m.roomCode === created.code &&
+          m.roomTitle === 'Design Architecture Sync',
+      ),
+    ).toBe(true);
+
+    wsOk.close();
+  });
 });

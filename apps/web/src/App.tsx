@@ -8,19 +8,32 @@ import { MeetingRoomView } from './components/MeetingRoomView';
 import { EndedView } from './components/EndedView';
 import { NotFoundView } from './components/NotFoundView';
 import { Toast } from './components/Toast';
-import { normalizeRoomCode, type ViewMode } from './types';
+import { Logo } from './components/Logo';
+import { normalizeRoomCode, type ViewMode, type DashboardTab } from './types';
 
 interface ParsedRoute {
   view: ViewMode;
   roomCode: string | null;
+  dashTab?: DashboardTab;
+  profileUserId?: string | null;
 }
 
 function parseLocationRoute(pathname: string, hash: string): ParsedRoute {
-  const cleanHash = hash.replace(/^#\/?/, '').trim().toLowerCase();
+  const rawHash = hash.replace(/^#\/?/, '').trim();
+  const cleanHash = rawHash.toLowerCase();
   const cleanPath = pathname
     .replace(/^\/+|\/+$/g, '')
     .trim()
     .toLowerCase();
+
+  // Auth redirects (OAuth / magic link / email confirm) land on `#access_token=...`
+  if (
+    cleanHash.startsWith('access_token=') ||
+    cleanHash.startsWith('error=') ||
+    cleanHash.includes('refresh_token=')
+  ) {
+    return { view: 'home', roomCode: null };
+  }
 
   // Check hash first if present, otherwise pathname
   const target = cleanHash || cleanPath;
@@ -29,7 +42,29 @@ function parseLocationRoute(pathname: string, hash: string): ParsedRoute {
     return { view: 'home', roomCode: null };
   }
   if (target === 'dashboard') {
-    return { view: 'dashboard', roomCode: null };
+    return { view: 'dashboard', roomCode: null, dashTab: 'home' };
+  }
+  if (target === 'settings' || target === 'dashboard/settings') {
+    return { view: 'dashboard', roomCode: null, dashTab: 'settings' };
+  }
+  if (target === 'profile' || target === 'dashboard/profile') {
+    return { view: 'dashboard', roomCode: null, dashTab: 'profile' };
+  }
+  if (
+    target === 'profile/edit' ||
+    target === 'profile-edit' ||
+    target === 'dashboard/profile/edit'
+  ) {
+    return { view: 'dashboard', roomCode: null, dashTab: 'profile-edit' };
+  }
+  if (target.startsWith('profile/')) {
+    const idPart = rawHash ? rawHash.slice('profile/'.length) : target.slice(8);
+    return {
+      view: 'dashboard',
+      roomCode: null,
+      dashTab: 'profile',
+      profileUserId: idPart || null,
+    };
   }
   if (target === 'signin' || target === 'login' || target === 'auth') {
     return { view: 'signin', roomCode: null };
@@ -71,6 +106,7 @@ function AppContent() {
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const toastTimeoutRef = useRef<number | null>(null);
+  const signingOutRef = useRef(false);
 
   const showToast = useCallback((msg: string) => {
     if (toastTimeoutRef.current) {
@@ -83,7 +119,11 @@ function AppContent() {
   }, []);
 
   const navigateTo = useCallback(
-    (nextView: ViewMode, roomCode?: string | null) => {
+    (
+      nextView: ViewMode,
+      roomCode?: string | null,
+      options: { replace?: boolean } = {},
+    ) => {
       let nextUrl = '/';
       if (nextView === 'home') {
         nextUrl = '/';
@@ -98,7 +138,11 @@ function AppContent() {
         nextUrl = `/#${nextView}`;
       }
 
-      window.history.pushState({}, '', nextUrl);
+      if (options.replace) {
+        window.history.replaceState({}, '', nextUrl);
+      } else {
+        window.history.pushState({}, '', nextUrl);
+      }
       setRoute({ view: nextView, roomCode: roomCode ?? null });
       window.scrollTo(0, 0);
     },
@@ -127,15 +171,22 @@ function AppContent() {
     };
   }, []);
 
-  // Protected route enforcement for Dashboard
+  // Route guards:
+  //  - dashboard requires a session
+  //  - signed-in users never see the landing page or auth pages; they go to the dashboard
   useEffect(() => {
-    if (isLoading) return;
+    if (isLoading || signingOutRef.current) return;
 
     if (route.view === 'dashboard' && !user) {
       showToast('Please sign in to access your dashboard.');
-      navigateTo('signin');
-    } else if ((route.view === 'signin' || route.view === 'signup') && user) {
-      navigateTo('dashboard');
+      navigateTo('signin', null, { replace: true });
+    } else if (
+      user &&
+      (route.view === 'signin' ||
+        route.view === 'signup' ||
+        route.view === 'home')
+    ) {
+      navigateTo('dashboard', null, { replace: true });
     }
   }, [route.view, user, isLoading, navigateTo, showToast]);
 
@@ -156,9 +207,11 @@ function AppContent() {
   };
 
   const handleSignOut = async () => {
+    signingOutRef.current = true;
+    navigateTo('home', null, { replace: true });
     await signOut();
+    signingOutRef.current = false;
     showToast('Signed out successfully.');
-    navigateTo('home');
   };
 
   const handleEnterRoom = useCallback(
@@ -183,7 +236,18 @@ function AppContent() {
 
   return (
     <>
-      {route.view === 'home' && (
+      {isLoading && route.view !== 'room' && (
+        <div
+          className="auth-splash"
+          role="status"
+          aria-live="polite"
+          aria-label="Restoring your session"
+        >
+          <Logo size="md" />
+        </div>
+      )}
+
+      {!isLoading && route.view === 'home' && !user && (
         <div className="landing-wrapper">
           <div className="wrap">
             <Header
@@ -205,7 +269,7 @@ function AppContent() {
         </div>
       )}
 
-      {(route.view === 'signin' || route.view === 'signup') && (
+      {!isLoading && (route.view === 'signin' || route.view === 'signup') && (
         <AuthView
           initialMode={route.view}
           currentTheme={theme}
@@ -216,13 +280,16 @@ function AppContent() {
         />
       )}
 
-      {route.view === 'dashboard' && (
+      {!isLoading && route.view === 'dashboard' && user && (
         <DashboardView
           user={user}
+          {...(route.dashTab ? { initialTab: route.dashTab } : {})}
+          {...(route.profileUserId !== undefined
+            ? { viewedProfileUserId: route.profileUserId }
+            : {})}
           onSignOut={handleSignOut}
           currentTheme={theme}
           onToggleTheme={handleToggleTheme}
-          onNavigateHome={() => navigateTo('home')}
           onEnterRoom={handleEnterRoom}
           onToast={showToast}
         />

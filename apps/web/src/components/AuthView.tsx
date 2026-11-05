@@ -25,7 +25,6 @@ export function AuthView({
     signUpWithEmail,
     signInWithMagicLink,
     signInWithGoogle,
-    signInDemo,
   } = useAuth();
 
   const [mode, setMode] = useState<'signin' | 'signup'>(initialMode);
@@ -82,15 +81,6 @@ export function AuthView({
     }
   };
 
-  const handleDemoSignIn = () => {
-    setLoading(true);
-    signInDemo();
-    onToast('Signed in as Ada Okafor (Demo Pro Host).');
-    setTimeout(() => {
-      onNavigateDashboard();
-    }, 200);
-  };
-
   const handleGoogleSignIn = async () => {
     setLoading(true);
     setError(null);
@@ -98,10 +88,8 @@ export function AuthView({
     if (res.error) {
       setError(res.error);
       setLoading(false);
-    } else {
-      onToast('Signed in with Google.');
-      onNavigateDashboard();
     }
+    // On success the browser is redirected to Google; the session is restored on return.
   };
 
   return (
@@ -228,26 +216,6 @@ export function AuthView({
                   ? 'Sign in to access your meetings, recordings, and notes.'
                   : 'Join MeetIT for reliable video calls on any network.'}
               </p>
-            </div>
-
-            {/* Quick Demo Login Option */}
-            <div className="auth-demo-banner">
-              <div className="auth-demo-content">
-                <b>Fast Demo Access</b>
-                <span>Test the dashboard immediately as a Pro host</span>
-              </div>
-              <button
-                type="button"
-                className="btn primary sm"
-                onClick={handleDemoSignIn}
-                disabled={loading}
-              >
-                Sign in as Ada Okafor
-              </button>
-            </div>
-
-            <div className="auth-divider">
-              <span>or continue with email</span>
             </div>
 
             {/* Feedback & Error Alerts */}

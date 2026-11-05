@@ -1,8 +1,13 @@
 import { describe, it, expect } from 'vitest';
-import { generateRoomCode, normalizeRoomCode } from './types';
+import {
+  generateRoomCode,
+  normalizeRoomCode,
+  personalRoomCodeForUser,
+} from './types';
 import { classifyMediaError } from './lib/devices';
 import { computeLayout } from './lib/layout';
 import { ActiveSpeakerSelector } from './lib/activeSpeaker';
+import { formatRecurrenceLabel, generateIcsContent } from './lib/meetingsStore';
 
 describe('Room Code Utilities', () => {
   it('generates a 3-4-3 room code with hyphen separators', () => {
@@ -134,5 +139,42 @@ describe('ActiveSpeakerSelector with hysteresis', () => {
         2600,
       ),
     ).toBeNull();
+  });
+});
+
+describe('Personal Room & Scheduled Meetings (.ics + RRULE)', () => {
+  it('generates deterministic permanent personal room codes per user ID', () => {
+    const code1 = personalRoomCodeForUser('user-uuid-123');
+    const code2 = personalRoomCodeForUser('user-uuid-123');
+    const code3 = personalRoomCodeForUser('user-uuid-999');
+    expect(code1).toMatch(/^[a-z]{3}-[a-z]{4}-[a-z]{3}$/);
+    expect(code1).toBe(code2);
+    expect(code1).not.toBe(code3);
+  });
+
+  it('generates valid RFC 5545 .ics calendar content with RRULE and passcode', () => {
+    const ics = generateIcsContent(
+      {
+        id: 'sched-001',
+        roomCode: 'abc-defg-hij',
+        title: 'Weekly Engineering Sync',
+        description: 'Review sprint goals and blockers.',
+        startsAt: '2026-11-06T14:00:00.000Z',
+        durationMinutes: 45,
+        rrule: 'FREQ=WEEKLY',
+        passcode: '7788',
+        invitees: ['mei@example.com'],
+        createdAt: '2026-11-05T10:00:00.000Z',
+      },
+      'https://meetit.app',
+    );
+
+    expect(ics).toContain('BEGIN:VCALENDAR');
+    expect(ics).toContain('SUMMARY:Weekly Engineering Sync');
+    expect(ics).toContain('RRULE:FREQ=WEEKLY');
+    expect(ics).toContain('Room passcode: 7788');
+    expect(ics).toContain('ATTENDEE;CN=mei@example.com:mailto:mei@example.com');
+    expect(ics).toContain('END:VCALENDAR');
+    expect(formatRecurrenceLabel('FREQ=WEEKLY')).toBe('Repeats weekly');
   });
 });

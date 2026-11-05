@@ -23,13 +23,22 @@ function toHttpBaseUrl(wsUrl: string): string {
   return wsUrl.replace(/^wss:/i, 'https:').replace(/^ws:/i, 'http:');
 }
 
-export async function createRoomViaApi(): Promise<string> {
+export async function createRoomViaApi(options?: {
+  code?: string;
+  title?: string;
+  description?: string;
+  passcode?: string;
+  kind?: 'instant' | 'scheduled' | 'personal';
+  ownerId?: string;
+}): Promise<string> {
   const baseUrl = toHttpBaseUrl(DEFAULT_SIGNALING_WS_URL);
   try {
     const controller = new AbortController();
     const timer = window.setTimeout(() => controller.abort(), 1800);
     const res = await fetch(`${baseUrl}/rooms`, {
       method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(options ?? {}),
       signal: controller.signal,
     });
     window.clearTimeout(timer);
@@ -40,11 +49,49 @@ export async function createRoomViaApi(): Promise<string> {
   } catch {
     // Fallback to client-generated valid room code if signaling server isn't running
   }
-  return generateRoomCode();
+  return options?.code ?? generateRoomCode();
+}
+
+export async function configureRoomViaApi(options: {
+  code: string;
+  title?: string;
+  description?: string;
+  passcode?: string;
+  kind?: 'instant' | 'scheduled' | 'personal';
+  ownerId?: string;
+}): Promise<void> {
+  await createRoomViaApi(options);
+}
+
+export async function requestGuestTokenViaApi(
+  displayName: string,
+): Promise<string> {
+  const baseUrl = toHttpBaseUrl(DEFAULT_SIGNALING_WS_URL);
+  try {
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => controller.abort(), 1500);
+    const res = await fetch(`${baseUrl}/auth/guest`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ displayName }),
+      signal: controller.signal,
+    });
+    window.clearTimeout(timer);
+    if (res.ok) {
+      const data = (await res.json()) as { token?: string };
+      if (data.token) return data.token;
+    }
+  } catch {
+    // Fallback to guest-token when signaling server is offline
+  }
+  return 'guest-token';
 }
 
 export async function inspectRoomViaApi(code: string): Promise<{
   exists: boolean;
+  title?: string;
+  description?: string;
+  hasPasscode: boolean;
   locked: boolean;
   full: boolean;
   peerCount: number;
@@ -62,6 +109,9 @@ export async function inspectRoomViaApi(code: string): Promise<{
     if (res.ok) {
       const data = (await res.json()) as {
         exists?: boolean;
+        title?: string;
+        description?: string;
+        hasPasscode?: boolean;
         locked?: boolean;
         full?: boolean;
         participantCount?: number;
@@ -72,6 +122,9 @@ export async function inspectRoomViaApi(code: string): Promise<{
       const maxPeers = data.maxParticipants ?? 4;
       return {
         exists: data.exists ?? true,
+        ...(data.title ? { title: data.title } : {}),
+        ...(data.description ? { description: data.description } : {}),
+        hasPasscode: data.hasPasscode ?? false,
         locked: data.locked ?? false,
         full: data.full ?? peerCount >= maxPeers,
         peerCount,
@@ -83,6 +136,7 @@ export async function inspectRoomViaApi(code: string): Promise<{
   }
   return {
     exists: true,
+    hasPasscode: false,
     locked: false,
     full: false,
     peerCount: 0,
@@ -122,6 +176,7 @@ export interface SignalingClientOptions {
   roomCode: string;
   displayName: string;
   token?: string;
+  passcode?: string;
   initialState?: PeerState;
   onReconnecting?: (attempt: number) => void;
   onReconnected?: () => void;
@@ -136,6 +191,7 @@ export class SignalingClient implements SignalingChannel {
   private readonly roomCode: string;
   private readonly displayName: string;
   private readonly token: string;
+  private readonly passcode: string | undefined;
   private currentState: PeerState;
   private selfId: string;
   private ws: WebSocket | null = null;
@@ -168,6 +224,7 @@ export class SignalingClient implements SignalingChannel {
     this.roomCode = options.roomCode;
     this.displayName = options.displayName;
     this.token = options.token ?? 'guest-token';
+    this.passcode = options.passcode;
     this.currentState = options.initialState ?? {
       audio: true,
       video: true,
@@ -209,6 +266,7 @@ export class SignalingClient implements SignalingChannel {
             roomCode: this.roomCode,
             displayName: this.displayName,
             token: this.token,
+            ...(this.passcode ? { passcode: this.passcode } : {}),
             selfId: this.selfId,
             state: this.currentState,
             capabilities: ['mesh'],

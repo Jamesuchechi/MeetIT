@@ -10,6 +10,8 @@ import {
 import { RoomManager, type Peer, type Room } from './room.js';
 import { TokenBucketRateLimiter } from './rateLimiter.js';
 import { buildIceServers, type IceServerEnvConfig } from './turn.js';
+import { issueGuestToken, verifyJoinToken } from './auth.js';
+import { SignalingPersistence } from './persistence.js';
 
 export interface SignalingAppOptions {
   logger?: boolean;
@@ -34,6 +36,7 @@ export interface SignalingServerInstance {
   app: FastifyInstance;
   wss: WebSocketServer;
   roomManager: RoomManager;
+  persistence: SignalingPersistence;
   metrics: SignalingMetrics;
   close: () => Promise<void>;
 }
@@ -69,6 +72,7 @@ export function buildSignalingApp(
   };
 
   const roomManager = new RoomManager({ reclaimSlotMs });
+  const persistence = new SignalingPersistence();
   const metrics: SignalingMetrics = {
     invalidFrames: 0,
     rateLimitedFrames: 0,
@@ -106,7 +110,10 @@ export function buildSignalingApp(
         allowedOrigins.includes(origin)
       ) {
         reply.header('Access-Control-Allow-Origin', origin);
-        reply.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+        reply.header(
+          'Access-Control-Allow-Methods',
+          'GET, POST, PATCH, OPTIONS',
+        );
         reply.header(
           'Access-Control-Allow-Headers',
           'Content-Type, Authorization, X-Request-Id',
@@ -127,26 +134,66 @@ export function buildSignalingApp(
     invalidFrames: metrics.invalidFrames,
   }));
 
-  app.post<{ Body?: { title?: string; maxParticipants?: number } }>(
-    '/rooms',
+  app.post<{ Body?: { displayName?: string } }>(
+    '/auth/guest',
     async (request, reply) => {
-      const body = request.body ?? {};
-      const room = roomManager.createRoom({
-        ...(typeof body.title === 'string' ? { title: body.title } : {}),
-        ...(typeof body.maxParticipants === 'number'
-          ? { maxParticipants: body.maxParticipants }
-          : {}),
-      });
-      request.log.info({ roomCode: room.code }, 'room created');
-      return reply.code(201).send({
-        code: room.code,
-        locked: room.locked,
-        full: room.isFull,
-        participantCount: room.participantCount,
-        maxParticipants: room.maxParticipants,
-      });
+      const displayName = (request.body?.displayName ?? '').trim();
+      if (!displayName || displayName.length > 80) {
+        return reply.code(400).send({
+          error: 'INVALID_DISPLAY_NAME',
+          message: 'Display name is required (1–80 characters).',
+        });
+      }
+      const signed = issueGuestToken(displayName);
+      return reply.code(200).send(signed);
     },
   );
+
+  app.post<{
+    Body?: {
+      code?: string;
+      title?: string;
+      description?: string;
+      passcode?: string;
+      maxParticipants?: number;
+      kind?: 'instant' | 'scheduled' | 'personal';
+      ownerId?: string;
+    };
+  }>('/rooms', async (request, reply) => {
+    const body = request.body ?? {};
+    const requestedCode = body.code ? normalizeRoomCode(body.code) : null;
+    const room = roomManager.createRoom({
+      ...(requestedCode ? { code: requestedCode } : {}),
+      ...(typeof body.title === 'string' ? { title: body.title } : {}),
+      ...(typeof body.description === 'string'
+        ? { description: body.description }
+        : {}),
+      ...(typeof body.passcode === 'string' ? { passcode: body.passcode } : {}),
+      ...(typeof body.maxParticipants === 'number'
+        ? { maxParticipants: body.maxParticipants }
+        : {}),
+    });
+
+    persistence.recordRoomCreated({
+      code: room.code,
+      ...(room.title ? { title: room.title } : {}),
+      ...(room.description ? { description: room.description } : {}),
+      ...(body.kind ? { kind: body.kind } : {}),
+      ...(body.ownerId ? { ownerId: body.ownerId } : {}),
+    });
+
+    request.log.info({ roomCode: room.code }, 'room created');
+    return reply.code(201).send({
+      code: room.code,
+      ...(room.title ? { title: room.title } : {}),
+      ...(room.description ? { description: room.description } : {}),
+      hasPasscode: room.hasPasscode,
+      locked: room.locked,
+      full: room.isFull,
+      participantCount: room.participantCount,
+      maxParticipants: room.maxParticipants,
+    });
+  });
 
   app.get<{ Params: { code: string } }>(
     '/rooms/:code',
@@ -163,6 +210,7 @@ export function buildSignalingApp(
         return reply.code(200).send({
           exists: false,
           code: normalized,
+          hasPasscode: false,
           locked: false,
           full: false,
           participantCount: 0,
@@ -172,6 +220,9 @@ export function buildSignalingApp(
       return reply.code(200).send({
         exists: true,
         code: room.code,
+        ...(room.title ? { title: room.title } : {}),
+        ...(room.description ? { description: room.description } : {}),
+        hasPasscode: room.hasPasscode,
         locked: room.locked,
         full: room.isFull,
         participantCount: room.participantCount,
@@ -179,6 +230,10 @@ export function buildSignalingApp(
       });
     },
   );
+
+  app.get('/meetings/history', async () => ({
+    meetings: persistence.listMeetingsHistory(50),
+  }));
 
   const wss = new WebSocketServer({
     noServer: true,
@@ -344,9 +399,15 @@ export function buildSignalingApp(
           ctx.authTimer = null;
         }
 
-        const { roomCode, displayName, token, selfId, state } = msg.payload;
-        if (!token || token.trim().length === 0) {
-          sendError(ws, 'UNAUTHORIZED', 'Missing authentication token.');
+        const { roomCode, displayName, token, passcode, selfId, state } =
+          msg.payload;
+        const verifiedCaller = verifyJoinToken(token);
+        if (!verifiedCaller) {
+          sendError(
+            ws,
+            'UNAUTHORIZED',
+            'Invalid or expired authentication token.',
+          );
           ws.close(4401, 'Unauthorized');
           return;
         }
@@ -364,8 +425,12 @@ export function buildSignalingApp(
           socket: ws,
           displayName,
           ...(selfId !== undefined ? { requestedSelfId: selfId } : {}),
+          ...(verifiedCaller.userId !== undefined
+            ? { userId: verifiedCaller.userId }
+            : {}),
           ...(state !== undefined ? { initialState: state } : {}),
-          isAuthenticatedUser: token !== 'guest-token',
+          ...(passcode !== undefined ? { passcode } : {}),
+          isAuthenticatedUser: verifiedCaller.verified,
         });
 
         if (!joinRes.ok) {
@@ -375,6 +440,16 @@ export function buildSignalingApp(
 
         ctx.room = room;
         ctx.peer = joinRes.peer;
+
+        persistence.recordPeerJoined({
+          roomCode: room.code,
+          ...(room.title ? { roomTitle: room.title } : {}),
+          peerId: joinRes.peer.id,
+          ...(joinRes.peer.userId ? { userId: joinRes.peer.userId } : {}),
+          displayName: joinRes.peer.displayName,
+          role: joinRes.peer.role,
+          currentParticipantCount: room.participantCount,
+        });
 
         const iceServers = buildIceServers(joinRes.peer.id, iceConfig);
         app.log.info(
@@ -401,6 +476,8 @@ export function buildSignalingApp(
             roomState: {
               locked: room.locked,
               hostId: room.hostId,
+              ...(room.title ? { title: room.title } : {}),
+              ...(room.description ? { description: room.description } : {}),
             },
           },
         });
@@ -419,6 +496,11 @@ export function buildSignalingApp(
         case 'leave': {
           ctx.explicitlyLeft = true;
           room.leavePeer(peer.id, 'left');
+          persistence.recordPeerLeft({
+            roomCode: room.code,
+            peerId: peer.id,
+            remainingParticipants: room.participantCount,
+          });
           app.log.info(
             { traceId: ctx.traceId, roomId: room.code, peerId: peer.id },
             'peer left room gracefully',
@@ -551,8 +633,15 @@ export function buildSignalingApp(
         ctx.authTimer = null;
       }
       if (ctx.room && ctx.peer && !ctx.explicitlyLeft) {
+        const roomRef = ctx.room;
         // Hold slot for 30s so peer can reclaim with same selfId
-        ctx.room.detachSocket(ctx.peer.id, ws);
+        roomRef.detachSocket(ctx.peer.id, ws, (reapedPeerId) => {
+          persistence.recordPeerLeft({
+            roomCode: roomRef.code,
+            peerId: reapedPeerId,
+            remainingParticipants: roomRef.participantCount,
+          });
+        });
       }
       socketContexts.delete(ws);
     });
@@ -590,6 +679,7 @@ export function buildSignalingApp(
     app,
     wss,
     roomManager,
+    persistence,
     metrics,
     close,
   };

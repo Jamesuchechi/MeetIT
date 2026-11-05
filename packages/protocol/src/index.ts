@@ -64,6 +64,7 @@ export const peerInfoSchema = z.object({
   id: z.string().uuid(),
   displayName: z.string().trim().min(1).max(80),
   role: peerRoleSchema,
+  verified: z.boolean().optional(),
   state: peerStateSchema,
 });
 export type PeerInfo = z.infer<typeof peerInfoSchema>;
@@ -112,6 +113,7 @@ export const clientMessageSchema = z.discriminatedUnion('type', [
       roomCode: z.string().regex(ROOM_CODE_REGEX),
       displayName: z.string().trim().min(1).max(80),
       token: z.string().min(1),
+      passcode: z.string().max(64).optional(),
       selfId: z.string().uuid().optional(),
       state: peerStateSchema.optional(),
       capabilities: z.array(z.string()).default([]),
@@ -182,6 +184,8 @@ export const serverJoinedPayloadSchema = z.object({
   roomState: z.object({
     locked: z.boolean(),
     hostId: z.string().uuid().nullable(),
+    title: z.string().optional(),
+    description: z.string().optional(),
   }),
 });
 

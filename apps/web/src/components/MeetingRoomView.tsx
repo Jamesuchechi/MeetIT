@@ -8,6 +8,7 @@ import React, {
 import { MeshTransport, type ConnectionState } from '@meetit/media';
 import type { PeerInfo, PeerState, ReactionEmoji } from '@meetit/protocol';
 import { Logo } from './Logo';
+import { Avatar } from './Avatar';
 import {
   MicIcon,
   VidIcon,
@@ -38,7 +39,16 @@ import {
   createMultiPeerSpeakerMonitor,
   playCallChime,
 } from '../lib/activeSpeaker';
-import { SignalingClient, inspectRoomViaApi } from '../lib/signalingClient';
+import {
+  SignalingClient,
+  inspectRoomViaApi,
+  requestGuestTokenViaApi,
+} from '../lib/signalingClient';
+import {
+  findRoomMetadataByCode,
+  recordCompletedMeetingSession,
+  type MeetingAttendeeRecord,
+} from '../lib/meetingsStore';
 import { copyToClipboard, type AuthUser } from '../types';
 
 interface MeetingRoomViewProps {
@@ -126,7 +136,7 @@ function RemoteVideoTile({
 
   return (
     <div
-      className={`call-tile remote-tile ${isSpeaking ? 'active-speaker-ring' : ''} ${isPinned ? 'pinned-tile' : ''}`}
+      className={`call-tile remote-tile ${isSpeaking ? 'active-speaker-ring' : ''} ${isPinned ? 'pinned-tile' : ''} ${!hasVideo ? 'camera-off-studio' : ''}`}
       data-testid="remote-tile"
     >
       <video
@@ -137,8 +147,9 @@ function RemoteVideoTile({
       />
       {!hasVideo && (
         <div className="tile-avatar-fallback">
-          <div className="tile-avatar-circle">{initial}</div>
-          <span className="tile-avatar-sub">Camera off</span>
+          <div className={`tile-avatar-ring ${isSpeaking ? 'speaking' : ''}`}>
+            <div className="tile-avatar-circle">{initial}</div>
+          </div>
         </div>
       )}
 
@@ -187,6 +198,18 @@ function RemoteVideoTile({
           <span>{participant.displayName}</span>
           {participant.role === 'host' && (
             <span className="role-pill">Host</span>
+          )}
+          {participant.verified || participant.role !== 'guest' ? (
+            <span
+              className="role-pill verified-tile-pill"
+              title="Verified account"
+            >
+              ✓ Verified
+            </span>
+          ) : (
+            <span className="role-pill guest-tile-pill" title="Guest attendee">
+              Guest
+            </span>
           )}
         </div>
 
@@ -320,6 +343,18 @@ export function MeetingRoomView({
   const [isAcquiringMedia, setIsAcquiringMedia] = useState(false);
 
   // Room status & call state
+  const localMeta = useMemo(() => findRoomMetadataByCode(roomCode), [roomCode]);
+  const [roomTitle, setRoomTitle] = useState<string>(
+    () => localMeta?.title || `Room ${roomCode}`,
+  );
+  const [roomDescription, setRoomDescription] = useState<string>(
+    () => localMeta?.description || '',
+  );
+  const [roomHasPasscode, setRoomHasPasscode] = useState<boolean>(() =>
+    Boolean(localMeta?.passcode),
+  );
+  const [enteredPasscode, setEnteredPasscode] = useState('');
+  const [lobbyError, setLobbyError] = useState<string | null>(null);
   const [roomPeerCount, setRoomPeerCount] = useState(0);
   const [roomLocked, setRoomLocked] = useState(false);
   const [roomFull, setRoomFull] = useState(false);
@@ -331,6 +366,7 @@ export function MeetingRoomView({
   } | null>(null);
 
   // Panels, popovers, & spotlight state
+  const [dismissedReadyCard, setDismissedReadyCard] = useState(false);
   const [showDevicePopover, setShowDevicePopover] = useState(false);
   const [showReactionPopover, setShowReactionPopover] = useState(false);
   const [showChatPanel, setShowChatPanel] = useState(false);
@@ -362,6 +398,10 @@ export function MeetingRoomView({
   const transportRef = useRef<MeshTransport | null>(null);
   const showChatPanelRef = useRef(false);
   const soundsEnabledRef = useRef(soundsEnabled);
+  const callStartedAtRef = useRef<number | null>(null);
+  const seenAttendeesRef = useRef<Map<string, MeetingAttendeeRecord>>(
+    new Map(),
+  );
 
   useEffect(() => {
     showChatPanelRef.current = showChatPanel;
@@ -437,10 +477,19 @@ export function MeetingRoomView({
 
   // Inspect room metadata & acquire lobby preview on mount
   useEffect(() => {
+    const meta = findRoomMetadataByCode(roomCode);
+    if (meta) {
+      setRoomTitle(meta.title);
+      setRoomDescription(meta.description);
+      setRoomHasPasscode(Boolean(meta.passcode));
+    }
     void inspectRoomViaApi(roomCode).then((info) => {
       setRoomPeerCount(info.peerCount);
       setRoomLocked(info.locked);
       setRoomFull(info.full || info.peerCount >= MESH_MAX_PARTICIPANTS);
+      if (info.title) setRoomTitle(info.title);
+      if (info.description) setRoomDescription(info.description);
+      if (info.hasPasscode) setRoomHasPasscode(true);
     });
 
     const initialPrefs = loadDevicePreferences();
@@ -836,16 +885,38 @@ export function MeetingRoomView({
     [],
   );
 
-  const handleJoinCall = () => {
+  const handleJoinCall = async () => {
     if (roomFull || roomLocked) return;
+    setLobbyError(null);
 
-    const cleanName = displayName.trim() || user?.displayName || 'Guest';
+    const cleanName = displayName.trim() || user?.displayName || '';
+    if (!cleanName) {
+      setLobbyError('Please enter your display name before joining.');
+      return;
+    }
+
+    if (
+      localMeta?.passcode &&
+      enteredPasscode.trim() !== localMeta.passcode.trim()
+    ) {
+      setLobbyError('Incorrect room passcode.');
+      return;
+    }
+    if (roomHasPasscode && !enteredPasscode.trim()) {
+      setLobbyError('This room requires a passcode to join.');
+      return;
+    }
+
     setDisplayName(cleanName);
     try {
       window.localStorage.setItem(DISPLAY_NAME_STORAGE_KEY, cleanName);
     } catch {
       // ignore
     }
+
+    const token = user
+      ? 'authenticated-user-token'
+      : await requestGuestTokenViaApi(cleanName);
 
     const initialState: PeerState = {
       audio: !audioMuted,
@@ -859,9 +930,24 @@ export function MeetingRoomView({
       handRaised: false,
     };
 
+    callStartedAtRef.current = Date.now();
+    seenAttendeesRef.current = new Map([
+      [
+        user?.id ?? 'local-self',
+        {
+          id: user?.id ?? 'local-self',
+          displayName: cleanName,
+          role: user ? 'host' : 'guest',
+          verified: Boolean(user),
+        },
+      ],
+    ]);
+
     const signaling = new SignalingClient({
       roomCode,
       displayName: cleanName,
+      token,
+      ...(enteredPasscode.trim() ? { passcode: enteredPasscode.trim() } : {}),
       initialState,
       onReconnecting: () => {
         setConnectionBanner({
@@ -1007,8 +1093,20 @@ export function MeetingRoomView({
     });
 
     signaling.on('joined', (payload) => {
+      if (payload.roomState.title) {
+        setRoomTitle(payload.roomState.title);
+      }
+      if (payload.roomState.description) {
+        setRoomDescription(payload.roomState.description);
+      }
       const map: Record<string, RemoteParticipant> = {};
       for (const p of payload.peers) {
+        seenAttendeesRef.current.set(p.id, {
+          id: p.id,
+          displayName: p.displayName,
+          role: p.role,
+          ...(p.verified !== undefined ? { verified: p.verified } : {}),
+        });
         map[p.id] = {
           ...p,
           stream: null,
@@ -1049,6 +1147,12 @@ export function MeetingRoomView({
     });
 
     signaling.on('peer.joined', ({ peer }) => {
+      seenAttendeesRef.current.set(peer.id, {
+        id: peer.id,
+        displayName: peer.displayName,
+        role: peer.role,
+        ...(peer.verified !== undefined ? { verified: peer.verified } : {}),
+      });
       onToast(`${peer.displayName} joined the call.`);
       announce(`${peer.displayName} joined the meeting`);
       if (soundsEnabledRef.current) {
@@ -1149,6 +1253,11 @@ export function MeetingRoomView({
         setStage('lobby');
         signaling.disconnect();
         void transport.disconnect();
+      } else if (err.code === 'FORBIDDEN' || err.code === 'UNAUTHORIZED') {
+        setLobbyError(err.message);
+        setStage('lobby');
+        signaling.disconnect();
+        void transport.disconnect();
       }
       onToast(err.message);
     });
@@ -1160,6 +1269,16 @@ export function MeetingRoomView({
   };
 
   const handleHangUp = () => {
+    if (callStartedAtRef.current) {
+      recordCompletedMeetingSession({
+        roomCode,
+        roomTitle,
+        startedAtMs: callStartedAtRef.current,
+        endedAtMs: Date.now(),
+        attendees: Array.from(seenAttendeesRef.current.values()),
+      });
+      callStartedAtRef.current = null;
+    }
     signalingRef.current?.disconnect();
     void transportRef.current?.disconnect();
     if (localStreamRef.current) {
@@ -1455,7 +1574,15 @@ export function MeetingRoomView({
           <div className="lobby-join-card">
             <div>
               <span className="lobby-eyebrow">Ready to join?</span>
-              <h2>Room {roomCode}</h2>
+              <h2 data-testid="lobby-room-title">{roomTitle}</h2>
+              {roomDescription && (
+                <p
+                  className="lobby-room-description"
+                  data-testid="lobby-room-description"
+                >
+                  {roomDescription}
+                </p>
+              )}
               <p className="lobby-status-line">
                 {roomFull
                   ? `This room is full (${MESH_MAX_PARTICIPANTS}/${MESH_MAX_PARTICIPANTS} participants in mesh mode).`
@@ -1466,6 +1593,12 @@ export function MeetingRoomView({
                       : `${roomPeerCount} of ${MESH_MAX_PARTICIPANTS} participant${roomPeerCount > 1 ? 's' : ''} currently in the call.`}
               </p>
             </div>
+
+            {lobbyError && (
+              <div className="auth-alert error" role="alert">
+                {lobbyError}
+              </div>
+            )}
 
             {/* Clear "Room Full" UX alert when room reaches 4-participant mesh cap */}
             {roomFull && (
@@ -1484,7 +1617,14 @@ export function MeetingRoomView({
             )}
 
             <div className="lobby-field">
-              <label htmlFor="lobbyNameInput">Your display name</label>
+              <label htmlFor="lobbyNameInput">
+                Your display name{' '}
+                {user ? (
+                  <span className="verified-inline-pill">✓ Verified</span>
+                ) : (
+                  <span className="guest-inline-pill">Guest (required)</span>
+                )}
+              </label>
               <input
                 id="lobbyNameInput"
                 type="text"
@@ -1494,18 +1634,37 @@ export function MeetingRoomView({
                 onChange={(e) => setDisplayName(e.target.value)}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' && !roomLocked && !roomFull) {
-                    handleJoinCall();
+                    void handleJoinCall();
                   }
                 }}
               />
             </div>
+
+            {roomHasPasscode && (
+              <div className="lobby-field">
+                <label htmlFor="lobbyPasscodeInput">🔒 Room passcode *</label>
+                <input
+                  id="lobbyPasscodeInput"
+                  type="password"
+                  placeholder="Enter room passcode"
+                  value={enteredPasscode}
+                  maxLength={32}
+                  onChange={(e) => setEnteredPasscode(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !roomLocked && !roomFull) {
+                      void handleJoinCall();
+                    }
+                  }}
+                />
+              </div>
+            )}
 
             <div className="lobby-join-actions">
               <button
                 type="button"
                 className="btn primary lobby-join-btn"
                 disabled={roomLocked || roomFull}
-                onClick={handleJoinCall}
+                onClick={() => void handleJoinCall()}
                 data-testid="join-call-btn"
               >
                 <span>{roomFull ? 'Room full (4/4)' : 'Join meeting now'}</span>
@@ -1543,17 +1702,27 @@ export function MeetingRoomView({
         {ariaAnnouncement}
       </div>
 
-      {/* Top call bar */}
+      {/* Minimal Studio Top Bar (Google Meet style) */}
       <header className="call-topbar">
         <div className="call-topbar-left">
-          <Logo size="sm" />
-          <span className="call-room-code">{roomCode}</span>
-          <span className="call-peer-count-pill">
-            {totalParticipantCount}/{MESH_MAX_PARTICIPANTS} in call
-          </span>
           <span className="call-timer" aria-label="Call duration">
             {formatDuration(callSeconds)}
           </span>
+          <span className="call-topbar-sep" aria-hidden="true">
+            |
+          </span>
+          <span className="call-room-code" title={roomTitle}>
+            {roomCode}
+          </span>
+          <button
+            type="button"
+            className="call-topbar-icon-btn"
+            onClick={handleCopyInvite}
+            aria-label="Copy meeting invite link"
+            title="Copy meeting invite link"
+          >
+            {copiedInvite ? <CheckIcon /> : <LnkIcon />}
+          </button>
         </div>
 
         {connectionBanner && (
@@ -1567,19 +1736,21 @@ export function MeetingRoomView({
         )}
 
         <div className="call-topbar-right">
-          <button
-            type="button"
-            className="btn call-invite-btn"
-            onClick={handleCopyInvite}
-            aria-label="Copy meeting invite link"
+          <div
+            className="call-participants-chip"
+            title={`${totalParticipantCount} of ${MESH_MAX_PARTICIPANTS} participants in call`}
           >
-            {copiedInvite ? <CheckIcon /> : <LnkIcon />}
-            <span>{copiedInvite ? 'Copied' : 'Copy invite link'}</span>
-          </button>
+            <Avatar
+              name={displayName || user?.displayName || 'You'}
+              src={user?.avatarUrl}
+              className="call-topbar-avatar"
+            />
+            <span>{totalParticipantCount}</span>
+          </div>
 
           <button
             type="button"
-            className="theme-toggle"
+            className="call-topbar-icon-btn"
             onClick={() => setShowShortcutsModal(true)}
             aria-label="Keyboard shortcuts (?)"
             title="Keyboard shortcuts (?)"
@@ -1590,16 +1761,17 @@ export function MeetingRoomView({
 
           <button
             type="button"
-            className="theme-toggle"
+            className="call-topbar-icon-btn"
             onClick={onToggleTheme}
             aria-label="Toggle color theme"
+            title="Toggle color theme"
           >
             {currentTheme === 'dark' ? <SunIcon /> : <MoonIcon />}
           </button>
         </div>
       </header>
 
-      {/* Center workspace: video grid + optional side chat panel */}
+      {/* Center workspace: full-stage video canvas + optional side chat panel */}
       <div className={`call-body ${showChatPanel ? 'with-chat' : ''}`}>
         <main
           className={`call-stage mode-${layout.mode}`}
@@ -1627,6 +1799,41 @@ export function MeetingRoomView({
             </div>
           )}
 
+          {/* Compact floating "Your meeting's ready" card (never occupies a grid cell) */}
+          {remoteList.length === 0 &&
+            !activeScreenTile &&
+            !dismissedReadyCard && (
+              <div className="call-ready-float" data-testid="waiting-for-peer">
+                <div className="call-ready-float-head">
+                  <strong>Your meeting&apos;s ready</strong>
+                  <button
+                    type="button"
+                    className="call-ready-close"
+                    onClick={() => setDismissedReadyCard(true)}
+                    aria-label="Dismiss meeting info card"
+                    title="Dismiss"
+                  >
+                    <CloseIcon />
+                  </button>
+                </div>
+                <p>
+                  Share this meeting link with others you want in the call (up
+                  to {MESH_MAX_PARTICIPANTS} participants).
+                </p>
+                <div className="call-ready-link-box">
+                  <span>{inviteUrl.replace(/^https?:\/\//, '')}</span>
+                  <button
+                    type="button"
+                    className="call-ready-copy-btn"
+                    onClick={handleCopyInvite}
+                  >
+                    {copiedInvite ? <CheckIcon /> : <LnkIcon />}
+                    <span>{copiedInvite ? 'Copied' : 'Copy link'}</span>
+                  </button>
+                </div>
+              </div>
+            )}
+
           {/* Active Screen Share Tile (when anyone is sharing their screen) */}
           {activeScreenTile && (
             <ScreenShareTile
@@ -1639,29 +1846,6 @@ export function MeetingRoomView({
                 )
               }
             />
-          )}
-
-          {/* Waiting card when solo and not sharing screen */}
-          {remoteList.length === 0 && !activeScreenTile && (
-            <div className="call-waiting-card" data-testid="waiting-for-peer">
-              <div className="waiting-pulse" aria-hidden="true" />
-              <h3>Waiting for others to join (up to 4 participants)…</h3>
-              <p>
-                Share this room code or link with up to 3 other people to start
-                your multi-party call.
-              </p>
-              <div className="waiting-invite-box">
-                <code>{inviteUrl}</code>
-                <button
-                  type="button"
-                  className="btn primary"
-                  onClick={handleCopyInvite}
-                >
-                  <LnkIcon />
-                  <span>{copiedInvite ? 'Copied!' : 'Copy invite link'}</span>
-                </button>
-              </div>
-            </div>
           )}
 
           {/* Remote Participant Tiles */}
@@ -1680,7 +1864,7 @@ export function MeetingRoomView({
 
           {/* Local Participant Tile */}
           <div
-            className={`call-tile local-tile ${activeSpeakerId === 'local' ? 'active-speaker-ring' : ''} ${effectiveSpotlightId === 'local' ? 'pinned-tile' : ''}`}
+            className={`call-tile local-tile ${activeSpeakerId === 'local' ? 'active-speaker-ring' : ''} ${effectiveSpotlightId === 'local' ? 'pinned-tile' : ''} ${!hasLocalVideoTrack ? 'camera-off-studio' : ''}`}
             data-testid="local-tile"
           >
             <video
@@ -1692,8 +1876,15 @@ export function MeetingRoomView({
             />
             {!hasLocalVideoTrack && (
               <div className="tile-avatar-fallback">
-                <div className="tile-avatar-circle">{localInitial}</div>
-                <span className="tile-avatar-sub">Camera off</span>
+                <div
+                  className={`tile-avatar-ring ${!audioMuted && micLevel > 12 ? 'speaking' : ''}`}
+                >
+                  <Avatar
+                    name={displayName || user?.displayName || 'You'}
+                    src={user?.avatarUrl}
+                    className="tile-avatar-circle"
+                  />
+                </div>
               </div>
             )}
 
@@ -1732,7 +1923,22 @@ export function MeetingRoomView({
 
             <div className="tile-meta-bar">
               <div className="tile-name-badge">
-                <span>{displayName || 'You'} (You)</span>
+                <span>{displayName || 'You'}</span>
+                {user ? (
+                  <span
+                    className="role-pill verified-tile-pill"
+                    title="Verified account"
+                  >
+                    ✓
+                  </span>
+                ) : (
+                  <span
+                    className="role-pill guest-tile-pill"
+                    title="Guest attendee"
+                  >
+                    Guest
+                  </span>
+                )}
               </div>
               <div className="tile-status-icons">
                 {audioMuted && <span className="muted-badge">Muted</span>}
@@ -1749,7 +1955,7 @@ export function MeetingRoomView({
             data-testid="chat-panel"
           >
             <div className="chat-panel-header">
-              <h3>In-call chat</h3>
+              <h3>In-call messages</h3>
               <button
                 type="button"
                 className="btn-icon-subtle"
@@ -1806,12 +2012,16 @@ export function MeetingRoomView({
         )}
       </div>
 
-      {/* Bottom control dock */}
+      {/* Google Meet-Style 3-Zone Bottom Control Bar */}
       <footer className="call-dock-bar">
+        <div className="call-dock-left">
+          <span className="dock-room-title">{roomTitle}</span>
+        </div>
+
         <div className="call-dock" role="toolbar" aria-label="Call controls">
           <button
             type="button"
-            className={`dock-btn ${audioMuted ? 'off' : ''}`}
+            className={`dock-btn icon-pill ${audioMuted ? 'off' : ''}`}
             onClick={handleToggleMic}
             aria-pressed={!audioMuted}
             aria-label={
@@ -1821,12 +2031,14 @@ export function MeetingRoomView({
             data-testid="call-mic-btn"
           >
             <MicIcon />
-            <span>{audioMuted ? 'Unmute' : 'Mute'}</span>
+            <span className="dock-btn-label">
+              {audioMuted ? 'Unmute' : 'Mute'}
+            </span>
           </button>
 
           <button
             type="button"
-            className={`dock-btn ${!videoEnabled ? 'off' : ''}`}
+            className={`dock-btn icon-pill ${!videoEnabled ? 'off' : ''}`}
             onClick={() => void handleToggleVideo()}
             aria-pressed={videoEnabled}
             aria-label={videoEnabled ? 'Stop camera (V)' : 'Start camera (V)'}
@@ -1834,12 +2046,14 @@ export function MeetingRoomView({
             data-testid="call-cam-btn"
           >
             <VidIcon />
-            <span>{videoEnabled ? 'Camera' : 'Start cam'}</span>
+            <span className="dock-btn-label">
+              {videoEnabled ? 'Camera' : 'Start cam'}
+            </span>
           </button>
 
           <button
             type="button"
-            className={`dock-btn ${screenSharing ? 'active-share' : ''}`}
+            className={`dock-btn icon-pill ${screenSharing ? 'active-share' : ''}`}
             onClick={() => void handleToggleScreenShare()}
             aria-pressed={screenSharing}
             aria-label={
@@ -1851,38 +2065,29 @@ export function MeetingRoomView({
             data-testid="call-screen-btn"
           >
             <ScrIcon />
-            <span>{screenSharing ? 'Stop share' : 'Share'}</span>
+            <span className="dock-btn-label">
+              {screenSharing ? 'Stop share' : 'Present'}
+            </span>
           </button>
 
-          <button
-            type="button"
-            className={`dock-btn ${handRaised ? 'active-hand' : ''}`}
-            onClick={handleToggleHand}
-            aria-pressed={handRaised}
-            aria-label={handRaised ? 'Lower hand (H)' : 'Raise hand (H)'}
-            title={handRaised ? 'Lower hand (H)' : 'Raise hand (H)'}
-            data-testid="call-hand-btn"
-          >
-            <span aria-hidden="true">✋</span>
-            <span>{handRaised ? 'Lower hand' : 'Hand'}</span>
-          </button>
-
-          {/* Ephemeral Reactions popover */}
+          {/* Ephemeral Reactions popover (floating emoji bar above dock like Google Meet) */}
           <div className="dock-popover-anchor">
             <button
               type="button"
-              className="dock-btn"
+              className={`dock-btn icon-pill ${showReactionPopover ? 'active-panel' : ''}`}
               onClick={() => {
                 setShowReactionPopover((v) => !v);
                 setShowDevicePopover(false);
               }}
               aria-expanded={showReactionPopover}
               aria-label="Send reaction"
-              title="Send reaction"
+              title="Send a reaction"
               data-testid="call-react-btn"
             >
-              <span aria-hidden="true">😊</span>
-              <span>React</span>
+              <span aria-hidden="true" style={{ fontSize: 18 }}>
+                😊
+              </span>
+              <span className="dock-btn-label">React</span>
             </button>
 
             {showReactionPopover && (
@@ -1906,39 +2111,38 @@ export function MeetingRoomView({
             )}
           </div>
 
-          {/* In-call Chat toggle button with unread badge */}
           <button
             type="button"
-            className={`dock-btn ${showChatPanel ? 'active-panel' : ''}`}
-            onClick={() => setShowChatPanel((v) => !v)}
-            aria-pressed={showChatPanel}
-            aria-label="Toggle in-call chat (C)"
-            title="Toggle in-call chat (C)"
-            data-testid="call-chat-btn"
+            className={`dock-btn icon-pill ${handRaised ? 'active-hand' : ''}`}
+            onClick={handleToggleHand}
+            aria-pressed={handRaised}
+            aria-label={handRaised ? 'Lower hand (H)' : 'Raise hand (H)'}
+            title={handRaised ? 'Lower hand (H)' : 'Raise hand (H)'}
+            data-testid="call-hand-btn"
           >
-            <span>Chat</span>
-            {unreadChatCount > 0 && (
-              <span className="unread-chat-badge" data-testid="unread-badge">
-                {unreadChatCount}
-              </span>
-            )}
+            <span aria-hidden="true" style={{ fontSize: 17 }}>
+              ✋
+            </span>
+            <span className="dock-btn-label">
+              {handRaised ? 'Lower' : 'Hand'}
+            </span>
           </button>
 
           {/* Devices & Sound Settings popover */}
           <div className="dock-popover-anchor">
             <button
               type="button"
-              className="dock-btn"
+              className={`dock-btn icon-pill ${showDevicePopover ? 'active-panel' : ''}`}
               onClick={() => {
                 setShowDevicePopover((v) => !v);
                 setShowReactionPopover(false);
               }}
               aria-expanded={showDevicePopover}
               aria-label="Audio, video, and call settings"
-              title="Switch camera, microphone, or call options"
+              title="Audio, video, and call options"
             >
               <SetIcon />
-              <span>Options</span>
+              <span className="dock-btn-label">Options</span>
             </button>
 
             {showDevicePopover && (
@@ -2007,10 +2211,43 @@ export function MeetingRoomView({
             className="dock-btn end"
             onClick={handleHangUp}
             aria-label="Leave call"
+            title="Leave call"
             data-testid="leave-call-btn"
           >
             <EndIcon />
-            <span>Leave</span>
+          </button>
+        </div>
+
+        <div className="call-dock-right">
+          {/* In-call Chat toggle button with unread badge */}
+          <button
+            type="button"
+            className={`call-side-btn ${showChatPanel ? 'active-panel' : ''}`}
+            onClick={() => setShowChatPanel((v) => !v)}
+            aria-pressed={showChatPanel}
+            aria-label="Toggle in-call chat (C)"
+            title="Toggle in-call chat (C)"
+            data-testid="call-chat-btn"
+          >
+            <svg
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+            </svg>
+            <span>Chat</span>
+            {unreadChatCount > 0 && (
+              <span className="unread-chat-badge" data-testid="unread-badge">
+                {unreadChatCount}
+              </span>
+            )}
           </button>
         </div>
       </footer>
