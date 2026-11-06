@@ -1,4 +1,4 @@
-const CACHE_NAME = 'meetit-shell-v1';
+const CACHE_NAME = 'meetit-shell-v2';
 const OFFLINE_SHELL_ASSETS = [
   '/',
   '/index.html',
@@ -48,11 +48,18 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Navigation requests (including /m/:code and /?share-target=1): network first, fallback to cached index.html shell
+  // Navigation requests (including /m/:code and /?share-target=1):
+  // Network first; if network fails or returns 404 from host CDN, fallback to /index.html shell
   if (request.mode === 'navigate') {
     event.respondWith(
       fetch(request)
-        .then((response) => {
+        .then(async (response) => {
+          if (!response || response.status === 404 || !response.ok) {
+            const cachedShell =
+              (await caches.match('/index.html')) || (await caches.match('/'));
+            if (cachedShell) return cachedShell;
+            return fetch('/index.html');
+          }
           const clone = response.clone();
           caches
             .open(CACHE_NAME)
@@ -62,31 +69,36 @@ self.addEventListener('fetch', (event) => {
         .catch(async () => {
           const cached =
             (await caches.match('/index.html')) || (await caches.match('/'));
-          return (
-            cached ||
-            new Response('MeetIT is offline.', {
-              status: 503,
-              headers: { 'Content-Type': 'text/plain' },
-            })
+          if (cached) return cached;
+          return fetch('/index.html').catch(
+            () =>
+              new Response('MeetIT is offline.', {
+                status: 503,
+                headers: { 'Content-Type': 'text/plain' },
+              }),
           );
         }),
     );
     return;
   }
 
-  // Static shell assets (.js, .css, .svg, .webmanifest): stale-while-revalidate
+  // Static shell assets (.js, .css, .svg, .webmanifest): stale-while-revalidate with guaranteed Response
   event.respondWith(
-    caches.match(request).then((cached) => {
-      const networkFetch = fetch(request)
-        .then((response) => {
-          if (response && response.status === 200) {
-            const clone = response.clone();
-            caches.open(CACHE_NAME).then((cache) => cache.put(request, clone));
-          }
-          return response;
-        })
-        .catch(() => cached);
-      return cached || networkFetch;
+    caches.match(request).then(async (cached) => {
+      try {
+        const response = await fetch(request);
+        if (response && response.status === 200) {
+          const clone = response.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(request, clone));
+        }
+        return response;
+      } catch {
+        if (cached) return cached;
+        return new Response('Asset unavailable offline', {
+          status: 404,
+          headers: { 'Content-Type': 'text/plain' },
+        });
+      }
     }),
   );
 });
