@@ -7,7 +7,7 @@ RUN corepack enable && corepack prepare pnpm@9.15.9 --activate
 WORKDIR /app
 
 # Step 1: Copy workspace manifest files
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json ./
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json tsconfig.base.json ./
 COPY packages/protocol/package.json ./packages/protocol/
 COPY packages/media/package.json ./packages/media/
 COPY packages/ui/package.json ./packages/ui/
