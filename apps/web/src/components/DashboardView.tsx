@@ -51,6 +51,7 @@ import { SettingsView } from './SettingsView';
 import { MeetingsView } from './MeetingsView';
 import { ScheduleView } from './ScheduleView';
 import { NotesView } from './NotesView';
+import { BackendStatusIndicator } from './BackendStatusIndicator';
 
 interface DashboardViewProps {
   user?: AuthUser | null;
@@ -499,6 +500,8 @@ export function DashboardView({
               <span>New meeting</span>
             </button>
 
+            <BackendStatusIndicator />
+
             {onToggleTheme && (
               <button
                 type="button"
@@ -580,6 +583,8 @@ export function DashboardView({
           </div>
 
           <div className="dash-mobile-header-actions">
+            <BackendStatusIndicator compact />
+
             {onToggleTheme && (
               <button
                 type="button"

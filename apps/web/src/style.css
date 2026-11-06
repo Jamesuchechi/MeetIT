@@ -5733,3 +5733,14 @@ aside.context-bar {
   font-size: 11px;
   color: var(--muted);
 }
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.4;
+    transform: scale(1.15);
+  }
+}

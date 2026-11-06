@@ -1,6 +1,6 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "buildCommand": "pnpm --filter @meetit/web build",
+  "buildCommand": "pnpm --filter @meetit/web... build",
   "outputDirectory": "dist",
   "framework": "vite",
   "cleanUrls": true,

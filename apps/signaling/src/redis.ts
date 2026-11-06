@@ -1,5 +1,5 @@
 import { Redis } from 'ioredis';
-import type { Room, RoomManager } from './room.js';
+import type { Room } from './room.js';
 
 export interface RedisAdapterOptions {
   redisUrl?: string | undefined;

@@ -76,6 +76,7 @@ import {
   REAL_DEVICE_TEST_MATRIX,
 } from '../lib/safariIosWorkarounds';
 import { copyToClipboard, type AuthUser } from '../types';
+import { BackendStatusIndicator } from './BackendStatusIndicator';
 
 interface MeetingRoomViewProps {
   roomCode: string;
@@ -2033,6 +2034,7 @@ export function MeetingRoomView({
           </button>
 
           <div className="lobby-header-right">
+            <BackendStatusIndicator />
             <div className="room-code-pill" title="Meeting room code">
               <span>{roomCode}</span>
               <button
@@ -2570,6 +2572,7 @@ export function MeetingRoomView({
         )}
 
         <div className="call-topbar-right">
+          <BackendStatusIndicator compact />
           <div
             className="call-participants-chip"
             title={`${totalParticipantCount} of ${MESH_MAX_PARTICIPANTS} participants in call`}

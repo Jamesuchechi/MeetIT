@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { SunIcon, MoonIcon, MenuIcon, CloseIcon } from './Icons';
 import { Logo } from './Logo';
 import type { AuthUser } from '../types';
+import { BackendStatusIndicator } from './BackendStatusIndicator';
 
 interface HeaderProps {
   user: AuthUser | null;
@@ -89,6 +90,8 @@ export function Header({
           Developers
         </a>
 
+        <BackendStatusIndicator />
+
         <button
           type="button"
           className="theme-toggle"
@@ -132,6 +135,8 @@ export function Header({
 
       {/* Mobile Header Actions */}
       <div className="mobile-header-actions">
+        <BackendStatusIndicator compact />
+
         <button
           type="button"
           className="theme-toggle"
