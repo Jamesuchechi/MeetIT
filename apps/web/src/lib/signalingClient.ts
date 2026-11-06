@@ -25,6 +25,21 @@ function toHttpBaseUrl(wsUrl: string): string {
   return wsUrl.replace(/^wss:/i, 'https:').replace(/^ws:/i, 'http:');
 }
 
+export function toWsUrl(url: string): string {
+  let cleaned = (url || '').trim();
+  if (cleaned.startsWith('https://')) {
+    cleaned = 'wss://' + cleaned.slice(8);
+  } else if (cleaned.startsWith('http://')) {
+    cleaned = 'ws://' + cleaned.slice(7);
+  } else if (!cleaned.startsWith('ws://') && !cleaned.startsWith('wss://')) {
+    cleaned =
+      (typeof window !== 'undefined' && window.location.protocol === 'https:'
+        ? 'wss://'
+        : 'ws://') + cleaned;
+  }
+  return cleaned;
+}
+
 export async function createRoomViaApi(options?: {
   code?: string;
   title?: string;
@@ -233,7 +248,7 @@ export class SignalingClient implements SignalingChannel {
   };
 
   constructor(options: SignalingClientOptions) {
-    this.url = options.url ?? DEFAULT_SIGNALING_WS_URL;
+    this.url = toWsUrl(options.url ?? DEFAULT_SIGNALING_WS_URL);
     this.roomCode = options.roomCode;
     this.displayName = options.displayName;
     this.token = options.token ?? 'guest-token';

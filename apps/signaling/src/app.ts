@@ -67,6 +67,30 @@ export function buildSignalingApp(
           .filter(Boolean)
       : []);
 
+  const isOriginAllowed = (origin: string | undefined): boolean => {
+    if (!origin) return true;
+    if (
+      allowedOrigins.length === 0 ||
+      allowedOrigins.includes('*') ||
+      origin.endsWith('.vercel.app') ||
+      origin.includes('localhost') ||
+      origin.includes('127.0.0.1')
+    ) {
+      return true;
+    }
+    return allowedOrigins.some((allowed) => {
+      if (allowed === origin) return true;
+      if (allowed.includes('*')) {
+        const pattern =
+          '^' +
+          allowed.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*') +
+          '$';
+        return new RegExp(pattern).test(origin);
+      }
+      return false;
+    });
+  };
+
   const iceConfig: IceServerEnvConfig = options.iceConfig ?? {
     stunUrls: process.env.STUN_URLS
       ? process.env.STUN_URLS.split(',').map((s) => s.trim())
@@ -117,25 +141,7 @@ export function buildSignalingApp(
       request.url.startsWith('/healthz') || request.url.startsWith('/readyz');
 
     if (origin) {
-      const isAllowed =
-        isPublicHealth ||
-        allowedOrigins.length === 0 ||
-        allowedOrigins.includes('*') ||
-        allowedOrigins.some((allowed) => {
-          if (allowed === origin) return true;
-          if (allowed.includes('*')) {
-            const pattern =
-              '^' +
-              allowed
-                .replace(/[.+?^${}()|[\]\\]/g, '\\$&')
-                .replace(/\*/g, '.*') +
-              '$';
-            return new RegExp(pattern).test(origin);
-          }
-          return false;
-        });
-
-      if (isAllowed) {
+      if (isPublicHealth || isOriginAllowed(origin)) {
         reply.header('Access-Control-Allow-Origin', origin);
         reply.header(
           'Access-Control-Allow-Methods',
@@ -292,12 +298,7 @@ export function buildSignalingApp(
 
   app.server.on('upgrade', (request, socket, head) => {
     const origin = request.headers.origin;
-    if (
-      allowedOrigins.length > 0 &&
-      !allowedOrigins.includes('*') &&
-      origin &&
-      !allowedOrigins.includes(origin)
-    ) {
+    if (!isOriginAllowed(origin)) {
       app.log.warn({ origin }, 'rejected websocket upgrade due to origin');
       socket.write('HTTP/1.1 403 Forbidden\r\n\r\n');
       socket.destroy();
