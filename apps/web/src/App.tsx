@@ -25,10 +25,13 @@ export function extractSharedRoomCodeFromSearch(search: string): string | null {
       search.startsWith('?') ? search : `?${search}`,
     );
     const candidates = [
+      params.get('room'),
+      params.get('code'),
+      params.get('roomCode'),
+      params.get('m'),
       params.get('url'),
       params.get('text'),
       params.get('title'),
-      params.get('room'),
     ];
     for (const candidate of candidates) {
       if (candidate) {
@@ -122,13 +125,26 @@ function parseLocationRoute(
     return { view: '404', roomCode: null };
   }
 
-  if (target.startsWith('m/')) {
-    const rawCode = target.slice(2);
+  // Support /m/xxx, /room/xxx, /join/xxx, /meet/xxx
+  if (
+    target.startsWith('m/') ||
+    target.startsWith('room/') ||
+    target.startsWith('join/') ||
+    target.startsWith('meet/')
+  ) {
+    const slashIdx = target.indexOf('/');
+    const rawCode = target.slice(slashIdx + 1);
     const normalized = normalizeRoomCode(rawCode);
     if (normalized) {
       return { view: 'room', roomCode: normalized };
     }
     return { view: '404', roomCode: null };
+  }
+
+  // Support direct room code in path or hash (e.g. /abc-defg-hij or /abcdefghij)
+  const directRoomCode = normalizeRoomCode(target);
+  if (directRoomCode) {
+    return { view: 'room', roomCode: directRoomCode };
   }
 
   return { view: '404', roomCode: null };

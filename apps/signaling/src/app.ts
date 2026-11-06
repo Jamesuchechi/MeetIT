@@ -113,12 +113,29 @@ export function buildSignalingApp(
   // Basic CORS handling for web client
   app.addHook('onRequest', async (request, reply) => {
     const origin = request.headers.origin;
+    const isPublicHealth =
+      request.url.startsWith('/healthz') || request.url.startsWith('/readyz');
+
     if (origin) {
-      if (
+      const isAllowed =
+        isPublicHealth ||
         allowedOrigins.length === 0 ||
         allowedOrigins.includes('*') ||
-        allowedOrigins.includes(origin)
-      ) {
+        allowedOrigins.some((allowed) => {
+          if (allowed === origin) return true;
+          if (allowed.includes('*')) {
+            const pattern =
+              '^' +
+              allowed
+                .replace(/[.+?^${}()|[\]\\]/g, '\\$&')
+                .replace(/\*/g, '.*') +
+              '$';
+            return new RegExp(pattern).test(origin);
+          }
+          return false;
+        });
+
+      if (isAllowed) {
         reply.header('Access-Control-Allow-Origin', origin);
         reply.header(
           'Access-Control-Allow-Methods',
@@ -129,20 +146,29 @@ export function buildSignalingApp(
           'Content-Type, Authorization, X-Request-Id',
         );
       }
+    } else if (isPublicHealth) {
+      reply.header('Access-Control-Allow-Origin', '*');
     }
+
     if (request.method === 'OPTIONS') {
       return reply.code(204).send();
     }
   });
 
-  app.get('/healthz', async () => ({ status: 'ok' }));
+  app.get('/healthz', async (request, reply) => {
+    reply.header('Access-Control-Allow-Origin', '*');
+    return { status: 'ok' };
+  });
 
-  app.get('/readyz', async () => ({
-    status: 'ready',
-    rooms: roomManager.size,
-    activeConnections: metrics.activeConnections,
-    invalidFrames: metrics.invalidFrames,
-  }));
+  app.get('/readyz', async (request, reply) => {
+    reply.header('Access-Control-Allow-Origin', '*');
+    return {
+      status: 'ready',
+      rooms: roomManager.size,
+      activeConnections: metrics.activeConnections,
+      invalidFrames: metrics.invalidFrames,
+    };
+  });
 
   app.post<{ Body?: { displayName?: string } }>(
     '/auth/guest',

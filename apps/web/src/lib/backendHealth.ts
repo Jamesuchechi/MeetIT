@@ -42,6 +42,43 @@ function notifyListeners() {
   });
 }
 
+function probeWebSocket(wsUrl: string, timeoutMs = 4000): Promise<boolean> {
+  return new Promise((resolve) => {
+    try {
+      const ws = new WebSocket(wsUrl);
+      const timer = window.setTimeout(() => {
+        try {
+          ws.close();
+        } catch {
+          // ignore
+        }
+        resolve(false);
+      }, timeoutMs);
+
+      ws.onopen = () => {
+        window.clearTimeout(timer);
+        try {
+          ws.close();
+        } catch {
+          // ignore
+        }
+        resolve(true);
+      };
+      ws.onerror = () => {
+        window.clearTimeout(timer);
+        try {
+          ws.close();
+        } catch {
+          // ignore
+        }
+        resolve(false);
+      };
+    } catch {
+      resolve(false);
+    }
+  });
+}
+
 export async function pingBackend(): Promise<{
   ok: boolean;
   latencyMs: number | null;
@@ -65,16 +102,37 @@ export async function pingBackend(): Promise<{
   const abortTimer = window.setTimeout(() => controller.abort(), 45000);
 
   try {
-    const res = await fetch(`${httpUrl}/healthz`, {
-      method: 'GET',
-      mode: 'cors',
-      cache: 'no-store',
-      signal: controller.signal,
-    });
+    let succeeded = false;
+    try {
+      const res = await fetch(`${httpUrl}/healthz`, {
+        method: 'GET',
+        mode: 'cors',
+        cache: 'no-store',
+        signal: controller.signal,
+      });
+      if (res.ok) {
+        succeeded = true;
+      }
+    } catch {
+      // Fallback 1: in case browser CORS blocked the response, try no-cors mode
+      try {
+        await fetch(`${httpUrl}/healthz`, {
+          method: 'GET',
+          mode: 'no-cors',
+          cache: 'no-store',
+          signal: controller.signal,
+        });
+        succeeded = true;
+      } catch {
+        // Fallback 2: probe WebSocket connection directly
+        succeeded = await probeWebSocket(getSignalingWsUrl(), 5000);
+      }
+    }
+
     window.clearTimeout(wakingTimer);
     window.clearTimeout(abortTimer);
 
-    if (res.ok) {
+    if (succeeded) {
       const latency = Date.now() - startTime;
       globalStatus = 'live';
       globalLatency = latency;
