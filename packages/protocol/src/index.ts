@@ -86,6 +86,16 @@ export const waitingPeerSchema = z.object({
 });
 export type WaitingPeer = z.infer<typeof waitingPeerSchema>;
 
+export const chatMessageSchema = z.object({
+  id: z.string().min(1),
+  seq: z.number().int().optional(),
+  from: z.string().uuid(),
+  displayName: z.string().trim().min(1).max(80),
+  text: z.string().min(1).max(4000),
+  ts: z.number(),
+});
+export type ChatMessagePayload = z.infer<typeof chatMessageSchema>;
+
 export const sdpSchema = z.object({
   type: z.enum(['offer', 'answer', 'pranswer', 'rollback']),
   sdp: z.string().optional(),
@@ -179,6 +189,7 @@ export const clientMessageSchema = z.discriminatedUnion('type', [
       token: z.string().min(1),
       passcode: z.string().max(64).optional(),
       selfId: z.string().uuid().optional(),
+      lastChatSeq: z.number().int().min(0).optional(),
       state: peerStateSchema.optional(),
       capabilities: z.array(z.string()).default([]),
     }),
@@ -259,6 +270,7 @@ export const serverJoinedPayloadSchema = z.object({
     description: z.string().optional(),
     permissions: roomPermissionsSchema.optional(),
     waitingPeers: z.array(waitingPeerSchema).optional(),
+    chatHistory: z.array(chatMessageSchema).optional(),
   }),
 });
 

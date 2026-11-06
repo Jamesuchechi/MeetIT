@@ -1,0 +1,61 @@
+{
+  "id": "/",
+  "name": "MeetIT · Video Meetings That Keep Going",
+  "short_name": "MeetIT",
+  "description": "Audio-first WebRTC video meetings built for resilience on any network.",
+  "start_url": "/#dashboard",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0a1220",
+  "theme_color": "#2457FF",
+  "categories": ["productivity", "communication", "business"],
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/favicon.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "New Instant Meeting",
+      "short_name": "Instant Call",
+      "description": "Start a new resilient room immediately",
+      "url": "/#dashboard?instant=1",
+      "icons": [{ "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml" }]
+    },
+    {
+      "name": "Meeting Notes & Action Items",
+      "short_name": "Notes",
+      "description": "Review meeting notes and follow-up action items",
+      "url": "/#notes",
+      "icons": [{ "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml" }]
+    },
+    {
+      "name": "Schedule a Meeting",
+      "short_name": "Schedule",
+      "description": "Plan an upcoming meeting with calendar .ics invite",
+      "url": "/#schedule",
+      "icons": [{ "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml" }]
+    }
+  ],
+  "share_target": {
+    "action": "/?share-target=1",
+    "method": "GET",
+    "enctype": "application/x-www-form-urlencoded",
+    "params": {
+      "title": "title",
+      "text": "text",
+      "url": "url"
+    }
+  }
+}
+

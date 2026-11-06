@@ -147,16 +147,16 @@ Every phase has an **exit criteria** block. Do not start the next phase until ex
 
 ### Resilience and UX
 
-- [ ] [P0] Signaling reconnect with backoff + jitter, state resync, chat backfill
-- [ ] [P0] Network quality indicator per tile (bars from `getStats()`)
-- [ ] [P1] Data saver and audio-only modes
-- [ ] [P1] Pre-call network and device test (loopback + bandwidth probe)
-- [ ] [P1] Safari and iOS workarounds pass; real-device test matrix
-- [ ] [P1] PWA: installable, offline shell, share target
+- [x] [P0] Signaling reconnect with backoff + jitter, state resync, chat backfill
+- [x] [P0] Network quality indicator per tile (bars from `getStats()`)
+- [x] [P1] Data saver and audio-only modes
+- [x] [P1] Pre-call network and device test (loopback + bandwidth probe)
+- [x] [P1] Safari and iOS workarounds pass; real-device test matrix
+- [x] [P1] PWA: installable, offline shell, share target
 
 ### Ops
 
-- [ ] [P0] Deploy: web on Vercel, signaling + coturn + Redis on Fly/VPS
+- [x] [P0] Deploy: web on Vercel, signaling + coturn + Redis on Fly/VPS
 - [ ] [P0] Sentry, uptime checks, basic dashboards
 - [ ] [P1] Staging environment + preview deployments per PR
 

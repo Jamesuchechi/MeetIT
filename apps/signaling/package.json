@@ -13,9 +13,11 @@
   "dependencies": {
     "@meetit/protocol": "workspace:*",
     "fastify": "^5.4.0",
+    "ioredis": "^6.0.0",
     "ws": "^8.18.0"
   },
   "devDependencies": {
+    "@types/ioredis": "^5.0.0",
     "@types/node": "^22.15.30",
     "@types/ws": "^8.18.0",
     "tsx": "^4.20.3",

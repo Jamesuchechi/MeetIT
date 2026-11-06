@@ -18,7 +18,41 @@ interface ParsedRoute {
   profileUserId?: string | null;
 }
 
-function parseLocationRoute(pathname: string, hash: string): ParsedRoute {
+export function extractSharedRoomCodeFromSearch(search: string): string | null {
+  if (!search) return null;
+  try {
+    const params = new URLSearchParams(
+      search.startsWith('?') ? search : `?${search}`,
+    );
+    const candidates = [
+      params.get('url'),
+      params.get('text'),
+      params.get('title'),
+      params.get('room'),
+    ];
+    for (const candidate of candidates) {
+      if (candidate) {
+        const normalized = normalizeRoomCode(candidate);
+        if (normalized) return normalized;
+      }
+    }
+  } catch {
+    // ignore malformed query string
+  }
+  return null;
+}
+
+function parseLocationRoute(
+  pathname: string,
+  hash: string,
+  search = typeof window !== 'undefined' ? window.location.search : '',
+): ParsedRoute {
+  // 0. Check Web Share Target query parameters (?share-target=1&url=...&text=...)
+  const sharedCode = extractSharedRoomCodeFromSearch(search);
+  if (sharedCode) {
+    return { view: 'room', roomCode: sharedCode };
+  }
+
   const rawHash = hash.replace(/^#\/?/, '').trim();
   const cleanHash = rawHash.toLowerCase();
   const cleanPath = pathname
@@ -36,13 +70,22 @@ function parseLocationRoute(pathname: string, hash: string): ParsedRoute {
   }
 
   // Check hash first if present, otherwise pathname
-  const target = cleanHash || cleanPath;
+  const target = (cleanHash || cleanPath).split('?')[0] ?? '';
 
   if (!target || target === 'home') {
     return { view: 'home', roomCode: null };
   }
   if (target === 'dashboard') {
     return { view: 'dashboard', roomCode: null, dashTab: 'home' };
+  }
+  if (target === 'notes' || target === 'dashboard/notes') {
+    return { view: 'dashboard', roomCode: null, dashTab: 'notes' };
+  }
+  if (target === 'schedule' || target === 'dashboard/schedule') {
+    return { view: 'dashboard', roomCode: null, dashTab: 'schedule' };
+  }
+  if (target === 'meetings' || target === 'dashboard/meetings') {
+    return { view: 'dashboard', roomCode: null, dashTab: 'meetings' };
   }
   if (target === 'settings' || target === 'dashboard/settings') {
     return { view: 'dashboard', roomCode: null, dashTab: 'settings' };
@@ -105,6 +148,13 @@ function AppContent() {
   });
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [isOffline, setIsOffline] = useState<boolean>(() =>
+    typeof navigator !== 'undefined' ? !navigator.onLine : false,
+  );
+  const [deferredInstallPrompt, setDeferredInstallPrompt] = useState<{
+    prompt: () => Promise<void>;
+    userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>;
+  } | null>(null);
   const toastTimeoutRef = useRef<number | null>(null);
   const signingOutRef = useRef(false);
 
@@ -149,12 +199,13 @@ function AppContent() {
     [],
   );
 
-  // Sync with browser popstate and hashchange
+  // Sync with browser popstate, hashchange, online/offline, and PWA install prompt
   useEffect(() => {
     function syncLocation() {
       const next = parseLocationRoute(
         window.location.pathname,
         window.location.hash,
+        window.location.search,
       );
       if (next.roomCode) {
         setLastRoomCode(next.roomCode);
@@ -163,13 +214,40 @@ function AppContent() {
       window.scrollTo(0, 0);
     }
 
+    const handleOnline = () => {
+      setIsOffline(false);
+      showToast('Back online — connection restored.');
+    };
+    const handleOffline = () => {
+      setIsOffline(true);
+      showToast('You are offline — running in offline shell mode.');
+    };
+    const handleBeforeInstallPrompt = (e: Event) => {
+      e.preventDefault();
+      setDeferredInstallPrompt(
+        e as unknown as {
+          prompt: () => Promise<void>;
+          userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>;
+        },
+      );
+    };
+
     window.addEventListener('popstate', syncLocation);
     window.addEventListener('hashchange', syncLocation);
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
     return () => {
       window.removeEventListener('popstate', syncLocation);
       window.removeEventListener('hashchange', syncLocation);
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+      window.removeEventListener(
+        'beforeinstallprompt',
+        handleBeforeInstallPrompt,
+      );
     };
-  }, []);
+  }, [showToast]);
 
   // Route guards:
   //  - dashboard requires a session
@@ -236,6 +314,50 @@ function AppContent() {
 
   return (
     <>
+      {isOffline && (
+        <div
+          className="pwa-offline-banner"
+          role="status"
+          aria-live="polite"
+          data-testid="pwa-offline-banner"
+        >
+          <span>
+            ⚡ Offline shell active — your scheduled meetings, notes, and action
+            items are available locally. Calls will reconnect automatically when
+            back online.
+          </span>
+        </div>
+      )}
+
+      {deferredInstallPrompt && route.view !== 'room' && (
+        <div className="pwa-install-pill" data-testid="pwa-install-pill">
+          <span>Install MeetIT for 1-tap desktop &amp; mobile access</span>
+          <button
+            type="button"
+            className="btn primary"
+            style={{ padding: '5px 12px', fontSize: 12.5 }}
+            onClick={() => {
+              void (async () => {
+                await deferredInstallPrompt.prompt();
+                await deferredInstallPrompt.userChoice;
+                setDeferredInstallPrompt(null);
+              })();
+            }}
+          >
+            Install app
+          </button>
+          <button
+            type="button"
+            className="btn-icon-subtle"
+            style={{ width: 28, height: 28 }}
+            onClick={() => setDeferredInstallPrompt(null)}
+            aria-label="Dismiss install prompt"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
       {isLoading && route.view !== 'room' && (
         <div
           className="auth-splash"

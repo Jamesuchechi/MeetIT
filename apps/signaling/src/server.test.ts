@@ -693,4 +693,125 @@ describe('Signaling server integration tests', () => {
     blockedWs.close();
     hostWs.close();
   });
+
+  it('backfills missed chat messages and resyncs room state upon signaling reconnect', async () => {
+    instance = buildSignalingApp({ logger: false });
+    const address = await instance.app.listen({ port: 0, host: '127.0.0.1' });
+    const wsUrl = address.replace(/^http/, 'ws');
+
+    const createRes = await instance.app.inject({
+      method: 'POST',
+      url: '/rooms',
+      payload: { title: 'Resilience Test Room' },
+    });
+    const { code: roomCode } = createRes.json<{ code: string }>();
+
+    // 1. Alice (Host) and Bob join
+    const aliceWs = new WebSocket(wsUrl);
+    await new Promise((r) => aliceWs.once('open', r));
+    const aliceJoinP = waitForMessage(aliceWs, (m) => m.type === 'joined');
+    aliceWs.send(
+      JSON.stringify({
+        v: 1,
+        type: 'join',
+        payload: { roomCode, displayName: 'Alice', token: 'user-alice' },
+      }),
+    );
+    await aliceJoinP;
+
+    const bobWs = new WebSocket(wsUrl);
+    await new Promise((r) => bobWs.once('open', r));
+    const bobJoinP = waitForMessage(bobWs, (m) => m.type === 'joined');
+    bobWs.send(
+      JSON.stringify({
+        v: 1,
+        type: 'join',
+        payload: { roomCode, displayName: 'Bob', token: 'user-bob' },
+      }),
+    );
+    const bobJoined = (await bobJoinP).payload as { selfId: string };
+    const bobId = bobJoined.selfId;
+
+    // 2. Alice sends message #1 while Bob is connected
+    const msg1P = waitForMessage(bobWs, (m) => m.type === 'chat.message');
+    aliceWs.send(
+      JSON.stringify({
+        v: 1,
+        type: 'chat.send',
+        payload: { text: 'Message 1 before drop' },
+      }),
+    );
+    const msg1 = (await msg1P).payload as { seq: number; text: string };
+    expect(msg1.seq).toBe(1);
+
+    // 3. Bob drops connection (without explicit leave); Alice sends messages #2 and #3
+    bobWs.close();
+    await new Promise((r) => setTimeout(r, 40));
+
+    const msg2AliceP = waitForMessage(
+      aliceWs,
+      (m) =>
+        m.type === 'chat.message' && (m.payload as { seq: number }).seq === 2,
+    );
+    aliceWs.send(
+      JSON.stringify({
+        v: 1,
+        type: 'chat.send',
+        payload: { text: 'Message 2 while Bob offline' },
+      }),
+    );
+    await msg2AliceP;
+
+    const msg3AliceP = waitForMessage(
+      aliceWs,
+      (m) =>
+        m.type === 'chat.message' && (m.payload as { seq: number }).seq === 3,
+    );
+    aliceWs.send(
+      JSON.stringify({
+        v: 1,
+        type: 'chat.send',
+        payload: { text: 'Message 3 while Bob offline' },
+      }),
+    );
+    await msg3AliceP;
+
+    // 4. Bob reconnects with selfId=bobId and lastChatSeq=1 -> receives only messages #2 and #3 in chatHistory
+    const bobReconnectWs = new WebSocket(wsUrl);
+    await new Promise((r) => bobReconnectWs.once('open', r));
+    const bobRejoinedP = waitForMessage(
+      bobReconnectWs,
+      (m) => m.type === 'joined',
+    );
+    bobReconnectWs.send(
+      JSON.stringify({
+        v: 1,
+        type: 'join',
+        payload: {
+          roomCode,
+          displayName: 'Bob',
+          token: 'user-bob',
+          selfId: bobId,
+          lastChatSeq: 1,
+        },
+      }),
+    );
+    const rejoinedPayload = (await bobRejoinedP).payload as {
+      selfId: string;
+      roomState: {
+        chatHistory?: Array<{ seq: number; text: string }>;
+      };
+    };
+    expect(rejoinedPayload.selfId).toBe(bobId);
+    expect(rejoinedPayload.roomState.chatHistory).toHaveLength(2);
+    expect(rejoinedPayload.roomState.chatHistory?.[0]?.text).toBe(
+      'Message 2 while Bob offline',
+    );
+    expect(rejoinedPayload.roomState.chatHistory?.[1]?.text).toBe(
+      'Message 3 while Bob offline',
+    );
+
+    bobReconnectWs.close();
+    aliceWs.close();
+  });
 });

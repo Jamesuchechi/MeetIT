@@ -18,6 +18,7 @@ import { TokenBucketRateLimiter } from './rateLimiter.js';
 import { buildIceServers, type IceServerEnvConfig } from './turn.js';
 import { issueGuestToken, verifyJoinToken } from './auth.js';
 import { SignalingPersistence } from './persistence.js';
+import { RedisAdapter } from './redis.js';
 
 export interface SignalingAppOptions {
   logger?: boolean;
@@ -30,6 +31,7 @@ export interface SignalingAppOptions {
   allowedOrigins?: string[];
   iceConfig?: IceServerEnvConfig;
   autoCreateRoomOnJoin?: boolean;
+  redisUrl?: string;
 }
 
 export interface SignalingMetrics {
@@ -43,6 +45,7 @@ export interface SignalingServerInstance {
   wss: WebSocketServer;
   roomManager: RoomManager;
   persistence: SignalingPersistence;
+  redis: RedisAdapter;
   metrics: SignalingMetrics;
   close: () => Promise<void>;
 }
@@ -79,6 +82,7 @@ export function buildSignalingApp(
 
   const roomManager = new RoomManager({ reclaimSlotMs });
   const persistence = new SignalingPersistence();
+  const redis = new RedisAdapter({ redisUrl: options.redisUrl });
   const metrics: SignalingMetrics = {
     invalidFrames: 0,
     rateLimitedFrames: 0,
@@ -313,8 +317,10 @@ export function buildSignalingApp(
     room: Room,
     peer: Peer,
     requestMsgId?: string,
+    lastChatSeq?: number,
   ): void => {
     const iceServers = buildIceServers(peer.id, iceConfig);
+    const chatBackfill = room.getChatBackfill(lastChatSeq ?? 0);
     peer.send({
       v: 1,
       ...(requestMsgId ? { id: requestMsgId } : {}),
@@ -335,6 +341,7 @@ export function buildSignalingApp(
           ...(peer.role === 'host' || peer.role === 'cohost'
             ? { waitingPeers: room.listWaitingPeerInfos() }
             : {}),
+          ...(chatBackfill.length > 0 ? { chatHistory: chatBackfill } : {}),
         },
       },
     });
@@ -476,8 +483,15 @@ export function buildSignalingApp(
           ctx.authTimer = null;
         }
 
-        const { roomCode, displayName, token, passcode, selfId, state } =
-          msg.payload;
+        const {
+          roomCode,
+          displayName,
+          token,
+          passcode,
+          selfId,
+          lastChatSeq,
+          state,
+        } = msg.payload;
         const verifiedCaller = verifyJoinToken(token);
         if (!verifiedCaller) {
           sendError(
@@ -564,7 +578,7 @@ export function buildSignalingApp(
           'peer joined room',
         );
 
-        sendJoinedPayloadToPeer(room, joinRes.peer, msg.id);
+        sendJoinedPayloadToPeer(room, joinRes.peer, msg.id, lastChatSeq);
         return;
       }
 
@@ -708,6 +722,7 @@ export function buildSignalingApp(
             target?.send(chatMsg);
             peer.send(chatMsg);
           } else {
+            room.recordChatMessage(chatMsg.payload);
             room.broadcast(chatMsg);
           }
           break;
@@ -1004,6 +1019,7 @@ export function buildSignalingApp(
     }
     socketContexts.clear();
     roomManager.clear();
+    await redis.close();
     await new Promise<void>((resolve) => {
       wss.close(() => resolve());
     });
@@ -1015,6 +1031,7 @@ export function buildSignalingApp(
     wss,
     roomManager,
     persistence,
+    redis,
     metrics,
     close,
   };

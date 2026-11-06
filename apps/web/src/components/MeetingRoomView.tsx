@@ -5,7 +5,14 @@ import React, {
   useCallback,
   useMemo,
 } from 'react';
-import { MeshTransport, type ConnectionState } from '@meetit/media';
+import {
+  MeshTransport,
+  type BandwidthMode,
+  type ConnectionState,
+  type NetworkQualityBars,
+  type NetworkQualityLevel,
+  type PeerNetworkStats,
+} from '@meetit/media';
 import type {
   PeerInfo,
   PeerRole,
@@ -58,6 +65,16 @@ import {
   type MeetingAttendeeRecord,
 } from '../lib/meetingsStore';
 import { ensureNoteForCompletedMeeting } from '../lib/notesStore';
+import {
+  runPreCallDiagnosticsProbe,
+  type PreCallDiagnosticsReport,
+} from '../lib/DiagnosticsProbe';
+import {
+  attachSafeMediaElement,
+  detectBrowserPlatform,
+  hasEndedMediaTracks,
+  REAL_DEVICE_TEST_MATRIX,
+} from '../lib/safariIosWorkarounds';
 import { copyToClipboard, type AuthUser } from '../types';
 
 interface MeetingRoomViewProps {
@@ -94,10 +111,64 @@ interface FloatingReaction {
 const DISPLAY_NAME_STORAGE_KEY = 'meetit_guest_display_name';
 const MIRROR_SELF_STORAGE_KEY = 'meetit_mirror_self_view';
 const CALL_SOUNDS_STORAGE_KEY = 'meetit_call_sounds_enabled';
+const BANDWIDTH_MODE_STORAGE_KEY = 'meetit_bandwidth_mode';
 const REACTION_EMOJIS: ReactionEmoji[] = ['👍', '👏', '❤️', '🎉', '😂', '😮'];
+
+function NetworkBarsBadge({
+  bars,
+  level,
+  rttMs,
+  packetLossPct,
+  bitrateKbps,
+}: {
+  bars: NetworkQualityBars;
+  level: NetworkQualityLevel;
+  rttMs?: number | null | undefined;
+  packetLossPct?: number | undefined;
+  bitrateKbps?: number | undefined;
+}) {
+  const label =
+    level === 'excellent'
+      ? 'Excellent connection'
+      : level === 'good'
+        ? 'Good connection'
+        : level === 'fair'
+          ? 'Fair connection'
+          : 'Poor connection';
+  const details: string[] = [label];
+  if (rttMs !== undefined && rttMs !== null) {
+    details.push(`RTT ${rttMs} ms`);
+  }
+  if (packetLossPct !== undefined && packetLossPct > 0) {
+    details.push(`Loss ${packetLossPct.toFixed(1)}%`);
+  }
+  if (bitrateKbps !== undefined && bitrateKbps > 0) {
+    details.push(`${bitrateKbps} kbps`);
+  }
+  const titleText = details.join(' · ');
+
+  return (
+    <span
+      className={`network-bars-badge level-${level}`}
+      title={titleText}
+      aria-label={titleText}
+      data-testid="network-bars-badge"
+      data-bars={bars}
+    >
+      {[1, 2, 3, 4].map((idx) => (
+        <span
+          key={idx}
+          className={`net-bar bar-${idx} ${idx <= bars ? 'lit' : ''}`}
+        />
+      ))}
+    </span>
+  );
+}
 
 function RemoteVideoTile({
   participant,
+  stats,
+  audioOnlyMode,
   isSpeaking,
   isPinned,
   canModerate,
@@ -105,9 +176,12 @@ function RemoteVideoTile({
   onMutePeer,
   onAskUnmutePeer,
   onRemovePeer,
+  onAudioAutoplayBlocked,
   onToast,
 }: {
   participant: RemoteParticipant;
+  stats?: PeerNetworkStats | undefined;
+  audioOnlyMode: boolean;
   isSpeaking: boolean;
   isPinned: boolean;
   canModerate: boolean;
@@ -115,6 +189,7 @@ function RemoteVideoTile({
   onMutePeer: () => void;
   onAskUnmutePeer: () => void;
   onRemovePeer: () => void;
+  onAudioAutoplayBlocked: () => void;
   onToast: (msg: string) => void;
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -122,18 +197,33 @@ function RemoteVideoTile({
   useEffect(() => {
     const el = videoRef.current;
     if (!el) return;
-    if (participant.stream && el.srcObject !== participant.stream) {
-      el.srcObject = participant.stream;
-      void el.play().catch(() => {});
-    }
-  }, [participant.stream]);
+    attachSafeMediaElement(el, participant.stream, {
+      muted: false,
+      onAutoplayBlocked: onAudioAutoplayBlocked,
+    });
+  }, [participant.stream, onAudioAutoplayBlocked]);
 
   const hasVideo =
+    !audioOnlyMode &&
     participant.state.video &&
     participant.stream &&
     participant.stream.getVideoTracks().length > 0;
 
   const initial = (participant.displayName[0] || 'G').toUpperCase();
+  const netBars: NetworkQualityBars =
+    stats?.bars ??
+    (participant.connectionStatus === 'reconnecting'
+      ? 2
+      : participant.connectionStatus === 'failed'
+        ? 1
+        : 4);
+  const netLevel: NetworkQualityLevel =
+    stats?.quality ??
+    (participant.connectionStatus === 'reconnecting'
+      ? 'fair'
+      : participant.connectionStatus === 'failed'
+        ? 'poor'
+        : 'excellent');
 
   const handleTogglePip = async () => {
     const el = videoRef.current;
@@ -167,6 +257,11 @@ function RemoteVideoTile({
           <div className={`tile-avatar-ring ${isSpeaking ? 'speaking' : ''}`}>
             <div className="tile-avatar-circle">{initial}</div>
           </div>
+          {audioOnlyMode && participant.state.video && (
+            <small className="audio-only-tile-note">
+              Audio-only mode active
+            </small>
+          )}
         </div>
       )}
 
@@ -265,6 +360,17 @@ function RemoteVideoTile({
         </div>
 
         <div className="tile-status-icons">
+          <NetworkBarsBadge
+            bars={netBars}
+            level={netLevel}
+            rttMs={stats?.roundTripTimeMs}
+            packetLossPct={stats ? stats.fractionLost * 100 : undefined}
+            bitrateKbps={
+              stats?.availableOutgoingBitrate
+                ? Math.round(stats.availableOutgoingBitrate / 1000)
+                : undefined
+            }
+          />
           {participant.connectionStatus === 'reconnecting' && (
             <span className="conn-pill warn">Reconnecting…</span>
           )}
@@ -461,12 +567,32 @@ export function MeetingRoomView({
     Record<string, RemoteParticipant>
   >({});
 
+  // Resilience & UX state: Bandwidth mode, Peer network stats, Diagnostics probe, Safari audio unlock
+  const [bandwidthMode, setBandwidthMode] = useState<BandwidthMode>(() => {
+    try {
+      const saved = window.localStorage.getItem(BANDWIDTH_MODE_STORAGE_KEY);
+      if (saved === 'data_saver' || saved === 'audio_only') return saved;
+      return 'standard';
+    } catch {
+      return 'standard';
+    }
+  });
+  const [peerStatsMap, setPeerStatsMap] = useState<
+    Record<string, PeerNetworkStats>
+  >({});
+  const [diagnosticsReport, setDiagnosticsReport] =
+    useState<PreCallDiagnosticsReport | null>(null);
+  const [isRunningDiagnostics, setIsRunningDiagnostics] = useState(false);
+  const [safariAudioBlocked, setSafariAudioBlocked] = useState(false);
+  const platformProfile = useMemo(() => detectBrowserPlatform(), []);
+
   const lobbyVideoRef = useRef<HTMLVideoElement>(null);
   const callLocalVideoRef = useRef<HTMLVideoElement>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
   const localScreenStreamRef = useRef<MediaStream | null>(null);
   const signalingRef = useRef<SignalingClient | null>(null);
   const transportRef = useRef<MeshTransport | null>(null);
+  const hasConnectedTransportRef = useRef(false);
   const showChatPanelRef = useRef(false);
   const soundsEnabledRef = useRef(soundsEnabled);
   const callStartedAtRef = useRef<number | null>(null);
@@ -532,7 +658,7 @@ export function MeetingRoomView({
           aTrack.enabled = !audioMuted;
         }
         for (const vTrack of res.stream.getVideoTracks()) {
-          vTrack.enabled = videoEnabled;
+          vTrack.enabled = videoEnabled && bandwidthMode !== 'audio_only';
         }
       }
 
@@ -543,7 +669,7 @@ export function MeetingRoomView({
       setRecoverySteps(res.recoverySteps);
       await refreshDevices();
     },
-    [audioMuted, videoEnabled, refreshDevices],
+    [audioMuted, videoEnabled, bandwidthMode, refreshDevices],
   );
 
   // Inspect room metadata & acquire lobby preview on mount
@@ -598,8 +724,7 @@ export function MeetingRoomView({
   useEffect(() => {
     const el = lobbyVideoRef.current;
     if (el && localStream) {
-      el.srcObject = localStream;
-      void el.play().catch(() => {});
+      attachSafeMediaElement(el, localStream, { muted: true });
     }
   }, [localStream, stage, videoEnabled]);
 
@@ -607,10 +732,107 @@ export function MeetingRoomView({
   useEffect(() => {
     const el = callLocalVideoRef.current;
     if (el && localStream) {
-      el.srcObject = localStream;
-      void el.play().catch(() => {});
+      attachSafeMediaElement(el, localStream, { muted: true });
     }
   }, [localStream, stage, videoEnabled, pinnedTargetId]);
+
+  // Poll RTCPeerConnection.getStats() every 2s during active call to drive per-tile network quality bars
+  useEffect(() => {
+    if (stage !== 'call') {
+      setPeerStatsMap({});
+      return;
+    }
+    let cancelled = false;
+    const pollStats = async () => {
+      const transport = transportRef.current;
+      if (!transport || cancelled) return;
+      try {
+        const stats = await transport.getPeerStats();
+        if (!cancelled) {
+          setPeerStatsMap(stats);
+        }
+      } catch {
+        // ignore transient stats error
+      }
+    };
+    void pollStats();
+    const interval = window.setInterval(() => {
+      void pollStats();
+    }, 2000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }, [stage]);
+
+  // Safari / iOS foreground recovery: re-acquire any ended microphone/camera tracks after tab switch or screen lock
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    const onVisibilityChange = async () => {
+      if (document.visibilityState !== 'visible') return;
+      const expectVideo = videoEnabled && bandwidthMode !== 'audio_only';
+      const ended = hasEndedMediaTracks(localStreamRef.current, expectVideo);
+      if (!ended) return;
+
+      const res = await acquireUserMedia({
+        audio: true,
+        video: expectVideo,
+        ...(prefs.audioInputId ? { audioInputId: prefs.audioInputId } : {}),
+        ...(prefs.videoInputId ? { videoInputId: prefs.videoInputId } : {}),
+      });
+      if (!res.stream) return;
+
+      const current = localStreamRef.current;
+      const newAudio = res.stream.getAudioTracks()[0];
+      if (newAudio) {
+        newAudio.enabled = !audioMuted;
+        if (current) {
+          for (const old of current.getAudioTracks()) {
+            old.stop();
+            current.removeTrack(old);
+          }
+          current.addTrack(newAudio);
+        }
+        if (transportRef.current) {
+          await transportRef.current.replaceTrack('microphone', newAudio);
+        }
+      }
+      if (expectVideo) {
+        const newVideo = res.stream.getVideoTracks()[0];
+        if (newVideo) {
+          newVideo.enabled = true;
+          if (current) {
+            for (const old of current.getVideoTracks()) {
+              old.stop();
+              current.removeTrack(old);
+            }
+            current.addTrack(newVideo);
+          }
+          if (transportRef.current) {
+            await transportRef.current.replaceTrack('camera', newVideo);
+          }
+        }
+      }
+      if (current) {
+        setLocalStream(new MediaStream(current.getTracks()));
+      } else {
+        localStreamRef.current = res.stream;
+        setLocalStream(res.stream);
+      }
+      onToast('Restored media devices after returning to foreground.');
+    };
+
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    return () =>
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+  }, [
+    audioMuted,
+    videoEnabled,
+    bandwidthMode,
+    prefs.audioInputId,
+    prefs.videoInputId,
+    onToast,
+  ]);
 
   // Live microphone level meter in lobby
   useEffect(() => {
@@ -792,6 +1014,76 @@ export function MeetingRoomView({
       onToast(next ? 'Join/leave chimes enabled.' : 'Join/leave chimes muted.');
       return next;
     });
+  }, [onToast]);
+
+  // Switch bandwidth / resilience mode ('standard' | 'data_saver' | 'audio_only')
+  const handleSelectBandwidthMode = useCallback(
+    async (nextMode: BandwidthMode) => {
+      setBandwidthMode(nextMode);
+      try {
+        window.localStorage.setItem(BANDWIDTH_MODE_STORAGE_KEY, nextMode);
+      } catch {
+        // ignore
+      }
+
+      if (transportRef.current) {
+        await transportRef.current.setBandwidthMode(nextMode);
+      }
+
+      if (nextMode === 'audio_only') {
+        if (localStreamRef.current) {
+          for (const vTrack of localStreamRef.current.getVideoTracks()) {
+            vTrack.enabled = false;
+          }
+        }
+        setVideoEnabled(false);
+        signalingRef.current?.updateState({ video: false });
+        announce('Switched to Audio-Only mode. Video paused to protect audio.');
+        onToast('Audio-Only mode enabled — video paused to save bandwidth.');
+      } else if (nextMode === 'data_saver') {
+        announce('Switched to Data Saver mode (220 kbps video cap).');
+        onToast('Data Saver enabled (220 kbps video cap).');
+      } else {
+        announce('Switched to Standard HD mode.');
+        onToast('Standard HD video mode enabled.');
+      }
+    },
+    [announce, onToast],
+  );
+
+  // Run pre-call WebRTC loopback + bandwidth + hardware diagnostics probe
+  const handleRunPreCallDiagnostics = useCallback(async () => {
+    if (isRunningDiagnostics) return;
+    setIsRunningDiagnostics(true);
+    try {
+      const report = await runPreCallDiagnosticsProbe({
+        localStream: localStreamRef.current,
+        audioMuted,
+        videoEnabled,
+      });
+      setDiagnosticsReport(report);
+      if (report.recommendedMode === 'standard') {
+        onToast('Network & device test passed — ready for HD call.');
+      } else if (report.recommendedMode === 'data_saver') {
+        onToast('Network test completed — Data Saver mode recommended.');
+      } else {
+        onToast('Network test completed — Audio-Only mode recommended.');
+      }
+    } catch {
+      onToast('Could not complete pre-call diagnostics.');
+    } finally {
+      setIsRunningDiagnostics(false);
+    }
+  }, [isRunningDiagnostics, audioMuted, videoEnabled, onToast]);
+
+  // Unlock Safari/iOS remote audio playback on user tap
+  const handleUnlockSafariAudio = useCallback(() => {
+    setSafariAudioBlocked(false);
+    const videos = document.querySelectorAll<HTMLVideoElement>('video');
+    videos.forEach((v) => {
+      void v.play().catch(() => {});
+    });
+    onToast('Audio playback resumed.');
   }, [onToast]);
 
   // Send ephemeral reaction
@@ -1201,49 +1493,64 @@ export function MeetingRoomView({
       if (payload.roomState.description) {
         setRoomDescription(payload.roomState.description);
       }
-      const map: Record<string, RemoteParticipant> = {};
-      for (const p of payload.peers) {
-        seenAttendeesRef.current.set(p.id, {
-          id: p.id,
-          displayName: p.displayName,
-          role: p.role,
-          ...(p.verified !== undefined ? { verified: p.verified } : {}),
-        });
-        map[p.id] = {
-          ...p,
-          stream: null,
-          screenStream: null,
-          connectionStatus: 'connecting',
-        };
-      }
-      setRemotePeers(map);
-      if (soundsEnabledRef.current) {
+
+      const isReconnect = hasConnectedTransportRef.current;
+
+      setRemotePeers((prev) => {
+        const map: Record<string, RemoteParticipant> = {};
+        for (const p of payload.peers) {
+          seenAttendeesRef.current.set(p.id, {
+            id: p.id,
+            displayName: p.displayName,
+            role: p.role,
+            ...(p.verified !== undefined ? { verified: p.verified } : {}),
+          });
+          const existing = prev[p.id];
+          map[p.id] = {
+            ...p,
+            stream: existing?.stream ?? null,
+            screenStream: p.state.screen
+              ? (existing?.screenStream ?? null)
+              : null,
+            connectionStatus: existing?.connectionStatus ?? 'connecting',
+          };
+        }
+        return map;
+      });
+
+      if (!isReconnect && soundsEnabledRef.current) {
         playCallChime('join');
       }
 
       void (async () => {
-        await transport.connect({
-          roomId: roomCode,
-          selfId: payload.selfId,
-          iceServers: payload.iceServers as RTCIceServer[],
-          signaling,
-          peerIds: payload.peers.map((p) => p.id),
-        });
+        if (!hasConnectedTransportRef.current) {
+          hasConnectedTransportRef.current = true;
+          await transport.connect({
+            roomId: roomCode,
+            selfId: payload.selfId,
+            iceServers: payload.iceServers as RTCIceServer[],
+            signaling,
+            peerIds: payload.peers.map((p) => p.id),
+          });
+          await transport.setBandwidthMode(bandwidthMode);
 
-        const currentStream = localStreamRef.current;
-        if (currentStream) {
-          const audioTrack = currentStream.getAudioTracks()[0];
-          if (audioTrack) {
-            await transport.publish(audioTrack, 'microphone', {
-              stream: currentStream,
-            });
+          const currentStream = localStreamRef.current;
+          if (currentStream) {
+            const audioTrack = currentStream.getAudioTracks()[0];
+            if (audioTrack) {
+              await transport.publish(audioTrack, 'microphone', {
+                stream: currentStream,
+              });
+            }
+            const videoTrack = currentStream.getVideoTracks()[0];
+            if (videoTrack) {
+              await transport.publish(videoTrack, 'camera', {
+                stream: currentStream,
+              });
+            }
           }
-          const videoTrack = currentStream.getVideoTracks()[0];
-          if (videoTrack) {
-            await transport.publish(videoTrack, 'camera', {
-              stream: currentStream,
-            });
-          }
+        } else {
+          await transport.setBandwidthMode(bandwidthMode);
         }
       })();
     });
@@ -1432,6 +1739,7 @@ export function MeetingRoomView({
       onToast(err.message);
     });
 
+    hasConnectedTransportRef.current = false;
     signalingRef.current = signaling;
     transportRef.current = transport;
     signaling.connect();
@@ -1439,6 +1747,7 @@ export function MeetingRoomView({
   };
 
   const handleHangUp = () => {
+    hasConnectedTransportRef.current = false;
     if (callStartedAtRef.current) {
       const historyItem = recordCompletedMeetingSession({
         roomCode,
@@ -1479,6 +1788,7 @@ export function MeetingRoomView({
 
   const hasLocalVideoTrack =
     videoEnabled &&
+    bandwidthMode !== 'audio_only' &&
     Boolean(localStream && localStream.getVideoTracks().length > 0);
   const localInitial = (
     (displayName || user?.displayName || 'G')[0] || 'G'
@@ -1486,6 +1796,57 @@ export function MeetingRoomView({
 
   const remoteList = useMemo(() => Object.values(remotePeers), [remotePeers]);
   const totalParticipantCount = remoteList.length + 1;
+
+  // Aggregate local network quality from active peer stats
+  const localNetworkSummary = useMemo((): {
+    bars: NetworkQualityBars;
+    level: NetworkQualityLevel;
+    rttMs: number | null;
+    packetLossPct: number;
+    bitrateKbps: number;
+  } => {
+    const entries = Object.values(peerStatsMap);
+    if (entries.length === 0) {
+      return {
+        bars: 4,
+        level: 'excellent',
+        rttMs: null,
+        packetLossPct: 0,
+        bitrateKbps: 0,
+      };
+    }
+    let minBars: NetworkQualityBars = 4;
+    let worstLevel: NetworkQualityLevel = 'excellent';
+    let maxRtt: number | null = null;
+    let maxLoss = 0;
+    let totalBitrate = 0;
+    for (const st of entries) {
+      if (st.bars < minBars) {
+        minBars = st.bars;
+        worstLevel = st.quality;
+      }
+      if (
+        st.roundTripTimeMs !== undefined &&
+        (maxRtt === null || st.roundTripTimeMs > maxRtt)
+      ) {
+        maxRtt = st.roundTripTimeMs;
+      }
+      const lossPct = st.fractionLost * 100;
+      if (lossPct > maxLoss) {
+        maxLoss = lossPct;
+      }
+      if (st.availableOutgoingBitrate) {
+        totalBitrate += Math.round(st.availableOutgoingBitrate / 1000);
+      }
+    }
+    return {
+      bars: minBars,
+      level: worstLevel,
+      rttMs: maxRtt,
+      packetLossPct: maxLoss,
+      bitrateKbps: totalBitrate,
+    };
+  }, [peerStatsMap]);
 
   // Determine active screen share or pinned target
   const activeScreenTile = useMemo(() => {
@@ -1836,6 +2197,128 @@ export function MeetingRoomView({
               )}
             </div>
 
+            {/* Pre-Call Network & Device Diagnostics Probe (WebRTC Loopback + Bandwidth) */}
+            <div className="lobby-diagnostics-bar">
+              <button
+                type="button"
+                className="btn"
+                onClick={() => void handleRunPreCallDiagnostics()}
+                disabled={isRunningDiagnostics}
+                data-testid="run-diagnostics-btn"
+              >
+                <span>
+                  {isRunningDiagnostics
+                    ? 'Running loopback & bandwidth test…'
+                    : diagnosticsReport
+                      ? 'Re-run network & device test'
+                      : 'Test network & devices'}
+                </span>
+              </button>
+              <span
+                className="lobby-platform-tag"
+                title="Detected platform profile"
+              >
+                {platformProfile.isIOS
+                  ? 'iOS WebKit'
+                  : platformProfile.isSafari
+                    ? 'macOS Safari'
+                    : 'WebRTC Ready'}
+              </span>
+            </div>
+
+            {diagnosticsReport && (
+              <div
+                className={`diagnostics-probe-card status-${
+                  diagnosticsReport.recommendedMode === 'standard'
+                    ? 'good'
+                    : diagnosticsReport.recommendedMode === 'data_saver'
+                      ? 'fair'
+                      : 'poor'
+                }`}
+                role="region"
+                aria-label="Pre-call network and device test report"
+                data-testid="diagnostics-report-card"
+              >
+                <div className="diagnostics-probe-head">
+                  <strong>
+                    {diagnosticsReport.recommendedMode === 'standard'
+                      ? '✓ Ready for HD Call'
+                      : diagnosticsReport.recommendedMode === 'data_saver'
+                        ? '⚠ Fair Network — Data Saver Recommended'
+                        : '✕ Low Bandwidth — Audio-Only Recommended'}
+                  </strong>
+                  <button
+                    type="button"
+                    className="btn-icon-subtle"
+                    onClick={() => setDiagnosticsReport(null)}
+                    aria-label="Dismiss diagnostics report"
+                  >
+                    <CloseIcon />
+                  </button>
+                </div>
+
+                <div className="diagnostics-metrics-grid">
+                  <div className="diag-metric">
+                    <small>WebRTC Loopback</small>
+                    <strong>
+                      {diagnosticsReport.loopbackRttMs} ms RTT (ICE{' '}
+                      {diagnosticsReport.iceGatherMs} ms)
+                    </strong>
+                  </div>
+                  <div className="diag-metric">
+                    <small>Est. Bandwidth</small>
+                    <strong>
+                      {(
+                        diagnosticsReport.estimatedThroughputKbps / 1000
+                      ).toFixed(1)}{' '}
+                      Mbps
+                    </strong>
+                  </div>
+                  <div className="diag-metric">
+                    <small>Signaling RTT</small>
+                    <strong>{diagnosticsReport.signalingLatencyMs} ms</strong>
+                  </div>
+                  <div className="diag-metric">
+                    <small>Hardware</small>
+                    <strong>
+                      Mic{' '}
+                      {diagnosticsReport.audioStatus === 'ok'
+                        ? '✓'
+                        : 'Muted/Off'}{' '}
+                      · Cam{' '}
+                      {diagnosticsReport.videoStatus === 'ok' ? '✓' : 'Off'}
+                    </strong>
+                  </div>
+                </div>
+
+                <p
+                  className="diagnostics-recommendations"
+                  style={{ paddingLeft: 0 }}
+                >
+                  {diagnosticsReport.summary}
+                </p>
+
+                <details className="diagnostics-matrix-details">
+                  <summary>
+                    Real-device &amp; Safari/iOS compatibility matrix
+                  </summary>
+                  <div className="diagnostics-matrix-table">
+                    {REAL_DEVICE_TEST_MATRIX.map((row) => (
+                      <div
+                        key={`${row.platform}-${row.browser}`}
+                        className="matrix-row"
+                      >
+                        <strong>
+                          {row.platform} · {row.browser}
+                        </strong>
+                        <span>{row.workdirWorkaround}</span>
+                      </div>
+                    ))}
+                  </div>
+                </details>
+              </div>
+            )}
+
             {/* Permission denied / no device recovery box */}
             {mediaErrorKind && (
               <div
@@ -1960,6 +2443,48 @@ export function MeetingRoomView({
               </div>
             )}
 
+            {/* Bandwidth & Resilience Mode Selector in Lobby */}
+            <div className="lobby-field">
+              <label>Call quality &amp; data mode</label>
+              <div
+                className="bandwidth-mode-pills"
+                role="radiogroup"
+                aria-label="Call quality and data mode"
+                data-testid="lobby-bandwidth-modes"
+              >
+                <button
+                  type="button"
+                  className={`bw-mode-pill ${bandwidthMode === 'standard' ? 'active' : ''}`}
+                  onClick={() => void handleSelectBandwidthMode('standard')}
+                  aria-pressed={bandwidthMode === 'standard'}
+                  data-testid="bw-mode-standard"
+                >
+                  <strong>Standard HD</strong>
+                  <small>Adaptive video</small>
+                </button>
+                <button
+                  type="button"
+                  className={`bw-mode-pill ${bandwidthMode === 'data_saver' ? 'active' : ''}`}
+                  onClick={() => void handleSelectBandwidthMode('data_saver')}
+                  aria-pressed={bandwidthMode === 'data_saver'}
+                  data-testid="bw-mode-data-saver"
+                >
+                  <strong>Data Saver</strong>
+                  <small>220 kbps cap</small>
+                </button>
+                <button
+                  type="button"
+                  className={`bw-mode-pill ${bandwidthMode === 'audio_only' ? 'active' : ''}`}
+                  onClick={() => void handleSelectBandwidthMode('audio_only')}
+                  aria-pressed={bandwidthMode === 'audio_only'}
+                  data-testid="bw-mode-audio-only"
+                >
+                  <strong>Audio-Only</strong>
+                  <small>No video</small>
+                </button>
+              </div>
+            </div>
+
             <div className="lobby-join-actions">
               <button
                 type="button"
@@ -2024,6 +2549,14 @@ export function MeetingRoomView({
           >
             {copiedInvite ? <CheckIcon /> : <LnkIcon />}
           </button>
+          {bandwidthMode !== 'standard' && (
+            <span
+              className="call-bw-mode-badge"
+              data-testid="active-bw-mode-badge"
+            >
+              {bandwidthMode === 'audio_only' ? 'Audio-Only' : 'Data Saver'}
+            </span>
+          )}
         </div>
 
         {connectionBanner && (
@@ -2086,6 +2619,28 @@ export function MeetingRoomView({
           }}
           data-layout-mode={layout.mode}
         >
+          {/* Safari/iOS Autoplay Audio Unlock Banner */}
+          {safariAudioBlocked && (
+            <div
+              className="call-waiting-admit-banner safari-audio-unlock-banner"
+              role="alert"
+              data-testid="safari-audio-unlock-banner"
+            >
+              <div className="waiting-admit-text">
+                <strong>Browser paused incoming call audio</strong>
+              </div>
+              <div className="waiting-admit-actions">
+                <button
+                  type="button"
+                  className="btn primary"
+                  onClick={handleUnlockSafariAudio}
+                >
+                  Tap to resume audio
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Host Waiting Room Admission Floating Banner */}
           {canModerate && waitingPeers.length > 0 && (
             <div
@@ -2251,6 +2806,8 @@ export function MeetingRoomView({
             <RemoteVideoTile
               key={peer.id}
               participant={peer}
+              stats={peerStatsMap[peer.id]}
+              audioOnlyMode={bandwidthMode === 'audio_only'}
               isSpeaking={activeSpeakerId === peer.id}
               isPinned={effectiveSpotlightId === peer.id}
               canModerate={canModerate}
@@ -2264,6 +2821,7 @@ export function MeetingRoomView({
               onRemovePeer={() =>
                 handleHostRemovePeer(peer.id, peer.displayName, false)
               }
+              onAudioAutoplayBlocked={() => setSafariAudioBlocked(true)}
               onToast={onToast}
             />
           ))}
@@ -2291,6 +2849,11 @@ export function MeetingRoomView({
                     className="tile-avatar-circle"
                   />
                 </div>
+                {bandwidthMode === 'audio_only' && (
+                  <small className="audio-only-tile-note">
+                    Audio-Only mode active
+                  </small>
+                )}
               </div>
             )}
 
@@ -2351,6 +2914,13 @@ export function MeetingRoomView({
                 )}
               </div>
               <div className="tile-status-icons">
+                <NetworkBarsBadge
+                  bars={localNetworkSummary.bars}
+                  level={localNetworkSummary.level}
+                  rttMs={localNetworkSummary.rttMs}
+                  packetLossPct={localNetworkSummary.packetLossPct}
+                  bitrateKbps={localNetworkSummary.bitrateKbps}
+                />
                 {audioMuted && <span className="muted-badge">Muted</span>}
               </div>
             </div>
@@ -2817,6 +3387,7 @@ export function MeetingRoomView({
               aria-expanded={showDevicePopover}
               aria-label="Audio, video, and call settings"
               title="Audio, video, and call options"
+              data-testid="call-options-btn"
             >
               <SetIcon />
               <span className="dock-btn-label">Options</span>
@@ -2828,6 +3399,30 @@ export function MeetingRoomView({
                 role="dialog"
                 aria-label="Switch active devices and options"
               >
+                <label className="device-select-group">
+                  <span>Bandwidth &amp; Data Mode</span>
+                  <select
+                    aria-label="Select bandwidth mode"
+                    value={bandwidthMode}
+                    onChange={(e) =>
+                      void handleSelectBandwidthMode(
+                        e.target.value as BandwidthMode,
+                      )
+                    }
+                    data-testid="call-bandwidth-select"
+                  >
+                    <option value="standard">
+                      Standard HD (Adaptive video)
+                    </option>
+                    <option value="data_saver">
+                      Data Saver (220 kbps video cap)
+                    </option>
+                    <option value="audio_only">
+                      Audio-Only (Pause all video)
+                    </option>
+                  </select>
+                </label>
+
                 <label className="device-select-group">
                   <span>Microphone</span>
                   <select

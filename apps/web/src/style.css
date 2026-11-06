@@ -5442,3 +5442,294 @@ aside.context-bar {
   color: var(--ink);
   font-size: 11.5px;
 }
+
+/* ================= PHASE 3: RESILIENCE, NETWORK QUALITY, DIAGNOSTICS & PWA ================= */
+
+.call-shell {
+  height: 100dvh;
+}
+
+/* PWA Offline Banner & Install Floating Pill */
+.pwa-offline-banner {
+  position: sticky;
+  top: 0;
+  z-index: 95;
+  width: 100%;
+  padding: 8px 16px;
+  background: rgba(245, 158, 11, 0.16);
+  border-bottom: 1px solid rgba(245, 158, 11, 0.4);
+  color: var(--ink);
+  font-size: 12.5px;
+  font-weight: 500;
+  text-align: center;
+  backdrop-filter: blur(10px);
+}
+
+.pwa-install-pill {
+  position: fixed;
+  bottom: 20px;
+  left: 20px;
+  z-index: 80;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 15px;
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.22);
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    transform 0.15s ease,
+    border-color 0.15s ease;
+}
+
+.pwa-install-pill:hover {
+  transform: translateY(-1px);
+  border-color: var(--accent);
+}
+
+/* Network Quality Bars Badge per Tile */
+.network-bars-badge {
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 18px;
+  padding: 3px 6px;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.68);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  backdrop-filter: blur(8px);
+}
+
+.network-bars-badge .net-bar {
+  width: 3px;
+  border-radius: 1.5px;
+  background: rgba(255, 255, 255, 0.25);
+  transition: background 0.2s ease;
+}
+
+.network-bars-badge .net-bar.bar-1 {
+  height: 4px;
+}
+
+.network-bars-badge .net-bar.bar-2 {
+  height: 7px;
+}
+
+.network-bars-badge .net-bar.bar-3 {
+  height: 10px;
+}
+
+.network-bars-badge .net-bar.bar-4 {
+  height: 13px;
+}
+
+.network-bars-badge.level-excellent .net-bar.lit,
+.network-bars-badge.level-good .net-bar.lit {
+  background: #22c55e;
+}
+
+.network-bars-badge.level-fair .net-bar.lit {
+  background: #f59e0b;
+}
+
+.network-bars-badge.level-poor .net-bar.lit {
+  background: #ef4444;
+}
+
+/* Bandwidth & Data Saver Mode Pills */
+.bandwidth-mode-pills {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.bw-mode-pill {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 9px 11px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: var(--bg);
+  color: var(--ink);
+  cursor: pointer;
+  text-align: left;
+  transition:
+    border-color 0.15s ease,
+    background 0.15s ease;
+}
+
+.bw-mode-pill strong {
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.bw-mode-pill small {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.bw-mode-pill:hover {
+  border-color: var(--muted);
+}
+
+.bw-mode-pill.active {
+  border-color: var(--accent);
+  background: rgba(124, 156, 255, 0.12);
+}
+
+.call-bw-mode-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 600;
+  background: rgba(245, 158, 11, 0.16);
+  color: #f59e0b;
+  border: 1px solid rgba(245, 158, 11, 0.35);
+}
+
+.audio-only-tile-note {
+  margin-top: 8px;
+  font-size: 11.5px;
+  color: var(--muted);
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: var(--bg);
+  border: 1px solid var(--line);
+}
+
+/* Pre-Call Network & Device Diagnostics Probe Card */
+.lobby-diagnostics-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.lobby-platform-tag {
+  font-size: 11.5px;
+  color: var(--muted);
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+}
+
+.diagnostics-probe-card {
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.diagnostics-probe-card.status-good {
+  border-color: rgba(34, 197, 94, 0.4);
+}
+
+.diagnostics-probe-card.status-fair {
+  border-color: rgba(245, 158, 11, 0.45);
+}
+
+.diagnostics-probe-card.status-poor {
+  border-color: rgba(239, 68, 68, 0.45);
+}
+
+.diagnostics-probe-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.diagnostics-probe-head strong {
+  font-size: 13.5px;
+  color: var(--ink);
+}
+
+.diagnostics-metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.diag-metric {
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.diag-metric small {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.diag-metric strong {
+  font-size: 12.5px;
+  color: var(--ink);
+}
+
+.diagnostics-recommendations {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 12px;
+  color: var(--muted);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.diagnostics-matrix-details {
+  font-size: 12px;
+  color: var(--muted);
+  border-top: 1px solid var(--line);
+  padding-top: 8px;
+}
+
+.diagnostics-matrix-details summary {
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.diagnostics-matrix-table {
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.matrix-row {
+  padding: 6px 8px;
+  border-radius: 8px;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.matrix-row strong {
+  font-size: 11.5px;
+  color: var(--ink);
+}
+
+.matrix-row span {
+  font-size: 11px;
+  color: var(--muted);
+}

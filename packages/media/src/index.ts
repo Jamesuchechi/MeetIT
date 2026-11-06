@@ -8,6 +8,24 @@ export type TrackSource = 'camera' | 'microphone' | 'screen' | 'screen_audio';
 export type ConnectionState =
   'new' | 'connecting' | 'connected' | 'reconnecting' | 'failed' | 'closed';
 
+export type NetworkQualityLevel =
+  'excellent' | 'good' | 'fair' | 'poor' | 'unknown';
+export type NetworkQualityBars = 0 | 1 | 2 | 3 | 4;
+export type BandwidthMode = 'standard' | 'data_saver' | 'audio_only';
+
+export interface PeerNetworkStats {
+  peerId: string;
+  roundTripTimeMs?: number;
+  packetsLost: number;
+  packetsReceived: number;
+  fractionLost: number;
+  bytesReceived: number;
+  bytesSent: number;
+  availableOutgoingBitrate?: number;
+  quality: NetworkQualityLevel;
+  bars: NetworkQualityBars;
+}
+
 export interface ConnectOptions {
   roomId: string;
   selfId: string;
@@ -48,6 +66,9 @@ export interface MediaTransport {
   unpublish(source: TrackSource): Promise<void>;
   replaceTrack(source: TrackSource, track: MediaStreamTrack): Promise<void>;
   getStats(): Promise<TransportStats>;
+  getPeerStats?(): Promise<Record<string, PeerNetworkStats>>;
+  setBandwidthMode?(mode: BandwidthMode): Promise<void>;
+  getBandwidthMode?(): BandwidthMode;
   on<E extends keyof TransportEvents>(
     event: E,
     callback: (payload: TransportEvents[E]) => void,
@@ -55,9 +76,48 @@ export interface MediaTransport {
 }
 
 /**
- * Computes per-stream max video bitrate (bps) based on participant count.
+ * Computes a 0-4 bar score and quality label from RTT (ms), packet loss ratio, and connection state.
  */
-export function computeMaxVideoBitrate(participantCount: number): number {
+export function computeNetworkQuality(params: {
+  roundTripTimeMs?: number | undefined;
+  fractionLost?: number | undefined;
+  packetsLost?: number | undefined;
+  connectionState?: ConnectionState | undefined;
+}): { quality: NetworkQualityLevel; bars: NetworkQualityBars } {
+  const { roundTripTimeMs, fractionLost = 0, connectionState } = params;
+
+  if (connectionState === 'failed' || connectionState === 'closed') {
+    return { quality: 'poor', bars: 0 };
+  }
+  if (connectionState === 'reconnecting') {
+    return { quality: 'poor', bars: 1 };
+  }
+  if (roundTripTimeMs === undefined && fractionLost === 0) {
+    return { quality: 'excellent', bars: 4 };
+  }
+
+  const rtt = roundTripTimeMs ?? 45;
+  if (rtt <= 110 && fractionLost <= 0.015) {
+    return { quality: 'excellent', bars: 4 };
+  }
+  if (rtt <= 230 && fractionLost <= 0.04) {
+    return { quality: 'good', bars: 3 };
+  }
+  if (rtt <= 420 && fractionLost <= 0.09) {
+    return { quality: 'fair', bars: 2 };
+  }
+  return { quality: 'poor', bars: 1 };
+}
+
+/**
+ * Computes per-stream max video bitrate (bps) based on participant count and bandwidth mode.
+ */
+export function computeMaxVideoBitrate(
+  participantCount: number,
+  mode: BandwidthMode = 'standard',
+): number {
+  if (mode === 'audio_only') return 0;
+  if (mode === 'data_saver') return 180_000;
   if (participantCount <= 2) return 1_500_000;
   if (participantCount <= 4) return 800_000;
   return 300_000;
@@ -166,6 +226,9 @@ interface PeerSession {
   queuedCandidates: IceCandidatePayload[];
   senders: Map<TrackSource, RTCRtpSender>;
   receivedVideoTrackIds: Set<string>;
+  receivedVideoTracks: Set<MediaStreamTrack>;
+  prevPacketsLost: number;
+  prevPacketsReceived: number;
   state: ConnectionState;
   disconnectTimer: ReturnType<typeof setTimeout> | null;
   renegotiateTimer: ReturnType<typeof setTimeout> | null;
@@ -196,6 +259,7 @@ export class MeshTransport implements MediaTransport {
   private iceServers: RTCIceServer[] = [];
   private signaling: SignalingChannel | null = null;
   private connected = false;
+  private bandwidthMode: BandwidthMode = 'standard';
 
   private readonly PeerConnectionCtor: typeof RTCPeerConnection | undefined;
   private readonly iceRestartGraceMs: number;
@@ -332,6 +396,175 @@ export class MeshTransport implements MediaTransport {
     return normalizeRtcStats(allReports);
   }
 
+  async getPeerStats(): Promise<Record<string, PeerNetworkStats>> {
+    const result: Record<string, PeerNetworkStats> = {};
+    let maxRtt: number | undefined;
+    let totalLostDelta = 0;
+    let totalRecvDelta = 0;
+    let totalBytesRecv = 0;
+    let totalBytesSent = 0;
+
+    for (const session of this.peers.values()) {
+      let bytesReceived = 0;
+      let bytesSent = 0;
+      let packetsLost = 0;
+      let packetsReceived = 0;
+      let roundTripTimeMs: number | undefined;
+      let availableOutgoingBitrate: number | undefined;
+
+      if (typeof session.pc.getStats === 'function') {
+        try {
+          const stats = await session.pc.getStats();
+          stats.forEach((report: Record<string, unknown>) => {
+            const type = report.type;
+            if (type === 'inbound-rtp') {
+              if (typeof report.bytesReceived === 'number') {
+                bytesReceived += report.bytesReceived;
+              }
+              if (typeof report.packetsLost === 'number') {
+                packetsLost += Math.max(0, report.packetsLost);
+              }
+              if (typeof report.packetsReceived === 'number') {
+                packetsReceived += Math.max(0, report.packetsReceived);
+              }
+            } else if (type === 'outbound-rtp') {
+              if (typeof report.bytesSent === 'number') {
+                bytesSent += report.bytesSent;
+              }
+            } else if (
+              type === 'candidate-pair' &&
+              report.state === 'succeeded'
+            ) {
+              if (typeof report.currentRoundTripTime === 'number') {
+                roundTripTimeMs = Math.round(
+                  report.currentRoundTripTime * 1000,
+                );
+              }
+              if (typeof report.availableOutgoingBitrate === 'number') {
+                availableOutgoingBitrate = report.availableOutgoingBitrate;
+              }
+            }
+          });
+        } catch {
+          // ignore stats read failure
+        }
+      }
+
+      const deltaLost = Math.max(0, packetsLost - session.prevPacketsLost);
+      const deltaRecv = Math.max(
+        0,
+        packetsReceived - session.prevPacketsReceived,
+      );
+      session.prevPacketsLost = packetsLost;
+      session.prevPacketsReceived = packetsReceived;
+
+      const totalWindowPackets = deltaLost + deltaRecv;
+      const fractionLost =
+        totalWindowPackets > 0 ? deltaLost / totalWindowPackets : 0;
+
+      const { quality, bars } = computeNetworkQuality({
+        roundTripTimeMs,
+        fractionLost,
+        packetsLost: deltaLost,
+        connectionState: session.state,
+      });
+
+      result[session.peerId] = {
+        peerId: session.peerId,
+        ...(roundTripTimeMs !== undefined ? { roundTripTimeMs } : {}),
+        packetsLost,
+        packetsReceived,
+        fractionLost,
+        bytesReceived,
+        bytesSent,
+        ...(availableOutgoingBitrate !== undefined
+          ? { availableOutgoingBitrate }
+          : {}),
+        quality,
+        bars,
+      };
+
+      if (
+        roundTripTimeMs !== undefined &&
+        (maxRtt === undefined || roundTripTimeMs > maxRtt)
+      ) {
+        maxRtt = roundTripTimeMs;
+      }
+      totalLostDelta += deltaLost;
+      totalRecvDelta += deltaRecv;
+      totalBytesRecv += bytesReceived;
+      totalBytesSent += bytesSent;
+    }
+
+    const localTotalPackets = totalLostDelta + totalRecvDelta;
+    const localFractionLost =
+      localTotalPackets > 0 ? totalLostDelta / localTotalPackets : 0;
+    const localQuality = computeNetworkQuality({
+      roundTripTimeMs: maxRtt,
+      fractionLost: localFractionLost,
+      packetsLost: totalLostDelta,
+      connectionState: this.connected ? 'connected' : 'closed',
+    });
+
+    result.local = {
+      peerId: 'local',
+      ...(maxRtt !== undefined ? { roundTripTimeMs: maxRtt } : {}),
+      packetsLost: totalLostDelta,
+      packetsReceived: totalRecvDelta,
+      fractionLost: localFractionLost,
+      bytesReceived: totalBytesRecv,
+      bytesSent: totalBytesSent,
+      quality: localQuality.quality,
+      bars: localQuality.bars,
+    };
+
+    return result;
+  }
+
+  getBandwidthMode(): BandwidthMode {
+    return this.bandwidthMode;
+  }
+
+  async setBandwidthMode(mode: BandwidthMode): Promise<void> {
+    this.bandwidthMode = mode;
+    const isAudioOnly = mode === 'audio_only';
+
+    // Toggle incoming remote video tracks
+    for (const session of this.peers.values()) {
+      for (const remoteTrack of session.receivedVideoTracks) {
+        remoteTrack.enabled = !isAudioOnly;
+      }
+    }
+
+    // Toggle or constrain local camera track
+    const camEntry = this.publishedTracks.get('camera');
+    if (camEntry) {
+      if (isAudioOnly) {
+        camEntry.track.enabled = false;
+      } else if (typeof camEntry.track.applyConstraints === 'function') {
+        try {
+          if (mode === 'data_saver') {
+            await camEntry.track.applyConstraints({
+              width: { ideal: 640 },
+              height: { ideal: 360 },
+              frameRate: { max: 15 },
+            });
+          } else {
+            await camEntry.track.applyConstraints({
+              width: { ideal: 1280 },
+              height: { ideal: 720 },
+              frameRate: { ideal: 30 },
+            });
+          }
+        } catch {
+          // ignore if constraints not supported on synthetic/mock track
+        }
+      }
+    }
+
+    this.updateAllPeersBitrateCap();
+  }
+
   on<E extends keyof TransportEvents>(
     event: E,
     callback: (payload: TransportEvents[E]) => void,
@@ -380,6 +613,9 @@ export class MeshTransport implements MediaTransport {
       queuedCandidates: [],
       senders: new Map(),
       receivedVideoTrackIds: new Set(),
+      receivedVideoTracks: new Set(),
+      prevPacketsLost: 0,
+      prevPacketsReceived: 0,
       state: 'new',
       disconnectTimer: null,
       renegotiateTimer: null,
@@ -428,6 +664,10 @@ export class MeshTransport implements MediaTransport {
           session.receivedVideoTrackIds.size > 0 &&
           !session.receivedVideoTrackIds.has(track.id);
         session.receivedVideoTrackIds.add(track.id);
+        session.receivedVideoTracks.add(track);
+        if (this.bandwidthMode === 'audio_only') {
+          track.enabled = false;
+        }
         if (
           labelLower.includes('screen') ||
           labelLower.includes('window') ||
@@ -448,6 +688,7 @@ export class MeshTransport implements MediaTransport {
 
       track.onended = () => {
         session.receivedVideoTrackIds.delete(track.id);
+        session.receivedVideoTracks.delete(track);
         this.emit('trackUnsubscribed', { peerId, source });
       };
     };
@@ -509,9 +750,14 @@ export class MeshTransport implements MediaTransport {
       if (!params.encodings || params.encodings.length === 0) {
         params.encodings = [{}];
       }
-      const maxBitrate = computeMaxVideoBitrate(this.peers.size + 1);
+      const maxBitrate = computeMaxVideoBitrate(
+        this.peers.size + 1,
+        this.bandwidthMode,
+      );
       for (const enc of params.encodings) {
         enc.maxBitrate = maxBitrate;
+        enc.scaleResolutionDownBy = this.bandwidthMode === 'data_saver' ? 2 : 1;
+        enc.maxFramerate = this.bandwidthMode === 'data_saver' ? 15 : 30;
       }
       await sender.setParameters(params);
     } catch {

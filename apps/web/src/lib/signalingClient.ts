@@ -207,6 +207,9 @@ export class SignalingClient implements SignalingChannel {
   private reconnectTimer: number | null = null;
   private pingTimer: number | null = null;
   private hasJoinedOnce = false;
+  private lastChatSeq = 0;
+  private readonly pendingQueue: ClientMessage[] = [];
+  private readonly handleWindowOnline: () => void;
   private readonly onReconnecting: ((attempt: number) => void) | undefined;
   private readonly onReconnected: (() => void) | undefined;
 
@@ -244,14 +247,35 @@ export class SignalingClient implements SignalingChannel {
     this.selfId = getOrCreateTabSelfId(options.roomCode);
     this.onReconnecting = options.onReconnecting;
     this.onReconnected = options.onReconnected;
+    this.handleWindowOnline = () => {
+      if (
+        !this.closed &&
+        (!this.ws ||
+          (this.ws.readyState !== WebSocket.OPEN &&
+            this.ws.readyState !== WebSocket.CONNECTING))
+      ) {
+        if (this.reconnectTimer !== null) {
+          window.clearTimeout(this.reconnectTimer);
+          this.reconnectTimer = null;
+        }
+        this.openWebSocket();
+      }
+    };
   }
 
   getSelfId(): string {
     return this.selfId;
   }
 
+  getLastChatSeq(): number {
+    return this.lastChatSeq;
+  }
+
   connect(): void {
     this.closed = false;
+    if (typeof window !== 'undefined') {
+      window.addEventListener('online', this.handleWindowOnline);
+    }
     this.openWebSocket();
   }
 
@@ -278,6 +302,7 @@ export class SignalingClient implements SignalingChannel {
             token: this.token,
             ...(this.passcode ? { passcode: this.passcode } : {}),
             selfId: this.selfId,
+            lastChatSeq: this.lastChatSeq,
             state: this.currentState,
             capabilities: ['mesh'],
           },
@@ -487,6 +512,39 @@ export class SignalingClient implements SignalingChannel {
         this.hasJoinedOnce = true;
         this.selfId = p.selfId;
         this.emit('joined', p);
+
+        if (p.roomState.chatHistory && p.roomState.chatHistory.length > 0) {
+          for (const backfilledMsg of p.roomState.chatHistory) {
+            if (
+              backfilledMsg.seq !== undefined &&
+              backfilledMsg.seq > this.lastChatSeq
+            ) {
+              this.lastChatSeq = backfilledMsg.seq;
+            }
+            this.emit('chat.message', {
+              id: backfilledMsg.id,
+              ...(backfilledMsg.seq !== undefined
+                ? { seq: backfilledMsg.seq }
+                : {}),
+              from: backfilledMsg.from,
+              displayName: backfilledMsg.displayName,
+              text: backfilledMsg.text,
+              ts: backfilledMsg.ts,
+            });
+          }
+        }
+
+        // Flush any queued chat messages that were sent during a brief disconnect
+        if (
+          this.pendingQueue.length > 0 &&
+          this.ws &&
+          this.ws.readyState === WebSocket.OPEN
+        ) {
+          const toFlush = this.pendingQueue.splice(0);
+          for (const queued of toFlush) {
+            this.ws.send(JSON.stringify(queued));
+          }
+        }
         break;
       }
       case 'waiting.room':
@@ -534,12 +592,17 @@ export class SignalingClient implements SignalingChannel {
           msg.payload as SignalingEvents['state.updated'],
         );
         break;
-      case 'chat.message':
-        this.emit(
-          'chat.message',
-          msg.payload as SignalingEvents['chat.message'],
-        );
+      case 'chat.message': {
+        const chatPayload = msg.payload as SignalingEvents['chat.message'];
+        if (
+          chatPayload.seq !== undefined &&
+          chatPayload.seq > this.lastChatSeq
+        ) {
+          this.lastChatSeq = chatPayload.seq;
+        }
+        this.emit('chat.message', chatPayload);
         break;
+      }
       case 'reaction.received':
         this.emit(
           'reaction.received',
@@ -573,6 +636,16 @@ export class SignalingClient implements SignalingChannel {
 
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
       this.ws.send(JSON.stringify(validated.data));
+      return;
+    }
+
+    if (
+      !this.broadcast &&
+      this.hasJoinedOnce &&
+      validated.data.type === 'chat.send' &&
+      this.pendingQueue.length < 30
+    ) {
+      this.pendingQueue.push(validated.data);
       return;
     }
 
@@ -695,6 +768,10 @@ export class SignalingClient implements SignalingChannel {
 
   disconnect(): void {
     this.closed = true;
+    this.pendingQueue.length = 0;
+    if (typeof window !== 'undefined') {
+      window.removeEventListener('online', this.handleWindowOnline);
+    }
     this.stopKeepalive();
     if (this.reconnectTimer !== null) {
       window.clearTimeout(this.reconnectTimer);

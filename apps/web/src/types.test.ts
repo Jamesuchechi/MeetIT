@@ -14,6 +14,13 @@ import {
   type MeetingActionItem,
   type MeetingNoteItem,
 } from './lib/notesStore';
+import { extractSharedRoomCodeFromSearch } from './App';
+import {
+  detectBrowserPlatform,
+  hasEndedMediaTracks,
+  REAL_DEVICE_TEST_MATRIX,
+} from './lib/safariIosWorkarounds';
+import { computeMaxVideoBitrate, computeNetworkQuality } from '@meetit/media';
 
 describe('Room Code Utilities', () => {
   it('generates a 3-4-3 room code with hyphen separators', () => {
@@ -246,5 +253,112 @@ describe('Meeting Notes & Action Items Hub (Markdown export & task sync)', () =>
     const combined = formatAllNotesAsMarkdown([sampleNote], sampleTasks);
     expect(combined).toContain('# Architecture Sync');
     expect(combined).toContain('## Action Items');
+  });
+});
+
+describe('Phase 3 Resilience & UX: Network Quality, Bandwidth Modes, Safari/iOS & PWA Share Target', () => {
+  it('computes per-tile network quality bars (0-4) from RTT, packet loss, and connection state', () => {
+    expect(
+      computeNetworkQuality({
+        roundTripTimeMs: 35,
+        fractionLost: 0.002,
+        connectionState: 'connected',
+      }),
+    ).toEqual({
+      bars: 4,
+      quality: 'excellent',
+    });
+    expect(
+      computeNetworkQuality({
+        roundTripTimeMs: 140,
+        fractionLost: 0.02,
+        connectionState: 'connected',
+      }),
+    ).toEqual({
+      bars: 3,
+      quality: 'good',
+    });
+    expect(
+      computeNetworkQuality({
+        roundTripTimeMs: 260,
+        fractionLost: 0.05,
+        connectionState: 'connected',
+      }),
+    ).toEqual({
+      bars: 2,
+      quality: 'fair',
+    });
+    expect(
+      computeNetworkQuality({
+        roundTripTimeMs: 480,
+        fractionLost: 0.12,
+        connectionState: 'connected',
+      }),
+    ).toEqual({
+      bars: 1,
+      quality: 'poor',
+    });
+    expect(
+      computeNetworkQuality({
+        roundTripTimeMs: 40,
+        fractionLost: 0,
+        connectionState: 'reconnecting',
+      }),
+    ).toEqual({
+      bars: 1,
+      quality: 'poor',
+    });
+    expect(
+      computeNetworkQuality({
+        roundTripTimeMs: 40,
+        fractionLost: 0,
+        connectionState: 'failed',
+      }),
+    ).toEqual({
+      bars: 0,
+      quality: 'poor',
+    });
+  });
+
+  it('scales max video bitrate for standard, data_saver, and audio_only modes', () => {
+    expect(computeMaxVideoBitrate(2, 'standard')).toBe(1_500_000);
+    expect(computeMaxVideoBitrate(4, 'standard')).toBe(800_000);
+    expect(computeMaxVideoBitrate(2, 'data_saver')).toBe(180_000);
+    expect(computeMaxVideoBitrate(4, 'data_saver')).toBe(180_000);
+    expect(computeMaxVideoBitrate(2, 'audio_only')).toBe(0);
+  });
+
+  it('extracts room codes from PWA Web Share Target query strings', () => {
+    expect(
+      extractSharedRoomCodeFromSearch(
+        '?share-target=1&url=https%3A%2F%2Fmeetit.app%2Fm%2Fkpt-wnrb-hxe',
+      ),
+    ).toBe('kpt-wnrb-hxe');
+    expect(
+      extractSharedRoomCodeFromSearch(
+        '?text=Join+our+call+at+abc-defg-hij+right+now',
+      ),
+    ).toBe('abc-defg-hij');
+    expect(extractSharedRoomCodeFromSearch('?title=Nothing+here')).toBeNull();
+  });
+
+  it('detects Safari and iOS user agents and ended media tracks accurately', () => {
+    const iosSafari = detectBrowserPlatform(
+      'Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Mobile/15E148 Safari/604.1',
+      5,
+    );
+    expect(iosSafari.isIOS).toBe(true);
+    expect(iosSafari.isSafari).toBe(true);
+    expect(iosSafari.isMobileWebKit).toBe(true);
+
+    const desktopChrome = detectBrowserPlatform(
+      'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+      0,
+    );
+    expect(desktopChrome.isIOS).toBe(false);
+    expect(desktopChrome.isSafari).toBe(false);
+
+    expect(hasEndedMediaTracks(null, true)).toBe(false);
+    expect(REAL_DEVICE_TEST_MATRIX.length).toBeGreaterThanOrEqual(5);
   });
 });

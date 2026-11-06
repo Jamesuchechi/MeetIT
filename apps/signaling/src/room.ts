@@ -2,6 +2,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import type { WebSocket } from 'ws';
 import {
   generateRoomCode,
+  type ChatMessagePayload,
   type ErrorCode,
   type PeerInfo,
   type PeerRole,
@@ -119,6 +120,7 @@ export class Room {
   private readonly waitingPeers = new Map<string, WaitingEntry>();
   private readonly blockedUserIds = new Set<string>();
   private readonly blockedFingerprints = new Set<string>();
+  private readonly chatHistory: ChatMessagePayload[] = [];
   private readonly reclaimSlotMs: number;
   private chatSequence = 0;
 
@@ -213,6 +215,17 @@ export class Room {
       seq,
       ts: Date.now(),
     };
+  }
+
+  recordChatMessage(message: ChatMessagePayload): void {
+    this.chatHistory.push(message);
+    if (this.chatHistory.length > 100) {
+      this.chatHistory.shift();
+    }
+  }
+
+  getChatBackfill(afterSeq = 0): ChatMessagePayload[] {
+    return this.chatHistory.filter((m) => (m.seq ?? 0) > afterSeq);
   }
 
   getPeer(peerId: string): Peer | undefined {
