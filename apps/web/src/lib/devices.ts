@@ -248,7 +248,10 @@ export async function acquireUserMedia(options: {
 /**
  * Acquires a screen-sharing MediaStream via `navigator.mediaDevices.getDisplayMedia`.
  */
-export async function acquireDisplayMedia(): Promise<MediaStream | null> {
+export async function acquireDisplayMedia(options?: {
+  withAudio?: boolean;
+  highRes?: boolean;
+}): Promise<MediaStream | null> {
   if (
     typeof navigator === 'undefined' ||
     !navigator.mediaDevices ||
@@ -260,12 +263,25 @@ export async function acquireDisplayMedia(): Promise<MediaStream | null> {
   try {
     return await navigator.mediaDevices.getDisplayMedia({
       video: {
-        frameRate: { ideal: 15, max: 30 },
+        frameRate: { ideal: options?.highRes ? 30 : 15, max: 30 },
+        ...(options?.highRes
+          ? { width: { ideal: 1920 }, height: { ideal: 1080 } }
+          : {}),
       },
-      audio: false,
+      audio: options?.withAudio ?? true,
     });
   } catch {
-    return null;
+    // If audio capture was rejected by user or browser, try fallback without audio
+    try {
+      return await navigator.mediaDevices.getDisplayMedia({
+        video: {
+          frameRate: { ideal: 15, max: 30 },
+        },
+        audio: false,
+      });
+    } catch {
+      return null;
+    }
   }
 }
 

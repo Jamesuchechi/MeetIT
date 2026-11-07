@@ -32,6 +32,10 @@ export interface ConnectOptions {
   iceServers: RTCIceServer[];
   signaling?: SignalingChannel;
   peerIds?: string[];
+  livekit?: {
+    url: string;
+    token: string;
+  };
 }
 
 export interface RemoteTrackEvent {
@@ -52,6 +56,7 @@ export interface TransportEvents {
   trackSubscribed: RemoteTrackEvent;
   trackUnsubscribed: { peerId: string; source: TrackSource };
   connectionStateChanged: { peerId: string; state: ConnectionState };
+  activeSpeakersChanged: { speakerIds: string[] };
   error: Error;
 }
 
@@ -61,7 +66,12 @@ export interface MediaTransport {
   publish(
     track: MediaStreamTrack,
     source: TrackSource,
-    options?: { peerId?: string; stream?: MediaStream },
+    options?: {
+      peerId?: string;
+      stream?: MediaStream;
+      screenAudio?: boolean;
+      highRes?: boolean;
+    },
   ): Promise<void>;
   unpublish(source: TrackSource): Promise<void>;
   replaceTrack(source: TrackSource, track: MediaStreamTrack): Promise<void>;
@@ -69,6 +79,16 @@ export interface MediaTransport {
   getPeerStats?(): Promise<Record<string, PeerNetworkStats>>;
   setBandwidthMode?(mode: BandwidthMode): Promise<void>;
   getBandwidthMode?(): BandwidthMode;
+  setTrackVisibility?(
+    peerId: string,
+    source: TrackSource,
+    visible: boolean,
+  ): Promise<void>;
+  setTrackResolutionTier?(
+    peerId: string,
+    source: TrackSource,
+    tier: 'low' | 'medium' | 'high',
+  ): Promise<void>;
   on<E extends keyof TransportEvents>(
     event: E,
     callback: (payload: TransportEvents[E]) => void,
@@ -1087,3 +1107,5 @@ export class FakeTransport implements MediaTransport {
     }
   }
 }
+
+export { LiveKitTransport, type LiveKitTransportOptions } from './livekit.js';

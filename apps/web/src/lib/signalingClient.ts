@@ -243,6 +243,7 @@ export class SignalingClient implements SignalingChannel {
     'reaction.received': new Set(),
     'room.updated': new Set(),
     'host.command': new Set(),
+    'transport.promoted': new Set(),
     error: new Set(),
     pong: new Set(),
   };

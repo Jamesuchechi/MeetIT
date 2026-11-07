@@ -113,7 +113,8 @@ export class Room {
   locked = false;
   hostId: string | null = null;
   permissions: RoomPermissions;
-  readonly maxParticipants: number;
+  transport: 'mesh' | 'sfu';
+  maxParticipants: number;
   readonly createdAt: number = Date.now();
 
   private readonly peers = new Map<string, Peer>();
@@ -133,6 +134,7 @@ export class Room {
       passcode?: string;
       waitingRoom?: boolean;
       permissions?: Partial<RoomPermissions>;
+      transport?: 'mesh' | 'sfu';
       maxParticipants?: number;
       reclaimSlotMs?: number;
     } = {},
@@ -157,8 +159,21 @@ export class Room {
         : {}),
       ...(options.permissions ?? {}),
     };
-    this.maxParticipants = options.maxParticipants ?? 4;
+    this.transport =
+      options.transport ??
+      (options.maxParticipants && options.maxParticipants > 4 ? 'sfu' : 'mesh');
+    this.maxParticipants =
+      options.maxParticipants ?? (this.transport === 'sfu' ? 100 : 4);
     this.reclaimSlotMs = options.reclaimSlotMs ?? 30_000;
+  }
+
+  promoteToSfu(): boolean {
+    if (this.transport === 'sfu') return false;
+    this.transport = 'sfu';
+    if (this.maxParticipants < 100) {
+      this.maxParticipants = 100;
+    }
+    return true;
   }
 
   get hasPasscode(): boolean {
@@ -797,6 +812,7 @@ export class RoomManager {
       passcode?: string;
       waitingRoom?: boolean;
       permissions?: Partial<RoomPermissions>;
+      transport?: 'mesh' | 'sfu';
       maxParticipants?: number;
       randomFn?: () => number;
     } = {},
@@ -852,6 +868,9 @@ export class RoomManager {
         : {}),
       ...(options.permissions !== undefined
         ? { permissions: options.permissions }
+        : {}),
+      ...(options.transport !== undefined
+        ? { transport: options.transport }
         : {}),
       ...(options.maxParticipants !== undefined
         ? { maxParticipants: options.maxParticipants }

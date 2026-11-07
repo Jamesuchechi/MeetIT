@@ -257,12 +257,19 @@ export const clientMessageSchema = z.discriminatedUnion('type', [
   }),
 ]);
 
+export const livekitConfigSchema = z.object({
+  url: z.string().min(1),
+  token: z.string().min(1),
+});
+export type LivekitConfig = z.infer<typeof livekitConfigSchema>;
+
 export const serverJoinedPayloadSchema = z.object({
   selfId: z.string().uuid(),
   role: peerRoleSchema,
   peers: z.array(peerInfoSchema),
   iceServers: z.array(iceServerSchema),
   transport: z.enum(['mesh', 'sfu']),
+  livekit: livekitConfigSchema.optional(),
   roomState: z.object({
     locked: z.boolean(),
     hostId: z.string().uuid().nullable(),
@@ -336,6 +343,10 @@ export interface SignalingEvents {
     locked: boolean;
     hostId: string | null;
     permissions?: RoomPermissions;
+  };
+  'transport.promoted': {
+    transport: 'sfu';
+    livekit: LivekitConfig;
   };
   'host.command': HostCommandEvent;
   error: { code: ErrorCode; message: string };

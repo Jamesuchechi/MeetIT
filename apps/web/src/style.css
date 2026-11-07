@@ -3747,7 +3747,8 @@ aside.context-bar {
   grid-template-rows: 1fr 1fr;
 }
 
-.call-stage.mode-spotlight {
+.call-stage.mode-spotlight,
+.call-stage.mode-speaker {
   display: flex;
   flex-wrap: wrap;
   gap: 14px;
@@ -3755,14 +3756,80 @@ aside.context-bar {
 }
 
 .call-stage.mode-spotlight .pinned-tile,
-.call-stage.mode-spotlight .screen-share-tile {
+.call-stage.mode-spotlight .screen-share-tile,
+.call-stage.mode-speaker .pinned-tile,
+.call-stage.mode-speaker .screen-share-tile {
   flex: 1 1 68%;
   min-height: 300px;
 }
 
-.call-stage.mode-spotlight .call-tile:not(.pinned-tile):not(.screen-share-tile) {
+.call-stage.mode-spotlight .call-tile:not(.pinned-tile):not(.screen-share-tile),
+.call-stage.mode-speaker .call-tile:not(.pinned-tile):not(.screen-share-tile) {
   flex: 1 1 26%;
   min-height: 160px;
+}
+
+.call-stage.mode-gallery {
+  display: grid;
+  grid-auto-rows: minmax(0, 1fr);
+  gap: 14px;
+  align-items: stretch;
+}
+
+/* Gallery pagination overlay */
+.gallery-pagination-bar {
+  position: absolute;
+  bottom: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 14px;
+  background: rgba(15, 23, 42, 0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 9999px;
+  z-index: 25;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  pointer-events: auto;
+}
+
+.btn-gallery-page {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 500;
+  padding: 4px 12px;
+  border-radius: 9999px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-gallery-page:hover:not(:disabled) {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.btn-gallery-page:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.gallery-page-indicator {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.85);
+  white-space: nowrap;
+  font-weight: 500;
+}
+
+.call-topbar-icon-btn.active-toggle-btn {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
 }
 
 .screen-video {

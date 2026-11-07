@@ -166,17 +166,17 @@ Every phase has an **exit criteria** block. Do not start the next phase until ex
 
 ## Phase 4 - SFU migration (v1.0 beta, weeks 8 to 11)
 
-- [ ] [R] Spike: LiveKit Cloud vs self-hosted; cost model at 1k, 10k, 100k participant-minutes/day
-- [ ] [P0] ADR-0003 decision recorded
-- [ ] [P0] `LiveKitTransport` implementing `MediaTransport`, mapped events
-- [ ] [P0] Signaling issues LiveKit access tokens per join, role-scoped grants
-- [ ] [P0] Room-level `transport` field: `mesh` for 2 to 4, `sfu` above; configurable override
-- [ ] [P0] Simulcast publish (3 layers), adaptive stream + dynacast
-- [ ] [P0] Subscription quality by tile size and visibility
-- [ ] [P0] Server-side active speaker events
-- [ ] [P1] Seamless mesh to SFU promotion mid-call (research complexity first)
-- [ ] [P1] Grid virtualization, gallery pagination, speaker view
-- [ ] [P1] Screen share with audio, high-res mode for slides and code
+- [x] [R] Spike: LiveKit Cloud vs self-hosted; cost model at 1k, 10k, 100k participant-minutes/day
+- [x] [P0] ADR-0003 decision recorded
+- [x] [P0] `LiveKitTransport` implementing `MediaTransport`, mapped events
+- [x] [P0] Signaling issues LiveKit access tokens per join, role-scoped grants
+- [x] [P0] Room-level `transport` field: `mesh` for 2 to 4, `sfu` above; configurable override
+- [x] [P0] Simulcast publish (3 layers), adaptive stream + dynacast
+- [x] [P0] Subscription quality by tile size and visibility
+- [x] [P0] Server-side active speaker events
+- [x] [P1] Seamless mesh to SFU promotion mid-call (research complexity first)
+- [x] [P1] Grid virtualization, gallery pagination, speaker view
+- [x] [P1] Screen share with audio, high-res mode for slides and code
 - [ ] [P1] Region selection and latency-based routing
 - [ ] [P1] Load test: 100 participants (30 publishers) per room with LiveKit loadtester
 - [ ] [P2] Self-host LiveKit on dedicated nodes, Terraform module

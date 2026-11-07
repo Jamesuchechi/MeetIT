@@ -18,7 +18,8 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@meetit/protocol": "workspace:*"
+    "@meetit/protocol": "workspace:*",
+    "livekit-client": "^2.23.0"
   },
   "devDependencies": {
     "vitest": "^3.2.4"

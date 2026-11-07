@@ -832,4 +832,63 @@ describe('Signaling server integration tests', () => {
     bobReconnectWs.close();
     aliceWs.close();
   });
+
+  it('supports room transport configuration and issues LiveKit SFU access tokens on join', async () => {
+    instance = buildSignalingApp({
+      logger: false,
+      livekitUrl: 'wss://meetit-test.livekit.cloud',
+      livekitApiKey: 'devkey',
+      livekitApiSecret: 'secret_longer_than_32_characters_123456789',
+    });
+    const address = await instance.app.listen({ port: 0, host: '127.0.0.1' });
+    const wsUrl = address.replace('http', 'ws');
+
+    const createRes = await fetch(`${address}/rooms`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        title: 'All Hands Webinar',
+        transport: 'sfu',
+        maxParticipants: 100,
+      }),
+    });
+    expect(createRes.status).toBe(201);
+    const room = (await createRes.json()) as {
+      code: string;
+      transport: string;
+      maxParticipants: number;
+    };
+    expect(room.transport).toBe('sfu');
+    expect(room.maxParticipants).toBe(100);
+
+    const ws = new WebSocket(wsUrl);
+    const joinedP = waitForMessage(ws, (m) => m.type === 'joined');
+
+    await new Promise<void>((resolve) => ws.once('open', resolve));
+
+    ws.send(
+      JSON.stringify({
+        v: 1,
+        type: 'join',
+        payload: {
+          roomCode: room.code,
+          displayName: 'Presenter Alice',
+          token: 'jwt-user-alice',
+        },
+      }),
+    );
+
+    const joinedMsg = await joinedP;
+    const payload = joinedMsg.payload as {
+      transport: string;
+      livekit?: { url: string; token: string };
+    };
+    expect(payload.transport).toBe('sfu');
+    expect(payload.livekit).toBeDefined();
+    expect(payload.livekit?.url).toBe('wss://meetit-test.livekit.cloud');
+    expect(typeof payload.livekit?.token).toBe('string');
+    expect(payload.livekit!.token.length).toBeGreaterThan(20);
+
+    ws.close();
+  });
 });

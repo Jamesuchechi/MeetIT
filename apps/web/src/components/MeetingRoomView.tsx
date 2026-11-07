@@ -7,6 +7,8 @@ import React, {
 } from 'react';
 import {
   MeshTransport,
+  LiveKitTransport,
+  type MediaTransport,
   type BandwidthMode,
   type ConnectionState,
   type NetworkQualityBars,
@@ -738,6 +740,9 @@ export function MeetingRoomView({
     useState<PreCallDiagnosticsReport | null>(null);
   const [isRunningDiagnostics, setIsRunningDiagnostics] = useState(false);
   const [safariAudioBlocked, setSafariAudioBlocked] = useState(false);
+  const [isSpeakerView, setIsSpeakerView] = useState(false);
+  const [galleryPage, setGalleryPage] = useState(1);
+  const [roomTransport, setRoomTransport] = useState<'mesh' | 'sfu'>('mesh');
   const platformProfile = useMemo(() => detectBrowserPlatform(), []);
 
   const lobbyVideoRef = useRef<HTMLVideoElement>(null);
@@ -745,7 +750,7 @@ export function MeetingRoomView({
   const localStreamRef = useRef<MediaStream | null>(null);
   const localScreenStreamRef = useRef<MediaStream | null>(null);
   const signalingRef = useRef<SignalingClient | null>(null);
-  const transportRef = useRef<MeshTransport | null>(null);
+  const transportRef = useRef<MediaTransport | null>(null);
   const hasConnectedTransportRef = useRef(false);
   const showChatPanelRef = useRef(false);
   const soundsEnabledRef = useRef(soundsEnabled);
@@ -903,9 +908,11 @@ export function MeetingRoomView({
       const transport = transportRef.current;
       if (!transport || cancelled) return;
       try {
-        const stats = await transport.getPeerStats();
-        if (!cancelled) {
-          setPeerStatsMap(stats);
+        if (typeof transport.getPeerStats === 'function') {
+          const stats = await transport.getPeerStats();
+          if (!cancelled) {
+            setPeerStatsMap(stats);
+          }
         }
       } catch {
         // ignore transient stats error
@@ -1103,8 +1110,12 @@ export function MeetingRoomView({
       return;
     }
 
-    const displayStream = await acquireDisplayMedia();
+    const displayStream = await acquireDisplayMedia({
+      withAudio: true,
+      highRes: true,
+    });
     const screenTrack = displayStream?.getVideoTracks()[0];
+    const screenAudioTrack = displayStream?.getAudioTracks()[0];
     if (!displayStream || !screenTrack) {
       return;
     }
@@ -1123,7 +1134,13 @@ export function MeetingRoomView({
       try {
         await transportRef.current.publish(screenTrack, 'screen', {
           stream: displayStream,
+          highRes: true,
         });
+        if (screenAudioTrack) {
+          await transportRef.current.publish(screenAudioTrack, 'screen_audio', {
+            stream: displayStream,
+          });
+        }
       } catch {
         // ignore
       }
@@ -1182,7 +1199,10 @@ export function MeetingRoomView({
         // ignore
       }
 
-      if (transportRef.current) {
+      if (
+        transportRef.current &&
+        typeof transportRef.current.setBandwidthMode === 'function'
+      ) {
         await transportRef.current.setBandwidthMode(nextMode);
       }
 
@@ -1486,14 +1506,52 @@ export function MeetingRoomView({
       },
     });
 
-    const transport = new MeshTransport();
+    const wireTransport = (tr: MediaTransport) => {
+      tr.on('activeSpeakersChanged', ({ speakerIds }) => {
+        if (speakerIds.length > 0 && speakerIds[0]) {
+          setActiveSpeakerId(speakerIds[0]);
+        }
+      });
 
-    transport.on('trackSubscribed', ({ peerId, source, track, stream }) => {
-      setRemotePeers((prev) => {
-        const existing = prev[peerId];
-        if (source === 'screen') {
-          const screenStream = stream ?? new MediaStream([track]);
-          setPinnedTargetId(`screen:${peerId}`);
+      tr.on('trackSubscribed', ({ peerId, source, track, stream }) => {
+        setRemotePeers((prev) => {
+          const existing = prev[peerId];
+          if (source === 'screen') {
+            const screenStream = stream ?? new MediaStream([track]);
+            setPinnedTargetId(`screen:${peerId}`);
+            if (!existing) {
+              return {
+                ...prev,
+                [peerId]: {
+                  id: peerId,
+                  displayName: 'Guest',
+                  role: 'guest',
+                  state: {
+                    audio: true,
+                    video: true,
+                    screen: true,
+                    handRaised: false,
+                  },
+                  stream: null,
+                  screenStream,
+                  connectionStatus: 'connected',
+                },
+              };
+            }
+            return {
+              ...prev,
+              [peerId]: {
+                ...existing,
+                screenStream,
+              },
+            };
+          }
+
+          const nextStream =
+            stream ?? existing?.stream ?? new MediaStream([track]);
+          if (existing?.stream && !stream) {
+            existing.stream.addTrack(track);
+          }
           if (!existing) {
             return {
               ...prev,
@@ -1504,11 +1562,11 @@ export function MeetingRoomView({
                 state: {
                   audio: true,
                   video: true,
-                  screen: true,
+                  screen: false,
                   handRaised: false,
                 },
-                stream: null,
-                screenStream,
+                stream: nextStream,
+                screenStream: null,
                 connectionStatus: 'connected',
               },
             };
@@ -1517,47 +1575,32 @@ export function MeetingRoomView({
             ...prev,
             [peerId]: {
               ...existing,
-              screenStream,
-            },
-          };
-        }
-
-        const nextStream =
-          stream ?? existing?.stream ?? new MediaStream([track]);
-        if (existing?.stream && !stream) {
-          existing.stream.addTrack(track);
-        }
-        if (!existing) {
-          return {
-            ...prev,
-            [peerId]: {
-              id: peerId,
-              displayName: 'Guest',
-              role: 'guest',
-              state: {
-                audio: true,
-                video: true,
-                screen: false,
-                handRaised: false,
-              },
               stream: nextStream,
-              screenStream: null,
-              connectionStatus: 'connected',
             },
           };
-        }
-        return {
-          ...prev,
-          [peerId]: {
-            ...existing,
-            stream: nextStream,
-          },
-        };
+        });
       });
-    });
 
-    transport.on('trackUnsubscribed', ({ peerId, source }) => {
-      if (source === 'screen') {
+      tr.on('trackUnsubscribed', ({ peerId, source }) => {
+        if (source === 'screen') {
+          setRemotePeers((prev) => {
+            const existing = prev[peerId];
+            if (!existing) return prev;
+            return {
+              ...prev,
+              [peerId]: {
+                ...existing,
+                screenStream: null,
+              },
+            };
+          });
+          setPinnedTargetId((curr) =>
+            curr === `screen:${peerId}` ? null : curr,
+          );
+        }
+      });
+
+      tr.on('connectionStateChanged', ({ peerId, state: status }) => {
         setRemotePeers((prev) => {
           const existing = prev[peerId];
           if (!existing) return prev;
@@ -1565,52 +1608,38 @@ export function MeetingRoomView({
             ...prev,
             [peerId]: {
               ...existing,
-              screenStream: null,
+              connectionStatus: status,
             },
           };
         });
-        setPinnedTargetId((curr) =>
-          curr === `screen:${peerId}` ? null : curr,
-        );
-      }
-    });
 
-    transport.on('connectionStateChanged', ({ peerId, state: status }) => {
-      setRemotePeers((prev) => {
-        const existing = prev[peerId];
-        if (!existing) return prev;
-        return {
-          ...prev,
-          [peerId]: {
-            ...existing,
-            connectionStatus: status,
-          },
-        };
+        if (status === 'reconnecting') {
+          setConnectionBanner({
+            tone: 'warn',
+            text: 'Network hiccup detected — holding audio and reconnecting…',
+          });
+          onToast('Reconnecting media stream…');
+        } else if (status === 'connected') {
+          setConnectionBanner((curr) => {
+            if (curr && curr.tone !== 'ok') {
+              onToast('Call connection restored.');
+              window.setTimeout(() => setConnectionBanner(null), 2800);
+              return { tone: 'ok', text: 'Call connection restored.' };
+            }
+            return null;
+          });
+        } else if (status === 'failed') {
+          setConnectionBanner({
+            tone: 'danger',
+            text: 'Connection degraded — renegotiating route…',
+          });
+          onToast('Connection failed — attempting recovery.');
+        }
       });
+    };
 
-      if (status === 'reconnecting') {
-        setConnectionBanner({
-          tone: 'warn',
-          text: 'Network hiccup detected — holding audio and reconnecting…',
-        });
-        onToast('Reconnecting media stream…');
-      } else if (status === 'connected') {
-        setConnectionBanner((curr) => {
-          if (curr && curr.tone !== 'ok') {
-            onToast('Call connection restored.');
-            window.setTimeout(() => setConnectionBanner(null), 2800);
-            return { tone: 'ok', text: 'Call connection restored.' };
-          }
-          return null;
-        });
-      } else if (status === 'failed') {
-        setConnectionBanner({
-          tone: 'danger',
-          text: 'Connection degraded — renegotiating route…',
-        });
-        onToast('Connection failed — attempting recovery.');
-      }
-    });
+    let transport: MediaTransport = new MeshTransport();
+    wireTransport(transport);
 
     signaling.on('waiting.room', (payload) => {
       if (payload.title) {
@@ -1681,17 +1710,28 @@ export function MeetingRoomView({
 
       recordCallJoinSuccess(roomCode);
 
+      const isSfu = payload.transport === 'sfu' && Boolean(payload.livekit);
+      setRoomTransport(payload.transport);
+
       void (async () => {
         if (!hasConnectedTransportRef.current) {
           hasConnectedTransportRef.current = true;
+          if (isSfu && payload.livekit) {
+            void transport.disconnect();
+            transport = new LiveKitTransport();
+            wireTransport(transport);
+            transportRef.current = transport;
+          }
+
           await transport.connect({
             roomId: roomCode,
             selfId: payload.selfId,
             iceServers: payload.iceServers as RTCIceServer[],
             signaling,
             peerIds: payload.peers.map((p) => p.id),
+            ...(payload.livekit ? { livekit: payload.livekit } : {}),
           });
-          await transport.setBandwidthMode(bandwidthMode);
+          await transport.setBandwidthMode?.(bandwidthMode);
 
           const currentStream = localStreamRef.current;
           if (currentStream) {
@@ -1709,7 +1749,44 @@ export function MeetingRoomView({
             }
           }
         } else {
-          await transport.setBandwidthMode(bandwidthMode);
+          await transport.setBandwidthMode?.(bandwidthMode);
+        }
+      })();
+    });
+
+    signaling.on('transport.promoted', ({ livekit }) => {
+      onToast('Meeting promoted to LiveKit SFU mode.');
+      setRoomTransport('sfu');
+      void (async () => {
+        if (transportRef.current) {
+          await transportRef.current.disconnect();
+        }
+        transport = new LiveKitTransport();
+        wireTransport(transport);
+        transportRef.current = transport;
+
+        await transport.connect({
+          roomId: roomCode,
+          selfId: signaling.getSelfId() ?? 'self',
+          iceServers: [],
+          livekit,
+        });
+        await transport.setBandwidthMode?.(bandwidthMode);
+
+        const currentStream = localStreamRef.current;
+        if (currentStream) {
+          const audioTrack = currentStream.getAudioTracks()[0];
+          if (audioTrack) {
+            await transport.publish(audioTrack, 'microphone', {
+              stream: currentStream,
+            });
+          }
+          const videoTrack = currentStream.getVideoTracks()[0];
+          if (videoTrack) {
+            await transport.publish(videoTrack, 'camera', {
+              stream: currentStream,
+            });
+          }
         }
       })();
     });
@@ -2032,13 +2109,21 @@ export function MeetingRoomView({
   }, [screenSharing, localScreenStream, remoteList, displayName]);
 
   const effectiveSpotlightId =
-    pinnedTargetId ?? (activeScreenTile ? activeScreenTile.id : null);
+    pinnedTargetId ??
+    (activeScreenTile
+      ? activeScreenTile.id
+      : isSpeakerView
+        ? (activeSpeakerId ?? remoteList[0]?.id ?? 'local')
+        : null);
 
   const layout = useMemo(
     () =>
       computeLayout(totalParticipantCount, {
         hasSpotlight: Boolean(effectiveSpotlightId),
         isPortrait,
+        isSpeakerView,
+        isSfu: roomTransport === 'sfu',
+        page: galleryPage,
         ...(manualPipPreference !== null
           ? { preferPip: manualPipPreference }
           : {}),
@@ -2047,9 +2132,39 @@ export function MeetingRoomView({
       totalParticipantCount,
       effectiveSpotlightId,
       isPortrait,
+      isSpeakerView,
+      roomTransport,
+      galleryPage,
       manualPipPreference,
     ],
   );
+
+  const visibleRemoteList = useMemo(() => {
+    if (layout.mode === 'gallery') {
+      const startIndex = (layout.page - 1) * layout.pageSize;
+      return remoteList.slice(startIndex, startIndex + layout.pageSize);
+    }
+    return remoteList;
+  }, [remoteList, layout.mode, layout.page, layout.pageSize]);
+
+  useEffect(() => {
+    const transport = transportRef.current;
+    if (!transport || typeof transport.setTrackVisibility !== 'function')
+      return;
+
+    const visibleIds = new Set(visibleRemoteList.map((p) => p.id));
+    for (const peer of remoteList) {
+      const isVisible = visibleIds.has(peer.id);
+      void transport.setTrackVisibility(peer.id, 'camera', isVisible);
+      if (isVisible && typeof transport.setTrackResolutionTier === 'function') {
+        const tier =
+          layout.mode === 'spotlight' || layout.mode === 'speaker'
+            ? 'high'
+            : 'medium';
+        void transport.setTrackResolutionTier(peer.id, 'camera', tier);
+      }
+    }
+  }, [visibleRemoteList, remoteList, layout.mode]);
 
   const isPipActive = Boolean(layout.isPip && remoteList.length === 1);
   const isLocalFloating = isPipActive && !isPiPSwapped;
@@ -2748,7 +2863,7 @@ export function MeetingRoomView({
           <BackendStatusIndicator compact />
           <div
             className="call-participants-chip"
-            title={`${totalParticipantCount} of ${MESH_MAX_PARTICIPANTS} participants in call`}
+            title={`${totalParticipantCount} of ${layout.maxParticipants} participants in call`}
           >
             <Avatar
               name={displayName || user?.displayName || 'You'}
@@ -2757,6 +2872,26 @@ export function MeetingRoomView({
             />
             <span>{totalParticipantCount}</span>
           </div>
+
+          {totalParticipantCount > 2 && (
+            <button
+              type="button"
+              className={`call-topbar-icon-btn ${isSpeakerView ? 'active-toggle-btn' : ''}`}
+              onClick={() => setIsSpeakerView((prev) => !prev)}
+              aria-label={
+                isSpeakerView
+                  ? 'Switch to Grid Gallery view'
+                  : 'Switch to Speaker view'
+              }
+              title={
+                isSpeakerView
+                  ? 'Switch to Grid Gallery view'
+                  : 'Switch to Speaker view'
+              }
+            >
+              {isSpeakerView ? <PanelRightIcon /> : <VidIcon />}
+            </button>
+          )}
 
           {totalParticipantCount === 2 && !effectiveSpotlightId && (
             <button
@@ -2814,7 +2949,9 @@ export function MeetingRoomView({
           className={`call-stage mode-${layout.mode}`}
           style={{
             gridTemplateColumns:
-              layout.mode === 'spotlight' || layout.mode === 'pip'
+              layout.mode === 'spotlight' ||
+              layout.mode === 'speaker' ||
+              layout.mode === 'pip'
                 ? undefined
                 : `repeat(${layout.columns}, minmax(0, 1fr))`,
           }}
@@ -3003,7 +3140,7 @@ export function MeetingRoomView({
           )}
 
           {/* Remote Participant Tiles */}
-          {remoteList.map((peer) => {
+          {visibleRemoteList.map((peer) => {
             const isFloating = Boolean(isPipActive && isRemoteFloating);
             return (
               <RemoteVideoTile
@@ -3174,6 +3311,40 @@ export function MeetingRoomView({
               </div>
             </div>
           </div>
+
+          {/* Gallery pagination bar */}
+          {layout.totalPages > 1 && (
+            <div
+              className="gallery-pagination-bar"
+              role="navigation"
+              aria-label="Gallery pagination"
+            >
+              <button
+                type="button"
+                className="btn-gallery-page"
+                disabled={layout.page <= 1}
+                onClick={() => setGalleryPage((p) => Math.max(1, p - 1))}
+                aria-label="Previous page"
+              >
+                ‹ Prev
+              </button>
+              <span className="gallery-page-indicator">
+                Page {layout.page} of {layout.totalPages} (
+                {totalParticipantCount} in call)
+              </span>
+              <button
+                type="button"
+                className="btn-gallery-page"
+                disabled={layout.page >= layout.totalPages}
+                onClick={() =>
+                  setGalleryPage((p) => Math.min(layout.totalPages, p + 1))
+                }
+                aria-label="Next page"
+              >
+                Next ›
+              </button>
+            </div>
+          )}
         </main>
 
         {/* People & Host Controls Side Panel */}

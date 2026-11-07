@@ -19,6 +19,7 @@ import { buildIceServers, type IceServerEnvConfig } from './turn.js';
 import { issueGuestToken, verifyJoinToken } from './auth.js';
 import { SignalingPersistence } from './persistence.js';
 import { RedisAdapter } from './redis.js';
+import { issueLiveKitToken, isLiveKitConfigured } from './livekit.js';
 
 export interface SignalingAppOptions {
   logger?: boolean;
@@ -32,6 +33,9 @@ export interface SignalingAppOptions {
   iceConfig?: IceServerEnvConfig;
   autoCreateRoomOnJoin?: boolean;
   redisUrl?: string;
+  livekitUrl?: string;
+  livekitApiKey?: string;
+  livekitApiSecret?: string;
 }
 
 export interface SignalingMetrics {
@@ -246,6 +250,7 @@ export function buildSignalingApp(
       passcode?: string;
       waitingRoom?: boolean;
       permissions?: Partial<RoomPermissions>;
+      transport?: 'mesh' | 'sfu';
       maxParticipants?: number;
       kind?: 'instant' | 'scheduled' | 'personal';
       ownerId?: string;
@@ -267,6 +272,7 @@ export function buildSignalingApp(
         ? { waitingRoom: body.waitingRoom }
         : {}),
       ...(body.permissions ? { permissions: body.permissions } : {}),
+      ...(body.transport ? { transport: body.transport } : {}),
       ...(typeof body.maxParticipants === 'number'
         ? { maxParticipants: body.maxParticipants }
         : {}),
@@ -290,6 +296,7 @@ export function buildSignalingApp(
       hasPasscode: room.hasPasscode,
       waitingRoom: room.permissions.waitingRoom,
       permissions: room.permissions,
+      transport: room.transport,
       locked: room.locked,
       full: room.isFull,
       participantCount: room.participantCount,
@@ -314,6 +321,7 @@ export function buildSignalingApp(
           code: normalized,
           hasPasscode: false,
           waitingRoom: false,
+          transport: 'mesh',
           locked: false,
           full: false,
           participantCount: 0,
@@ -328,6 +336,7 @@ export function buildSignalingApp(
         hasPasscode: room.hasPasscode,
         waitingRoom: room.permissions.waitingRoom,
         permissions: room.permissions,
+        transport: room.transport,
         locked: room.locked,
         full: room.isFull,
         participantCount: room.participantCount,
@@ -389,14 +398,31 @@ export function buildSignalingApp(
 
   const socketContexts = new Map<WebSocket, SocketContext>();
 
-  const sendJoinedPayloadToPeer = (
+  const sendJoinedPayloadToPeer = async (
     room: Room,
     peer: Peer,
     requestMsgId?: string,
     lastChatSeq?: number,
-  ): void => {
+  ): Promise<void> => {
     const iceServers = buildIceServers(peer.id, iceConfig);
     const chatBackfill = room.getChatBackfill(lastChatSeq ?? 0);
+    let livekitConfig: { url: string; token: string } | undefined = undefined;
+
+    if (room.transport === 'sfu' || isLiveKitConfigured(options)) {
+      const lk = await issueLiveKitToken({
+        livekitUrl: options.livekitUrl,
+        apiKey: options.livekitApiKey,
+        apiSecret: options.livekitApiSecret,
+        roomCode: room.code,
+        identity: peer.id,
+        displayName: peer.displayName,
+        role: peer.role,
+      });
+      if (lk) {
+        livekitConfig = lk;
+      }
+    }
+
     peer.send({
       v: 1,
       ...(requestMsgId ? { id: requestMsgId } : {}),
@@ -407,7 +433,8 @@ export function buildSignalingApp(
         role: peer.role,
         peers: room.listOtherPeerInfos(peer.id),
         iceServers,
-        transport: 'mesh',
+        transport: room.transport,
+        ...(livekitConfig ? { livekit: livekitConfig } : {}),
         roomState: {
           locked: room.locked,
           hostId: room.hostId,
@@ -444,7 +471,7 @@ export function buildSignalingApp(
       role: admittedPeer.role,
       currentParticipantCount: room.participantCount,
     });
-    sendJoinedPayloadToPeer(room, admittedPeer);
+    void sendJoinedPayloadToPeer(room, admittedPeer);
   };
 
   wss.on('connection', (ws: WebSocket) => {
@@ -655,7 +682,7 @@ export function buildSignalingApp(
           'peer joined room',
         );
 
-        sendJoinedPayloadToPeer(room, joinRes.peer, msg.id, lastChatSeq);
+        void sendJoinedPayloadToPeer(room, joinRes.peer, msg.id, lastChatSeq);
         return;
       }
 
