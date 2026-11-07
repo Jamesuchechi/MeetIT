@@ -3,6 +3,7 @@ import {
   getEgressStorageConfig,
   buildEncodedFileOutput,
   startRoomCompositeRecording,
+  startParticipantIsoRecording,
   stopRoomCompositeRecording,
   handleLiveKitWebhook,
 } from './egress.js';
@@ -135,6 +136,51 @@ describe('LiveKit Egress recording and storage suite', () => {
       egressId: res!.egressId,
     });
     expect(stopped).toBe(true);
+  });
+
+  it('starts participant ISO recording with mock client', async () => {
+    const mockStartParticipant = vi.fn().mockResolvedValue({
+      egressId: 'EG_iso_participant_999',
+      roomName: 'test-iso-room',
+    } as unknown as EgressInfo);
+
+    const mockClient = {
+      startParticipantEgress: mockStartParticipant,
+    } as unknown as EgressClient;
+
+    const res = await startParticipantIsoRecording({
+      roomCode: 'test-iso-room',
+      identity: 'user-editor-1',
+      livekitUrl: 'https://test.livekit.cloud',
+      apiKey: 'test-key',
+      apiSecret: 'test-secret',
+      client: mockClient,
+      storage: {
+        type: 's3',
+        bucket: 'test-recordings-bucket',
+      },
+    });
+
+    expect(res).not.toBeNull();
+    expect(res?.egressId).toBe('EG_iso_participant_999');
+    expect(res?.filepath).toContain('test-iso-room/iso/user-editor-1');
+    expect(mockStartParticipant).toHaveBeenCalledWith(
+      'test-iso-room',
+      'user-editor-1',
+      expect.anything(),
+      expect.objectContaining({ screenShare: false }),
+    );
+  });
+
+  it('starts participant ISO recording in simulation fallback when unconfigured', async () => {
+    const res = await startParticipantIsoRecording({
+      roomCode: 'sim-iso-room',
+      identity: 'user-camera-2',
+    });
+
+    expect(res).not.toBeNull();
+    expect(res?.egressId).toMatch(/^eg_iso_sim_/);
+    expect(res?.filepath).toContain('sim-iso-room/iso/user-camera-2');
   });
 
   it('handles webhook authorization gracefully', async () => {

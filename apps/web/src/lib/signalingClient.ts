@@ -776,12 +776,20 @@ export class SignalingClient implements SignalingChannel {
   startRecording(options?: {
     layout?: 'grid' | 'speaker';
     audioOnly?: boolean;
+    isoTracks?: boolean;
+    retentionDays?: number;
   }): void {
     this.sendHostAction({
       action: 'start_recording',
       ...(options?.layout ? { layout: options.layout } : {}),
       ...(options?.audioOnly !== undefined
         ? { audioOnly: options.audioOnly }
+        : {}),
+      ...(options?.isoTracks !== undefined
+        ? { isoTracks: options.isoTracks }
+        : {}),
+      ...(options?.retentionDays !== undefined
+        ? { retentionDays: options.retentionDays }
         : {}),
     });
   }

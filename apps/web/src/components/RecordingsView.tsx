@@ -5,6 +5,7 @@ import {
   formatFileSize,
   formatRecordingDuration,
   formatRecordingDate,
+  formatExpiryCountdown,
   type RecordingItem,
   type RecordingStatus,
   type RecordingLayout,
@@ -225,6 +226,14 @@ export function RecordingsView({
                   <span className="rec-badge layout-badge">
                     {rec.layout === 'speaker' ? 'Speaker' : 'Grid'}
                   </span>
+                  {rec.isoTracks ? (
+                    <span
+                      className="rec-badge iso-badge"
+                      title="Per-participant ISO stems recorded"
+                    >
+                      ISO Stems
+                    </span>
+                  ) : null}
                 </div>
               </div>
 
@@ -264,6 +273,20 @@ export function RecordingsView({
                   <div className="meta-date">
                     {formatRecordingDate(rec.startedAt)}
                   </div>
+                  {rec.expiresAt ? (
+                    <div
+                      className="meta-expiry"
+                      title={
+                        rec.retentionDays
+                          ? `Retention: ${rec.retentionDays} days`
+                          : 'Retention policy active'
+                      }
+                    >
+                      <span className="expiry-tag">
+                        ⏳ {formatExpiryCountdown(rec.expiresAt)}
+                      </span>
+                    </div>
+                  ) : null}
                 </div>
 
                 {/* Card Actions */}

@@ -30,6 +30,11 @@ import {
   handleLiveKitWebhook,
   type EgressStorageConfig,
 } from './egress.js';
+import {
+  calculateExpiryTimestamp,
+  pruneExpiredRecordings,
+  type RecordingMetadata,
+} from './retention.js';
 import type { EgressClient } from 'livekit-server-sdk';
 
 export interface SignalingAppOptions {
@@ -395,6 +400,28 @@ export function buildSignalingApp(
 
     app.log.info({ event: event.event }, 'Received LiveKit webhook event');
     return reply.code(200).send({ received: true });
+  });
+
+  app.post('/maintenance/cleanup-recordings', async (request, reply) => {
+    reply.header('Access-Control-Allow-Origin', '*');
+    const authHeader = request.headers.authorization;
+    const adminKey =
+      process.env.ADMIN_API_KEY || process.env.LIVEKIT_API_SECRET;
+
+    if (adminKey && authHeader !== `Bearer ${adminKey}`) {
+      return reply.code(401).send({ error: 'Unauthorized maintenance call' });
+    }
+
+    const payload = request.body as
+      { recordings?: RecordingMetadata[] } | undefined;
+    const toPrune = payload?.recordings ?? [];
+
+    const result = await pruneExpiredRecordings(toPrune, {
+      storage: options.egressStorage,
+    });
+
+    app.log.info(result, 'Executed scheduled recording retention cleanup');
+    return reply.code(200).send(result);
   });
 
   const wss = new WebSocketServer({
@@ -1179,6 +1206,17 @@ export function buildSignalingApp(
                   ? actionPayload.audioOnly
                   : undefined;
 
+              const recIsoTracks =
+                'isoTracks' in actionPayload &&
+                typeof actionPayload.isoTracks === 'boolean'
+                  ? actionPayload.isoTracks
+                  : undefined;
+              const recRetentionDays =
+                'retentionDays' in actionPayload &&
+                typeof actionPayload.retentionDays === 'number'
+                  ? actionPayload.retentionDays
+                  : 30;
+
               let egressResult: {
                 egressId: string;
                 filepath: string;
@@ -1189,6 +1227,9 @@ export function buildSignalingApp(
                   ...(recLayout ? { layout: recLayout } : {}),
                   ...(recAudioOnly !== undefined
                     ? { audioOnly: recAudioOnly }
+                    : {}),
+                  ...(recIsoTracks !== undefined
+                    ? { isoTracks: recIsoTracks }
                     : {}),
                   livekitUrl: options.livekitUrl,
                   apiKey: options.livekitApiKey,
@@ -1209,6 +1250,11 @@ export function buildSignalingApp(
                 egressResult?.filepath,
               );
               if (started && room.recordingStartedAt) {
+                const expiresAt = calculateExpiryTimestamp(
+                  room.recordingStartedAt,
+                  recRetentionDays,
+                );
+
                 room.broadcast({
                   v: 1,
                   ts: Date.now(),
@@ -1220,6 +1266,11 @@ export function buildSignalingApp(
                     ...(egressResult?.egressId
                       ? { egressId: egressResult.egressId }
                       : {}),
+                    ...(recIsoTracks !== undefined
+                      ? { isoTracks: recIsoTracks }
+                      : {}),
+                    retentionDays: recRetentionDays,
+                    ...(expiresAt !== null ? { expiresAt } : {}),
                   },
                 });
               }

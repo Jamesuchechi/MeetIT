@@ -6,6 +6,7 @@ import {
   formatFileSize,
   formatRecordingDuration,
   formatRecordingDate,
+  formatExpiryCountdown,
   type RecordingItem,
 } from './recordingsStore';
 
@@ -50,6 +51,18 @@ describe('recordingsStore unit tests', () => {
   it('formats recording dates safely', () => {
     const formatted = formatRecordingDate('2026-11-06T10:00:00.000Z');
     expect(formatted).toContain('2026');
+  });
+
+  it('formats expiry countdown appropriately', () => {
+    expect(formatExpiryCountdown(undefined)).toBeNull();
+    const past = new Date(Date.now() - 10000).toISOString();
+    expect(formatExpiryCountdown(past)).toBe('Expired');
+
+    const futureDays = new Date(Date.now() + 5 * 86400 * 1000).toISOString();
+    expect(formatExpiryCountdown(futureDays)).toBe('Expires in 5d');
+
+    const futureHours = new Date(Date.now() + 4 * 3600 * 1000).toISOString();
+    expect(formatExpiryCountdown(futureHours)).toBe('Expires in 4h');
   });
 
   it('seeds demo recordings if localStorage is empty', () => {

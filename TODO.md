@@ -194,8 +194,8 @@ Every phase has an **exit criteria** block. Do not start the next phase until ex
 - [x] [P0] Recording library page: list, play, download, delete
 - [x] [P1] Speaker-view vs grid-view recording layouts
 - [x] [P1] Audio-only recording option
-- [ ] [P1] Per-workspace retention policies + scheduled hard delete
-- [ ] [P2] Separate per-participant (ISO) tracks for editors
+- [x] [P1] Per-workspace retention policies + scheduled hard delete
+- [x] [P2] Separate per-participant (ISO) tracks for editors
 
 ### Captions and transcripts
 

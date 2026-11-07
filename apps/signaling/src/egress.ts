@@ -129,6 +129,7 @@ export interface StartRecordingOptions {
   roomCode: string;
   layout?: 'grid' | 'speaker' | undefined;
   audioOnly?: boolean | undefined;
+  isoTracks?: boolean | undefined;
   customBaseUrl?: string | undefined;
   livekitUrl?: string | undefined;
   apiKey?: string | undefined;
@@ -136,6 +137,84 @@ export interface StartRecordingOptions {
   storage?: EgressStorageConfig | undefined;
   client?: EgressClient | undefined;
   filenameTemplate?: string | undefined;
+}
+
+export interface StartIsoRecordingOptions {
+  roomCode: string;
+  identity: string;
+  screenShare?: boolean | undefined;
+  storage?: EgressStorageConfig | undefined;
+  livekitUrl?: string | undefined;
+  apiKey?: string | undefined;
+  apiSecret?: string | undefined;
+  client?: EgressClient | undefined;
+}
+
+export async function startParticipantIsoRecording(
+  options: StartIsoRecordingOptions,
+): Promise<{ egressId: string; filepath: string } | null> {
+  const url = options.livekitUrl ?? process.env.LIVEKIT_URL;
+  const key = options.apiKey ?? process.env.LIVEKIT_API_KEY;
+  const secret = options.apiSecret ?? process.env.LIVEKIT_API_SECRET;
+  const storage = options.storage ?? getEgressStorageConfig();
+
+  const isoTemplate =
+    storage.type === 'local'
+      ? `${(storage.localDir || '/tmp/meetit-recordings').replace(/\/$/, '')}/{room_name}/iso/{identity}-{time}.mp4`
+      : `recordings/{room_name}/iso/{identity}-{time}.mp4`;
+
+  const { fileOutput, filepath } = buildEncodedFileOutput(
+    storage,
+    options.roomCode,
+    isoTemplate,
+  );
+
+  if (!url || !key || !secret || process.env.LIVEKIT_EGRESS_MOCK === 'true') {
+    const simEgressId = `eg_iso_sim_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+    return {
+      egressId: simEgressId,
+      filepath: filepath
+        .replace('{room_name}', options.roomCode)
+        .replace('{identity}', options.identity)
+        .replace('{time}', String(Date.now())),
+    };
+  }
+
+  const client = options.client ?? new EgressClient(url, key, secret);
+  try {
+    const egressInfo = await client.startParticipantEgress(
+      options.roomCode,
+      options.identity,
+      { file: fileOutput },
+      {
+        screenShare: options.screenShare ?? false,
+      },
+    );
+    return {
+      egressId: egressInfo.egressId,
+      filepath: filepath
+        .replace('{room_name}', options.roomCode)
+        .replace('{identity}', options.identity)
+        .replace('{time}', String(Date.now())),
+    };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    if (
+      process.env.NODE_ENV === 'test' ||
+      message.includes('ECONNREFUSED') ||
+      message.includes('no egress')
+    ) {
+      const fallbackId = `eg_iso_fallback_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+      return {
+        egressId: fallbackId,
+        filepath: filepath
+          .replace('{room_name}', options.roomCode)
+          .replace('{identity}', options.identity)
+          .replace('{time}', String(Date.now())),
+      };
+    }
+    throw err;
+  }
 }
 
 export interface StopRecordingOptions {

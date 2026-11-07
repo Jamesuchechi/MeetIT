@@ -616,6 +616,9 @@ export function MeetingRoomView({
   >('grid');
   const [recordingAudioOnlyChoice, setRecordingAudioOnlyChoice] =
     useState(false);
+  const [recordingIsoChoice, setRecordingIsoChoice] = useState(false);
+  const [recordingRetentionChoice, setRecordingRetentionChoice] =
+    useState<number>(30);
 
   useEffect(() => {
     if (!isRecording || !recordingStartedAt) {
@@ -1891,8 +1894,9 @@ export function MeetingRoomView({
       setIsRecording(true);
       setRecordingStartedAt(payload.startedAt);
       const by = payload.byDisplayName || 'The host';
-      onToast(`${by} started recording this meeting.`);
-      announce(`${by} started recording this meeting`);
+      const isoNotice = payload.isoTracks ? ' (ISO stems active)' : '';
+      onToast(`${by} started recording this meeting${isoNotice}.`);
+      announce(`${by} started recording this meeting${isoNotice}`);
       if (payload.byPeerId !== signaling.getSelfId()) {
         setShowRecordingConsentNotice(true);
       }
@@ -2371,6 +2375,8 @@ export function MeetingRoomView({
     signalingRef.current?.startRecording({
       layout: recordingLayoutChoice,
       audioOnly: recordingAudioOnlyChoice,
+      isoTracks: recordingIsoChoice,
+      retentionDays: recordingRetentionChoice,
     });
   };
 
@@ -4367,6 +4373,37 @@ export function MeetingRoomView({
                 <span style={{ fontSize: '0.85rem' }}>
                   Audio-only recording
                 </span>
+              </label>
+
+              <label className="popover-checkbox-row">
+                <input
+                  type="checkbox"
+                  checked={recordingIsoChoice}
+                  onChange={(e) => setRecordingIsoChoice(e.target.checked)}
+                  data-testid="recording-iso-tracks-check"
+                />
+                <span style={{ fontSize: '0.85rem' }}>
+                  Export separate per-participant (ISO) tracks for video editing
+                </span>
+              </label>
+
+              <label className="device-select-group">
+                <span style={{ fontSize: '0.85rem', fontWeight: 600 }}>
+                  Workspace Retention Policy
+                </span>
+                <select
+                  value={recordingRetentionChoice}
+                  onChange={(e) =>
+                    setRecordingRetentionChoice(Number(e.target.value))
+                  }
+                  data-testid="recording-retention-select"
+                >
+                  <option value={7}>7 Days (Compliance sprint)</option>
+                  <option value={30}>30 Days (Standard default)</option>
+                  <option value={90}>90 Days (Quarterly archive)</option>
+                  <option value={365}>1 Year (Enterprise)</option>
+                  <option value={0}>Indefinite / Keep forever</option>
+                </select>
               </label>
             </div>
             <div

@@ -178,6 +178,8 @@ export const hostActionPayloadSchema = z.discriminatedUnion('action', [
     action: z.literal('start_recording'),
     layout: z.enum(['grid', 'speaker']).optional(),
     audioOnly: z.boolean().optional(),
+    isoTracks: z.boolean().optional(),
+    retentionDays: z.number().int().min(1).max(3650).optional(),
   }),
   z.object({
     action: z.literal('stop_recording'),
@@ -374,6 +376,9 @@ export interface SignalingEvents {
     byPeerId: string;
     byDisplayName: string;
     egressId?: string;
+    isoTracks?: boolean;
+    retentionDays?: number;
+    expiresAt?: number;
   };
   'recording.stopped': {
     stoppedAt: number;

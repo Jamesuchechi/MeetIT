@@ -19,6 +19,9 @@ export interface RecordingItem {
   playUrl?: string | undefined;
   startedBy?: string | undefined;
   startedByName?: string | undefined;
+  expiresAt?: string | undefined;
+  retentionDays?: number | undefined;
+  isoTracks?: boolean | undefined;
 }
 
 const RECORDINGS_STORAGE_KEY = 'meetit_recordings_v1';
@@ -43,6 +46,9 @@ const DEMO_RECORDINGS: RecordingItem[] = [
     downloadUrl:
       'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4',
     startedByName: 'James Uchechi',
+    isoTracks: true,
+    retentionDays: 30,
+    expiresAt: new Date(Date.now() + 29 * 86400 * 1000).toISOString(),
   },
   {
     id: 'rec-demo-002',
@@ -60,6 +66,9 @@ const DEMO_RECORDINGS: RecordingItem[] = [
     downloadUrl:
       'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4',
     startedByName: 'James Uchechi',
+    isoTracks: false,
+    retentionDays: 90,
+    expiresAt: new Date(Date.now() + 88 * 86400 * 1000).toISOString(),
   },
 ];
 
@@ -139,6 +148,13 @@ export async function fetchRecordings(
           : {}),
         ...(row.download_url ? { playUrl: row.download_url as string } : {}),
         ...(row.started_by ? { startedBy: row.started_by as string } : {}),
+        ...(row.expires_at ? { expiresAt: row.expires_at as string } : {}),
+        ...(typeof row.retention_days === 'number'
+          ? { retentionDays: row.retention_days as number }
+          : {}),
+        ...(typeof row.iso_tracks === 'boolean'
+          ? { isoTracks: row.iso_tracks as boolean }
+          : {}),
       };
     });
 
@@ -204,5 +220,27 @@ export function formatRecordingDate(dateStr: string): string {
     });
   } catch {
     return dateStr;
+  }
+}
+
+export function formatExpiryCountdown(expiresAtStr?: string): string | null {
+  if (!expiresAtStr) return null;
+  try {
+    const target = new Date(expiresAtStr).getTime();
+    const now = Date.now();
+    const diffMs = target - now;
+    if (diffMs <= 0) return 'Expired';
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+    if (diffDays >= 1) {
+      return `Expires in ${diffDays}d`;
+    }
+    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+    if (diffHours >= 1) {
+      return `Expires in ${diffHours}h`;
+    }
+    const diffMins = Math.floor(diffMs / (1000 * 60));
+    return `Expires in ${Math.max(1, diffMins)}m`;
+  } catch {
+    return null;
   }
 }
