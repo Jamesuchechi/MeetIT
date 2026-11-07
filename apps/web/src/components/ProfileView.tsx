@@ -94,6 +94,8 @@ export function ProfileView({
   }
 
   const personalRoomCode = personalRoomCodeForUser(profile.id);
+  const originHost =
+    typeof window !== 'undefined' ? window.location.host : 'meetit';
   const personalRoomUrl = `${window.location.origin}/m/${personalRoomCode}`;
   const publicProfileUrl = `${window.location.origin}/#profile/${profile.id}`;
   const detectedTimezone =
@@ -258,7 +260,7 @@ export function ProfileView({
             <div className="profile-room-box">
               <div className="profile-room-code-wrap">
                 <LnkIcon />
-                <code>{`meetit.app/m/${personalRoomCode}`}</code>
+                <code>{`${originHost}/m/${personalRoomCode}`}</code>
               </div>
 
               <div className="profile-room-actions">

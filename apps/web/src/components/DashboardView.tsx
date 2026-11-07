@@ -148,6 +148,8 @@ export function DashboardView({
   const displayName = user?.displayName || 'there';
   const personalRoomCode = personalRoomCodeForUser(user?.id ?? '');
   const firstName = displayName.split(' ')[0] || 'there';
+  const originHost =
+    typeof window !== 'undefined' ? window.location.host : 'meetit';
 
   const greeting = useMemo(() => {
     const hour = new Date().getHours();
@@ -816,7 +818,8 @@ export function DashboardView({
                       <small>Permanent Personal Room · Always ready</small>
                       <h4>{firstName}&apos;s Personal Studio</h4>
                       <small>
-                        meetit.app/m/{personalRoomCode} · Up to 4 HD mesh peers
+                        {originHost}/m/{personalRoomCode} · Up to 4 HD mesh
+                        peers
                       </small>
                     </div>
                     <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
@@ -1001,7 +1004,7 @@ export function DashboardView({
               <h3>Your personal room</h3>
               <div className="link">
                 <LnkIcon />
-                <span id="roomLink">{`meetit.app/m/${personalRoomCode}`}</span>
+                <span id="roomLink">{`${originHost}/m/${personalRoomCode}`}</span>
                 <button
                   type="button"
                   id="copyBtn"

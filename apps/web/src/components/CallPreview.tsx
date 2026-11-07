@@ -52,7 +52,11 @@ export function CallPreview({ onAction }: CallPreviewProps) {
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
           <LogoMark size={16} />
-          <span>meetit.app/m/kpt-wnrb-hxe</span>
+          <span>
+            {typeof window !== 'undefined'
+              ? `${window.location.host}/m/kpt-wnrb-hxe`
+              : 'meetit/m/kpt-wnrb-hxe'}
+          </span>
         </div>
       </div>
 
