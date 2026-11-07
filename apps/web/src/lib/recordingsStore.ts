@@ -26,71 +26,32 @@ export interface RecordingItem {
 
 const RECORDINGS_STORAGE_KEY = 'meetit_recordings_v1';
 
-// Sample demo recordings for first-time onboarding or offline testing
-const DEMO_RECORDINGS: RecordingItem[] = [
-  {
-    id: 'rec-demo-001',
-    roomCode: 'ebg-dzxk-exs',
-    roomTitle: 'Product Design Sync & Review',
-    startedAt: new Date(Date.now() - 3600 * 1000 * 24).toISOString(),
-    endedAt: new Date(
-      Date.now() - 3600 * 1000 * 24 + 1845 * 1000,
-    ).toISOString(),
-    durationSeconds: 1845,
-    fileSizeBytes: 48_500_000,
-    status: 'ready',
-    layout: 'grid',
-    storagePath: 'recordings/ebg-dzxk-exs/product-sync-20261106.mp4',
-    playUrl:
-      'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4',
-    downloadUrl:
-      'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4',
-    startedByName: 'James Uchechi',
-    isoTracks: true,
-    retentionDays: 30,
-    expiresAt: new Date(Date.now() + 29 * 86400 * 1000).toISOString(),
-  },
-  {
-    id: 'rec-demo-002',
-    roomCode: 'klm-pqrs-tuv',
-    roomTitle: 'Architecture Planning & Latency Optimization',
-    startedAt: new Date(Date.now() - 3600 * 1000 * 48).toISOString(),
-    endedAt: new Date(Date.now() - 3600 * 1000 * 48 + 920 * 1000).toISOString(),
-    durationSeconds: 920,
-    fileSizeBytes: 24_100_000,
-    status: 'ready',
-    layout: 'speaker',
-    storagePath: 'recordings/klm-pqrs-tuv/arch-planning-20261105.mp4',
-    playUrl:
-      'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4',
-    downloadUrl:
-      'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4',
-    startedByName: 'James Uchechi',
-    isoTracks: false,
-    retentionDays: 90,
-    expiresAt: new Date(Date.now() + 88 * 86400 * 1000).toISOString(),
-  },
-];
-
 export function loadLocalRecordings(ownerId?: string): RecordingItem[] {
   try {
     const raw = window.localStorage.getItem(RECORDINGS_STORAGE_KEY);
     if (!raw) {
-      // Seed initial sample recordings for immediate preview
-      saveLocalRecordings(DEMO_RECORDINGS);
-      return DEMO_RECORDINGS;
+      return [];
     }
     const parsed = JSON.parse(raw) as RecordingItem[];
     if (!Array.isArray(parsed)) return [];
+
+    // Filter out and purge any legacy sample/demo recordings
+    const nonDemo = parsed.filter(
+      (r) => r.id && !r.id.startsWith('rec-demo-') && !r.id.includes('demo'),
+    );
+    if (nonDemo.length !== parsed.length) {
+      saveLocalRecordings(nonDemo);
+    }
+
     const filtered = ownerId
-      ? parsed.filter((r) => !r.startedBy || r.startedBy === ownerId)
-      : parsed;
+      ? nonDemo.filter((r) => !r.startedBy || r.startedBy === ownerId)
+      : nonDemo;
     return filtered.sort(
       (a, b) =>
         new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime(),
     );
   } catch {
-    return DEMO_RECORDINGS;
+    return [];
   }
 }
 

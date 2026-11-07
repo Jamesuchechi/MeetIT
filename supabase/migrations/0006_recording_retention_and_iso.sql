@@ -43,3 +43,4 @@ begin
   return query select total, paths;
 end;
 $$;
+
