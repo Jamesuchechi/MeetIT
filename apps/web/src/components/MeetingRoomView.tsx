@@ -2773,7 +2773,7 @@ export function MeetingRoomView({
 
           <button
             type="button"
-            className="call-topbar-icon-btn"
+            className="call-topbar-icon-btn shortcuts-help-btn"
             onClick={() => setShowShortcutsModal(true)}
             aria-label="Keyboard shortcuts (?)"
             title="Keyboard shortcuts (?)"
@@ -3736,34 +3736,56 @@ export function MeetingRoomView({
             </button>
 
             {showLeaveMenu && isHost && (
-              <div
-                className="call-device-popover"
-                role="dialog"
-                aria-label="Leave or end meeting"
-              >
-                <button
-                  type="button"
-                  className="btn"
-                  style={{ width: '100%', justifyContent: 'center' }}
-                  onClick={handleHangUp}
+              <>
+                <div
+                  className="leave-modal-backdrop"
+                  onClick={() => setShowLeaveMenu(false)}
+                />
+                <div
+                  className="call-leave-popover"
+                  role="dialog"
+                  aria-label="Leave or end meeting"
                 >
-                  Leave call (transfer host)
-                </button>
-                <button
-                  type="button"
-                  className="btn primary"
-                  style={{
-                    width: '100%',
-                    justifyContent: 'center',
-                    background: '#ea4335',
-                    borderColor: '#ea4335',
-                    color: '#fff',
-                  }}
-                  onClick={handleHostEndMeeting}
-                >
-                  End meeting for all
-                </button>
-              </div>
+                  <div className="call-leave-header">
+                    <h4>End meeting?</h4>
+                    <p>
+                      You are the host. Choose whether to end the call for
+                      everyone or leave and transfer host.
+                    </p>
+                  </div>
+                  <div className="call-leave-actions">
+                    <button
+                      type="button"
+                      className="btn danger-fill"
+                      onClick={() => {
+                        setShowLeaveMenu(false);
+                        handleHostEndMeeting();
+                      }}
+                      data-testid="confirm-end-all-btn"
+                    >
+                      End meeting for all
+                    </button>
+                    <button
+                      type="button"
+                      className="btn secondary"
+                      onClick={() => {
+                        setShowLeaveMenu(false);
+                        handleHangUp();
+                      }}
+                      data-testid="confirm-leave-call-btn"
+                    >
+                      Leave call (transfer host)
+                    </button>
+                    <button
+                      type="button"
+                      className="btn cancel"
+                      onClick={() => setShowLeaveMenu(false)}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              </>
             )}
           </div>
         </div>

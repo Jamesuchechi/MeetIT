@@ -2681,6 +2681,9 @@ aside.context-bar {
   font-size: 14px;
   color: var(--ink);
   letter-spacing: 0.01em;
+  white-space: nowrap;
+  flex-shrink: 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 }
 
 .call-topbar-icon-btn {
@@ -2943,6 +2946,10 @@ aside.context-bar {
   stroke: currentColor;
   stroke-width: 2.2;
   fill: none;
+}
+
+.call-stage.mode-pip .tile-hover-actions {
+  display: none !important;
 }
 
 .call-tile {
@@ -3377,6 +3384,120 @@ aside.context-bar {
   border: 1px solid var(--line);
 }
 
+/* Leave / End Meeting Confirmation Modal & Action Sheet */
+.leave-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(4px);
+  z-index: 80;
+  animation: fadeInBackdrop 0.18s ease-out;
+}
+
+@keyframes fadeInBackdrop {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.call-leave-popover {
+  position: absolute;
+  bottom: calc(100% + 14px);
+  right: 0;
+  width: 290px;
+  padding: 18px;
+  border-radius: 18px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  box-shadow: 0 16px 44px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(255, 255, 255, 0.08);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  z-index: 85;
+  color: var(--ink);
+  animation: slideUpPopover 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes slideUpPopover {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.call-leave-header h4 {
+  margin: 0 0 4px;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.call-leave-header p {
+  margin: 0;
+  font-size: 13px;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.call-leave-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+.call-leave-actions .btn {
+  width: 100%;
+  justify-content: center;
+  padding: 10px 14px;
+  font-size: 14px;
+  font-weight: 500;
+  border-radius: 12px;
+}
+
+.call-leave-actions .btn.danger-fill {
+  background: #ea4335;
+  border-color: #ea4335;
+  color: #ffffff;
+}
+
+.call-leave-actions .btn.danger-fill:hover {
+  background: #d93025;
+  border-color: #d93025;
+}
+
+.call-leave-actions .btn.cancel {
+  background: transparent;
+  border: 1px solid var(--line);
+  color: var(--muted);
+}
+
+.call-leave-actions .btn.cancel:hover {
+  background: var(--soft);
+  color: var(--ink);
+}
+
+@media (max-width: 600px) {
+  .call-leave-popover {
+    position: fixed;
+    bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+    left: 14px;
+    right: 14px;
+    margin: 0 auto;
+    width: calc(100% - 28px);
+    max-width: 380px;
+    padding: 20px 18px;
+    border-radius: 22px;
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.7);
+  }
+}
+
 /* Ended & 404 Views */
 .status-card-wrap {
   flex: 1;
@@ -3439,7 +3560,44 @@ aside.context-bar {
   }
 
   .call-topbar {
-    padding: 0 14px;
+    padding: 0 12px;
+    gap: 8px;
+  }
+
+  .call-topbar-left {
+    gap: 6px;
+  }
+
+  .call-topbar-right {
+    gap: 6px;
+  }
+
+  .call-room-code {
+    font-size: 13px;
+    max-width: 110px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .call-topbar-icon-btn.shortcuts-help-btn {
+    display: none !important;
+  }
+
+  .call-conn-banner {
+    position: absolute;
+    top: calc(100% + 8px);
+    left: 50%;
+    transform: translateX(-50%);
+    width: max-content;
+    max-width: calc(100vw - 28px);
+    z-index: 60;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+    backdrop-filter: blur(12px);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    padding: 6px 14px;
+    font-size: 12px;
   }
 
   .call-dock-bar {
@@ -3501,6 +3659,21 @@ aside.context-bar {
 
   .pill-copy-btn span {
     display: none;
+  }
+
+  .status-card {
+    padding: 28px 18px;
+    border-radius: 16px;
+  }
+
+  .status-actions {
+    flex-direction: column;
+    width: 100%;
+  }
+
+  .status-actions .btn {
+    width: 100%;
+    justify-content: center;
   }
 }
 
