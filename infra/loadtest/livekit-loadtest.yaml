@@ -1,0 +1,34 @@
+# LiveKit Load Tester Configuration
+# Objective: 100 participants per room (30 publishers, 70 subscribers)
+# Target Metrics: p75 time-to-first-frame < 5s, node CPU < 70% at target load
+
+url: 'ws://localhost:7880'
+api_key: 'devkey'
+api_secret: 'secret'
+room: 'meetit-loadtest-100'
+duration: 300s # 5 minutes test duration
+
+publishers:
+  num: 30
+  simulcast: true
+  video:
+    codec: 'h264'
+    resolution: '720p'
+    fps: 30
+    bitrate: 1500000 # 1.5 Mbps
+  audio:
+    codec: 'opus'
+    bitrate: 48000 # 48 kbps
+
+subscribers:
+  num: 70
+  adaptive_stream: true
+  dynacast: true
+
+metrics:
+  track_rtt: true
+  track_packet_loss: true
+  track_first_frame_latency: true
+  thresholds:
+    p75_time_to_first_frame_ms: 5000
+    max_packet_loss_pct: 2.0

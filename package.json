@@ -13,6 +13,7 @@
     "lint": "turbo run lint",
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
+    "loadtest": "pnpm --filter @meetit/signaling loadtest",
     "format": "prettier --write \"**/*.{js,jsx,ts,tsx,json,yml,yaml,css,cjs}\"",
     "format:check": "prettier --check \"**/*.{js,jsx,ts,tsx,json,yml,yaml,css,cjs}\"",
     "db:reset": "supabase db reset",
