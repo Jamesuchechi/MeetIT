@@ -199,6 +199,7 @@ export interface SignalingClientOptions {
   token?: string;
   passcode?: string;
   initialState?: PeerState;
+  preferredRegion?: string;
   onReconnecting?: (attempt: number) => void;
   onReconnected?: () => void;
 }
@@ -213,6 +214,7 @@ export class SignalingClient implements SignalingChannel {
   private readonly displayName: string;
   private readonly token: string;
   private readonly passcode: string | undefined;
+  private preferredRegion: string | undefined;
   private currentState: PeerState;
   private selfId: string;
   private ws: WebSocket | null = null;
@@ -254,6 +256,7 @@ export class SignalingClient implements SignalingChannel {
     this.displayName = options.displayName;
     this.token = options.token ?? 'guest-token';
     this.passcode = options.passcode;
+    this.preferredRegion = options.preferredRegion;
     this.currentState = options.initialState ?? {
       audio: true,
       video: true,
@@ -321,6 +324,9 @@ export class SignalingClient implements SignalingChannel {
             lastChatSeq: this.lastChatSeq,
             state: this.currentState,
             capabilities: ['mesh'],
+            ...(this.preferredRegion
+              ? { preferredRegion: this.preferredRegion }
+              : {}),
           },
         });
         this.startKeepalive();
@@ -751,6 +757,14 @@ export class SignalingClient implements SignalingChannel {
       type: 'host.action',
       payload,
     });
+  }
+
+  setPreferredRegion(region: string | undefined): void {
+    this.preferredRegion = region;
+  }
+
+  getPreferredRegion(): string | undefined {
+    return this.preferredRegion;
   }
 
   updateState(partialState: Partial<PeerState>): void {

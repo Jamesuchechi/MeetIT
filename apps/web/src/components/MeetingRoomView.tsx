@@ -63,6 +63,7 @@ import {
   inspectRoomViaApi,
   requestGuestTokenViaApi,
 } from '../lib/signalingClient';
+import { getSavedPreferredRegion } from '../lib/regions';
 import {
   findRoomMetadataByCode,
   recordCompletedMeetingSession,
@@ -743,6 +744,7 @@ export function MeetingRoomView({
   const [isSpeakerView, setIsSpeakerView] = useState(false);
   const [galleryPage, setGalleryPage] = useState(1);
   const [roomTransport, setRoomTransport] = useState<'mesh' | 'sfu'>('mesh');
+  const [connectedRegion, setConnectedRegion] = useState<string | null>(null);
   const platformProfile = useMemo(() => detectBrowserPlatform(), []);
 
   const lobbyVideoRef = useRef<HTMLVideoElement>(null);
@@ -1483,12 +1485,14 @@ export function MeetingRoomView({
       ],
     ]);
 
+    const savedRegion = getSavedPreferredRegion();
     const signaling = new SignalingClient({
       roomCode,
       displayName: cleanName,
       token,
       ...(enteredPasscode.trim() ? { passcode: enteredPasscode.trim() } : {}),
       initialState,
+      ...(savedRegion ? { preferredRegion: savedRegion } : {}),
       onReconnecting: () => {
         setConnectionBanner({
           tone: 'warn',
@@ -1712,6 +1716,9 @@ export function MeetingRoomView({
 
       const isSfu = payload.transport === 'sfu' && Boolean(payload.livekit);
       setRoomTransport(payload.transport);
+      if (payload.region) {
+        setConnectedRegion(payload.region);
+      }
 
       void (async () => {
         if (!hasConnectedTransportRef.current) {
@@ -1757,6 +1764,9 @@ export function MeetingRoomView({
     signaling.on('transport.promoted', ({ livekit }) => {
       onToast('Meeting promoted to LiveKit SFU mode.');
       setRoomTransport('sfu');
+      if (livekit.region) {
+        setConnectedRegion(livekit.region);
+      }
       void (async () => {
         if (transportRef.current) {
           await transportRef.current.disconnect();
@@ -2872,6 +2882,16 @@ export function MeetingRoomView({
             />
             <span>{totalParticipantCount}</span>
           </div>
+
+          {connectedRegion && (
+            <div
+              className="call-region-chip"
+              title={`Connected via LiveKit regional edge: ${connectedRegion}`}
+            >
+              <span className="region-dot" />
+              <span>{connectedRegion.toUpperCase()}</span>
+            </div>
+          )}
 
           {totalParticipantCount > 2 && (
             <button

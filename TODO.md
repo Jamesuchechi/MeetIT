@@ -177,7 +177,7 @@ Every phase has an **exit criteria** block. Do not start the next phase until ex
 - [x] [P1] Seamless mesh to SFU promotion mid-call (research complexity first)
 - [x] [P1] Grid virtualization, gallery pagination, speaker view
 - [x] [P1] Screen share with audio, high-res mode for slides and code
-- [ ] [P1] Region selection and latency-based routing
+- [x] [P1] Region selection and latency-based routing
 - [ ] [P1] Load test: 100 participants (30 publishers) per room with LiveKit loadtester
 - [ ] [P2] Self-host LiveKit on dedicated nodes, Terraform module
 

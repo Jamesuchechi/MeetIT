@@ -19,7 +19,11 @@ import { buildIceServers, type IceServerEnvConfig } from './turn.js';
 import { issueGuestToken, verifyJoinToken } from './auth.js';
 import { SignalingPersistence } from './persistence.js';
 import { RedisAdapter } from './redis.js';
-import { issueLiveKitToken, isLiveKitConfigured } from './livekit.js';
+import {
+  issueLiveKitToken,
+  isLiveKitConfigured,
+  getSupportedRegions,
+} from './livekit.js';
 
 export interface SignalingAppOptions {
   logger?: boolean;
@@ -36,6 +40,7 @@ export interface SignalingAppOptions {
   livekitUrl?: string;
   livekitApiKey?: string;
   livekitApiSecret?: string;
+  livekitRegionalUrls?: Record<string, string>;
 }
 
 export interface SignalingMetrics {
@@ -197,6 +202,16 @@ export function buildSignalingApp(
       totalConnections: metrics.totalConnections,
       invalidFrames: metrics.invalidFrames,
       rateLimitedFrames: metrics.rateLimitedFrames,
+    };
+  });
+
+  app.get('/regions', async (request, reply) => {
+    reply.header('Access-Control-Allow-Origin', '*');
+    return {
+      regions: getSupportedRegions({
+        livekitUrl: options.livekitUrl,
+        regionalUrls: options.livekitRegionalUrls,
+      }),
     };
   });
 
@@ -403,14 +418,18 @@ export function buildSignalingApp(
     peer: Peer,
     requestMsgId?: string,
     lastChatSeq?: number,
+    preferredRegion?: string,
   ): Promise<void> => {
     const iceServers = buildIceServers(peer.id, iceConfig);
     const chatBackfill = room.getChatBackfill(lastChatSeq ?? 0);
-    let livekitConfig: { url: string; token: string } | undefined = undefined;
+    let livekitConfig:
+      { url: string; token: string; region: string } | undefined = undefined;
 
     if (room.transport === 'sfu' || isLiveKitConfigured(options)) {
       const lk = await issueLiveKitToken({
         livekitUrl: options.livekitUrl,
+        regionalUrls: options.livekitRegionalUrls,
+        region: preferredRegion,
         apiKey: options.livekitApiKey,
         apiSecret: options.livekitApiSecret,
         roomCode: room.code,
@@ -434,7 +453,9 @@ export function buildSignalingApp(
         peers: room.listOtherPeerInfos(peer.id),
         iceServers,
         transport: room.transport,
-        ...(livekitConfig ? { livekit: livekitConfig } : {}),
+        ...(livekitConfig
+          ? { livekit: livekitConfig, region: livekitConfig.region }
+          : {}),
         roomState: {
           locked: room.locked,
           hostId: room.hostId,
@@ -595,6 +616,7 @@ export function buildSignalingApp(
           selfId,
           lastChatSeq,
           state,
+          preferredRegion,
         } = msg.payload;
         const verifiedCaller = verifyJoinToken(token);
         if (!verifiedCaller) {
@@ -614,6 +636,40 @@ export function buildSignalingApp(
         if (!room) {
           sendError(ws, 'ROOM_NOT_FOUND', `Room ${roomCode} does not exist.`);
           return;
+        }
+
+        if (
+          room.participantCount >= 4 &&
+          room.transport === 'mesh' &&
+          isLiveKitConfigured(options)
+        ) {
+          room.promoteToSfu();
+          for (const p of room.listActivePeers()) {
+            void (async () => {
+              const lk = await issueLiveKitToken({
+                livekitUrl: options.livekitUrl,
+                regionalUrls: options.livekitRegionalUrls,
+                region: preferredRegion,
+                apiKey: options.livekitApiKey,
+                apiSecret: options.livekitApiSecret,
+                roomCode: room.code,
+                identity: p.id,
+                displayName: p.displayName,
+                role: p.role,
+              });
+              if (lk) {
+                p.send({
+                  v: 1,
+                  ts: Date.now(),
+                  type: 'transport.promoted',
+                  payload: {
+                    livekit: lk,
+                    region: lk.region,
+                  },
+                });
+              }
+            })();
+          }
         }
 
         const tokenFingerprint = computeTokenFingerprint(token);
@@ -682,7 +738,13 @@ export function buildSignalingApp(
           'peer joined room',
         );
 
-        void sendJoinedPayloadToPeer(room, joinRes.peer, msg.id, lastChatSeq);
+        void sendJoinedPayloadToPeer(
+          room,
+          joinRes.peer,
+          msg.id,
+          lastChatSeq,
+          preferredRegion,
+        );
         return;
       }
 

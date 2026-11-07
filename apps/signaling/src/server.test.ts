@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { WebSocket } from 'ws';
-import type { ServerMessage } from '@meetit/protocol';
+import { generateRoomCode, type ServerMessage } from '@meetit/protocol';
 import { buildSignalingApp, type SignalingServerInstance } from './app.js';
 import { turnCredentials, buildIceServers } from './turn.js';
 import { TokenBucketRateLimiter } from './rateLimiter.js';
@@ -888,6 +888,61 @@ describe('Signaling server integration tests', () => {
     expect(payload.livekit?.url).toBe('wss://meetit-test.livekit.cloud');
     expect(typeof payload.livekit?.token).toBe('string');
     expect(payload.livekit!.token.length).toBeGreaterThan(20);
+
+    ws.close();
+  });
+
+  it('serves /regions and routes token issuance to preferred region', async () => {
+    instance = buildSignalingApp({
+      logger: false,
+      livekitUrl: 'wss://global.meetit.livekit.cloud',
+      livekitApiKey: 'devkey',
+      livekitApiSecret: 'secret_longer_than_32_characters_123456789',
+      livekitRegionalUrls: {
+        'us-east': 'wss://us-east.meetit.livekit.cloud',
+        'eu-west': 'wss://eu-west.meetit.livekit.cloud',
+      },
+    });
+    const address = await instance.app.listen({ port: 0, host: '127.0.0.1' });
+    const wsUrl = address.replace('http', 'ws');
+
+    // 1. GET /regions
+    const regionsRes = await fetch(`${address}/regions`);
+    expect(regionsRes.status).toBe(200);
+    const { regions } = (await regionsRes.json()) as {
+      regions: { id: string; name: string; pingUrl: string }[];
+    };
+    expect(regions.length).toBe(2);
+    expect(regions.find((r) => r.id === 'us-east')).toBeDefined();
+    expect(regions.find((r) => r.id === 'eu-west')).toBeDefined();
+
+    // 2. Join with preferredRegion: 'eu-west'
+    const code = generateRoomCode();
+    const ws = new WebSocket(wsUrl);
+    const joinedP = waitForMessage(ws, (m) => m.type === 'joined');
+    await new Promise<void>((resolve) => ws.once('open', resolve));
+
+    ws.send(
+      JSON.stringify({
+        v: 1,
+        type: 'join',
+        payload: {
+          roomCode: code,
+          displayName: 'EU Peer',
+          token: 'guest-token',
+          preferredRegion: 'eu-west',
+        },
+      }),
+    );
+
+    const joinedMsg = await joinedP;
+    const payload = joinedMsg.payload as {
+      livekit?: { url: string; token: string; region?: string };
+      region?: string;
+    };
+    expect(payload.livekit).toBeDefined();
+    expect(payload.livekit?.url).toBe('wss://eu-west.meetit.livekit.cloud');
+    expect(payload.region).toBe('eu-west');
 
     ws.close();
   });

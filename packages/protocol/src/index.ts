@@ -192,6 +192,7 @@ export const clientMessageSchema = z.discriminatedUnion('type', [
       lastChatSeq: z.number().int().min(0).optional(),
       state: peerStateSchema.optional(),
       capabilities: z.array(z.string()).default([]),
+      preferredRegion: z.string().optional(),
     }),
   }),
   z.object({
@@ -257,9 +258,18 @@ export const clientMessageSchema = z.discriminatedUnion('type', [
   }),
 ]);
 
+export const liveKitRegionSchema = z.object({
+  id: z.string().min(1),
+  name: z.string().min(1),
+  pingUrl: z.string().min(1),
+  isDefault: z.boolean().optional(),
+});
+export type LiveKitRegion = z.infer<typeof liveKitRegionSchema>;
+
 export const livekitConfigSchema = z.object({
   url: z.string().min(1),
   token: z.string().min(1),
+  region: z.string().optional(),
 });
 export type LivekitConfig = z.infer<typeof livekitConfigSchema>;
 
@@ -270,6 +280,7 @@ export const serverJoinedPayloadSchema = z.object({
   iceServers: z.array(iceServerSchema),
   transport: z.enum(['mesh', 'sfu']),
   livekit: livekitConfigSchema.optional(),
+  region: z.string().optional(),
   roomState: z.object({
     locked: z.boolean(),
     hostId: z.string().uuid().nullable(),
