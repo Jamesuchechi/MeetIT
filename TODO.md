@@ -208,13 +208,13 @@ Every phase has an **exit criteria** block. Do not start the next phase until ex
 
 ### AI meeting notes & intelligence
 
-- [ ] [P0] Automated post-meeting notes generation (executive summary, key decisions, action items with owners)
-- [ ] [P1] Summary, decisions, action items with owners (LLM over transcript)
-- [ ] [P1] Chapters and highlights with timestamp links
-- [ ] [P1] Searchable notes memory across all meetings in dashboard
-- [ ] [P1] Email summary and action items digest to attendees after meeting
-- [ ] [P2] "Ask the meeting": Q&A over transcript with citations to timestamps
-- [ ] [P2] Auto-create tasks in integrations (Linear, Notion, Asana, Google Docs - see Phase 9)
+- [x] [P0] Automated post-meeting notes generation (executive summary, key decisions, action items with owners)
+- [x] [P1] Summary, decisions, action items with owners (LLM over transcript)
+- [x] [P1] Chapters and highlights with timestamp links
+- [x] [P1] Searchable notes memory across all meetings in dashboard
+- [x] [P1] Email summary and action items digest to attendees after meeting
+- [x] [P2] "Ask the meeting": Q&A over transcript with citations to timestamps
+- [x] [P2] Auto-create tasks in integrations (Linear, Notion, Asana, Google Docs - see Phase 9)
 
 **Exit criteria:** Recording available within 5 minutes of meeting end; caption word error rate under 12% on a mixed-accent test set; summary accuracy rated 4/5 or better by internal reviewers.
 

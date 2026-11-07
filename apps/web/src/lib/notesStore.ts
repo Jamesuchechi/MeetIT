@@ -1,6 +1,7 @@
 import { supabase, isSupabaseConfigured } from './supabase';
 import { normalizeRoomCode } from '../types';
 import type { MeetingHistoryItem } from './meetingsStore';
+import { generateMeetingNotes, type MeetingChapter } from './aiService';
 
 export type ActionItemPriority = 'low' | 'medium' | 'high';
 
@@ -15,6 +16,9 @@ export interface MeetingNoteItem {
   content: string;
   attendees: string[];
   tags: string[];
+  chapters?: MeetingChapter[] | undefined;
+  keyDecisions?: string[] | undefined;
+  aiModel?: string | undefined;
   createdAt: string;
   updatedAt: string;
 }
@@ -113,6 +117,9 @@ export async function saveOrUpdateMeetingNote(params: {
   content: string;
   attendees?: string[];
   tags?: string[];
+  chapters?: MeetingChapter[];
+  keyDecisions?: string[];
+  aiModel?: string;
 }): Promise<MeetingNoteItem> {
   const all = loadMeetingNotes();
   const nowIso = new Date().toISOString();
@@ -139,6 +146,21 @@ export async function saveOrUpdateMeetingNote(params: {
     content: params.content.trim(),
     attendees: params.attendees ?? existing?.attendees ?? [],
     tags: params.tags ?? existing?.tags ?? [],
+    ...(params.chapters !== undefined
+      ? { chapters: params.chapters }
+      : existing?.chapters !== undefined
+        ? { chapters: existing.chapters }
+        : {}),
+    ...(params.keyDecisions !== undefined
+      ? { keyDecisions: params.keyDecisions }
+      : existing?.keyDecisions !== undefined
+        ? { keyDecisions: existing.keyDecisions }
+        : {}),
+    ...(params.aiModel !== undefined
+      ? { aiModel: params.aiModel }
+      : existing?.aiModel !== undefined
+        ? { aiModel: existing.aiModel }
+        : {}),
     createdAt: existing?.createdAt ?? nowIso,
     updatedAt: nowIso,
   };
@@ -165,13 +187,106 @@ export async function saveOrUpdateMeetingNote(params: {
           attendees: note.attendees,
           tags: note.tags,
           updated_at: note.updatedAt,
+          ...(note.chapters ? { chapters: note.chapters } : {}),
+          ...(note.keyDecisions ? { key_decisions: note.keyDecisions } : {}),
+          ...(note.aiModel ? { ai_model: note.aiModel } : {}),
         },
         { onConflict: 'id' },
       );
     } catch {
-      // Non-fatal if migration 0004 hasn't been applied on remote DB yet
+      // Non-fatal if migration hasn't been applied on remote DB yet
     }
   }
+
+  return note;
+}
+
+export async function regenerateNoteWithAI(
+  noteId: string,
+  customTranscript?: string,
+): Promise<MeetingNoteItem | null> {
+  const notes = loadMeetingNotes();
+  const note = notes.find((n) => n.id === noteId);
+  if (!note) return null;
+
+  const textToAnalyze = customTranscript || note.content || note.summary;
+  const intel = await generateMeetingNotes(textToAnalyze, note.meetingTitle);
+
+  // Auto-create extracted action items
+  for (const action of intel.actionItems) {
+    await createActionItem({
+      ownerId: note.ownerId,
+      noteId: note.id,
+      roomCode: note.roomCode,
+      meetingTitle: note.meetingTitle,
+      text: action.task,
+      ...(action.owner ? { assignee: action.owner } : {}),
+      ...(action.dueDate ? { dueDate: action.dueDate } : {}),
+      priority: action.priority || 'medium',
+    });
+  }
+
+  const updated = await saveOrUpdateMeetingNote({
+    id: note.id,
+    ownerId: note.ownerId,
+    ...(note.meetingId ? { meetingId: note.meetingId } : {}),
+    roomCode: note.roomCode,
+    meetingTitle: note.meetingTitle,
+    meetingDate: note.meetingDate,
+    summary: intel.executiveSummary,
+    content: note.content,
+    attendees: note.attendees,
+    tags: Array.from(new Set([...note.tags, 'ai-generated'])),
+    chapters: intel.chapters,
+    keyDecisions: intel.keyDecisions,
+    aiModel: `${intel.providerUsed}:${intel.modelUsed}`,
+  });
+
+  return updated;
+}
+
+export async function createPostMeetingNoteWithAI(params: {
+  ownerId: string;
+  roomCode: string;
+  meetingTitle: string;
+  transcriptText: string;
+  attendees?: string[];
+}): Promise<MeetingNoteItem> {
+  const intel = await generateMeetingNotes(
+    params.transcriptText,
+    params.meetingTitle,
+  );
+
+  const noteId = `note-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+
+  // Auto-create extracted action items with owners and priorities
+  for (const action of intel.actionItems) {
+    await createActionItem({
+      ownerId: params.ownerId,
+      noteId,
+      roomCode: params.roomCode,
+      meetingTitle: params.meetingTitle,
+      text: action.task,
+      ...(action.owner ? { assignee: action.owner } : {}),
+      ...(action.dueDate ? { dueDate: action.dueDate } : {}),
+      priority: action.priority || 'medium',
+    });
+  }
+
+  const note = await saveOrUpdateMeetingNote({
+    id: noteId,
+    ownerId: params.ownerId,
+    roomCode: params.roomCode,
+    meetingTitle: params.meetingTitle,
+    meetingDate: new Date().toISOString(),
+    summary: intel.executiveSummary,
+    content: params.transcriptText,
+    attendees: params.attendees ?? [],
+    tags: ['ai-generated', 'automated'],
+    chapters: intel.chapters,
+    keyDecisions: intel.keyDecisions,
+    aiModel: `${intel.providerUsed}:${intel.modelUsed}`,
+  });
 
   return note;
 }
@@ -368,6 +483,20 @@ export function formatNoteAsMarkdown(
     '',
     note.summary || '_No summary provided._',
   );
+
+  if (note.keyDecisions && note.keyDecisions.length > 0) {
+    lines.push('', '## Key Decisions', '');
+    for (const d of note.keyDecisions) {
+      lines.push(`- ✓ ${d}`);
+    }
+  }
+
+  if (note.chapters && note.chapters.length > 0) {
+    lines.push('', '## Chapters & Highlights', '');
+    for (const ch of note.chapters) {
+      lines.push(`- **[${ch.timecode}] ${ch.title}**: ${ch.summary}`);
+    }
+  }
 
   lines.push(
     '',

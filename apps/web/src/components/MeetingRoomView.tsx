@@ -69,7 +69,10 @@ import {
   recordCompletedMeetingSession,
   type MeetingAttendeeRecord,
 } from '../lib/meetingsStore';
-import { ensureNoteForCompletedMeeting } from '../lib/notesStore';
+import {
+  ensureNoteForCompletedMeeting,
+  regenerateNoteWithAI,
+} from '../lib/notesStore';
 import {
   recordCallJoinAttempt,
   recordCallJoinSuccess,
@@ -94,7 +97,11 @@ import {
   SpeechRecognitionService,
   isSpeechRecognitionSupported,
 } from '../lib/speechRecognition';
-import { persistTranscript, type TranscriptCue } from '../lib/transcriptsStore';
+import {
+  persistTranscript,
+  formatMsToClock,
+  type TranscriptCue,
+} from '../lib/transcriptsStore';
 import { copyToClipboard, type AuthUser } from '../types';
 import { BackendStatusIndicator } from './BackendStatusIndicator';
 
@@ -2145,11 +2152,21 @@ export function MeetingRoomView({
         endedAtMs: Date.now(),
         attendees: Array.from(seenAttendeesRef.current.values()),
       });
-      ensureNoteForCompletedMeeting({
+      const createdNote = ensureNoteForCompletedMeeting({
         ownerId: user?.id ?? '',
         historyItem,
         chatTranscript: chatMessages,
       });
+
+      if (transcriptCuesRef.current.length > 0) {
+        const transcriptText = transcriptCuesRef.current
+          .map(
+            (c) =>
+              `[${formatMsToClock(c.startMs)}] ${c.speakerName}: ${c.text}`,
+          )
+          .join('\n');
+        void regenerateNoteWithAI(createdNote.id, transcriptText);
+      }
       callStartedAtRef.current = null;
     }
     signalingRef.current?.disconnect();

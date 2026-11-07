@@ -5,6 +5,18 @@ import {
   saveDevicePreferences,
   type EnumeratedDevices,
 } from '../lib/devices';
+import {
+  getEffectiveApiKeys,
+  savePreferredProvider,
+  saveUserApiKey,
+  testAIConnectivity,
+  type AIProvider,
+} from '../lib/aiService';
+import {
+  loadIntegrationsConfig,
+  saveIntegrationsConfig,
+  type IntegrationConfig,
+} from '../lib/integrationsService';
 import { Avatar } from './Avatar';
 import { SunIcon, MoonIcon } from './Icons';
 import type { AuthUser } from '../types';
@@ -78,6 +90,13 @@ export function SettingsView({
   const [appSettings, setAppSettings] = useState<InAppSettings>(() =>
     loadAppSettings(),
   );
+  const [aiKeys, setAiKeys] = useState(() => getEffectiveApiKeys());
+  const [groqKeyInput, setGroqKeyInput] = useState('');
+  const [mistralKeyInput, setMistralKeyInput] = useState('');
+  const [isTestingAI, setIsTestingAI] = useState(false);
+  const [testResult, setTestResult] = useState<string | null>(null);
+  const [integrationsConfig, setIntegrationsConfig] =
+    useState<IntegrationConfig>(() => loadIntegrationsConfig());
 
   useEffect(() => {
     let mounted = true;
@@ -105,6 +124,56 @@ export function SettingsView({
     setAppSettings(updated);
     saveAppSettings(updated);
     onToast(`${label} ${nextValue ? 'enabled' : 'disabled'}.`);
+  };
+
+  const handleSaveAIProvider = (provider: AIProvider) => {
+    savePreferredProvider(provider);
+    setAiKeys(getEffectiveApiKeys());
+    onToast(`Preferred AI provider set to ${provider}.`);
+  };
+
+  const handleSaveGroqKey = () => {
+    saveUserApiKey('groq', groqKeyInput);
+    setAiKeys(getEffectiveApiKeys());
+    setGroqKeyInput('');
+    onToast('Groq API Key saved.');
+  };
+
+  const handleSaveMistralKey = () => {
+    saveUserApiKey('mistral', mistralKeyInput);
+    setAiKeys(getEffectiveApiKeys());
+    setMistralKeyInput('');
+    onToast('Mistral API Key saved.');
+  };
+
+  const handleTestAI = async () => {
+    setIsTestingAI(true);
+    setTestResult(null);
+    try {
+      const res = await testAIConnectivity(aiKeys.preferredProvider);
+      setTestResult(res.message);
+      if (res.success) {
+        onToast(`AI Connection verified (${res.latencyMs}ms)!`);
+      } else {
+        onToast(`AI Check: ${res.message}`);
+      }
+    } catch (err) {
+      setTestResult(`Failed: ${(err as Error).message}`);
+      onToast(`AI Connection failed: ${(err as Error).message}`);
+    } finally {
+      setIsTestingAI(false);
+    }
+  };
+
+  const handleSaveWebhook = (url: string) => {
+    const updated = {
+      ...integrationsConfig,
+      ...(url.trim() ? { webhookUrl: url.trim() } : {}),
+    };
+    if (!url.trim()) delete updated.webhookUrl;
+    setIntegrationsConfig(updated);
+    saveIntegrationsConfig(updated);
+    onToast('Integration webhook URL saved.');
   };
 
   return (
@@ -345,7 +414,166 @@ export function SettingsView({
           </div>
         </div>
 
-        {/* 3. Account & Public Profile Card (Full Width) */}
+        {/* 3. AI Meeting Intelligence & Model Provider */}
+        <div className="profile-section-card">
+          <h3>AI Meeting Intelligence &amp; LLM Provider</h3>
+          <p className="profile-card-sub">
+            Configure Groq (Llama 3.3 70B) and Mistral AI for post-meeting
+            notes, key decisions, chapters, and Q&amp;A.
+          </p>
+
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 14,
+              marginTop: 12,
+            }}
+          >
+            <label className="form-field">
+              <span>Preferred LLM Provider</span>
+              <select
+                value={aiKeys.preferredProvider}
+                onChange={(e) =>
+                  handleSaveAIProvider(e.target.value as AIProvider)
+                }
+              >
+                <option value="auto">
+                  Auto (Best Available: Groq → Mistral → Fallback)
+                </option>
+                <option value="groq">Groq (Llama 3.3 70B Versatile)</option>
+                <option value="mistral">
+                  Mistral AI (Mistral Small Latest)
+                </option>
+              </select>
+            </label>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                }}
+              >
+                <span style={{ fontSize: 13.5, fontWeight: 600 }}>
+                  Groq API Key
+                </span>
+                <span className="badge" style={{ fontSize: 11 }}>
+                  {aiKeys.groqKey ? '✓ Active & Connected' : 'Not configured'}
+                </span>
+              </div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <input
+                  type="password"
+                  placeholder={
+                    aiKeys.groqKey
+                      ? '•••••••••••••••• (Active)'
+                      : 'Enter Groq API Key (gsk_…)'
+                  }
+                  value={groqKeyInput}
+                  onChange={(e) => setGroqKeyInput(e.target.value)}
+                  style={{ flex: 1 }}
+                />
+                <button
+                  type="button"
+                  className="btn"
+                  onClick={handleSaveGroqKey}
+                  disabled={!groqKeyInput.trim()}
+                >
+                  Save
+                </button>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                }}
+              >
+                <span style={{ fontSize: 13.5, fontWeight: 600 }}>
+                  Mistral API Key
+                </span>
+                <span className="badge" style={{ fontSize: 11 }}>
+                  {aiKeys.mistralKey
+                    ? '✓ Active & Connected'
+                    : 'Not configured'}
+                </span>
+              </div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <input
+                  type="password"
+                  placeholder={
+                    aiKeys.mistralKey
+                      ? '•••••••••••••••• (Active)'
+                      : 'Enter Mistral API Key'
+                  }
+                  value={mistralKeyInput}
+                  onChange={(e) => setMistralKeyInput(e.target.value)}
+                  style={{ flex: 1 }}
+                />
+                <button
+                  type="button"
+                  className="btn"
+                  onClick={handleSaveMistralKey}
+                  disabled={!mistralKeyInput.trim()}
+                >
+                  Save
+                </button>
+              </div>
+            </div>
+
+            <div
+              style={{
+                display: 'flex',
+                gap: 10,
+                alignItems: 'center',
+                marginTop: 4,
+              }}
+            >
+              <button
+                type="button"
+                className="btn primary"
+                onClick={() => void handleTestAI()}
+                disabled={isTestingAI}
+              >
+                {isTestingAI
+                  ? 'Testing Connection…'
+                  : '⚡ Test AI Connectivity'}
+              </button>
+              {testResult && (
+                <span style={{ fontSize: 13, color: 'var(--muted)' }}>
+                  {testResult}
+                </span>
+              )}
+            </div>
+
+            <hr className="profile-divider" style={{ margin: '12px 0' }} />
+
+            <h3>
+              External Integrations &amp; Webhooks (Linear, Notion, Asana, Docs)
+            </h3>
+            <p className="profile-card-sub">
+              Automatically sync meeting action items to your company task
+              management system or webhook receiver.
+            </p>
+
+            <label className="form-field">
+              <span>Integration Webhook Endpoint URL (Optional)</span>
+              <input
+                type="url"
+                placeholder="https://hooks.zapier.com/... or https://company.com/webhook"
+                defaultValue={integrationsConfig.webhookUrl || ''}
+                onBlur={(e) => handleSaveWebhook(e.target.value)}
+              />
+            </label>
+          </div>
+        </div>
+
+        {/* 4. Account & Public Profile Card (Full Width) */}
         {user && (
           <div className="profile-section-card settings-account-card">
             <div className="settings-account-info">
