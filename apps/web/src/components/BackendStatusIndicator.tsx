@@ -50,8 +50,10 @@ export function BackendStatusIndicator({
       color: '#10b981',
       bg: 'rgba(16, 185, 129, 0.12)',
       border: 'rgba(16, 185, 129, 0.3)',
-      label: latencyMs ? `${latencyMs}ms` : 'Live',
-      tooltip: 'Signaling Server Live',
+      label: 'Live',
+      tooltip: latencyMs
+        ? `Signaling Server Live (${latencyMs}ms)`
+        : 'Signaling Server Live',
       badgeText: 'Connected',
       description:
         'The real-time WebRTC signaling server is running and responsive.',

@@ -1596,6 +1596,23 @@ aside.context-bar {
     place-items: center;
   }
 
+  @media (max-width: 440px) {
+    .dash-mobile-header {
+      padding: 10px 12px;
+    }
+    .dash-mobile-header-left {
+      gap: 6px;
+    }
+    .dash-mobile-header-actions {
+      gap: 6px;
+    }
+    .mobile-menu-btn,
+    .btn-icon-subtle {
+      width: 34px;
+      height: 34px;
+    }
+  }
+
   .dash-center {
     width: 100%;
     height: auto;
@@ -2280,27 +2297,38 @@ aside.context-bar {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding-top: 20px;
-  padding-bottom: 20px;
+  gap: 16px;
+  padding-top: 18px;
+  padding-bottom: 18px;
   border-bottom: 1px solid var(--line);
 }
 
 .lobby-header-right {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
+  flex-shrink: 0;
 }
 
 .room-code-pill {
   display: inline-flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   padding: 6px 12px;
   border-radius: 999px;
   background: var(--surface);
   border: 1px solid var(--line);
   font-size: 13px;
   font-weight: 600;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.room-code-pill span {
+  white-space: nowrap;
+  font-family: var(--font-mono, monospace);
+  letter-spacing: 0.04em;
+  display: inline-block;
 }
 
 .pill-copy-btn {
@@ -2315,6 +2343,9 @@ aside.context-bar {
   font-size: 12px;
   font-weight: 500;
   cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: all 0.15s ease;
 }
 
 .pill-copy-btn:hover {
@@ -3257,6 +3288,49 @@ aside.context-bar {
 
   .dock-btn {
     padding: 0 12px;
+  }
+}
+
+@media (max-width: 640px) {
+  .lobby-header {
+    padding-top: 12px;
+    padding-bottom: 12px;
+    gap: 10px;
+  }
+
+  .lobby-header-right {
+    gap: 8px;
+  }
+
+  .room-code-pill {
+    padding: 4px 10px;
+    font-size: 12px;
+    gap: 6px;
+  }
+
+  .pill-copy-btn {
+    padding: 3px 8px;
+    font-size: 11px;
+  }
+}
+
+@media (max-width: 480px) {
+  .lobby-header {
+    padding: 10px 12px;
+  }
+
+  .room-code-pill {
+    padding: 3px 8px;
+    font-size: 11.5px;
+    gap: 5px;
+  }
+
+  .pill-copy-btn {
+    padding: 3px 6px;
+  }
+
+  .pill-copy-btn span {
+    display: none;
   }
 }
 
@@ -4682,6 +4756,118 @@ aside.context-bar {
   }
 }
 
+@media (max-width: 680px) {
+  /* Subpage header */
+  .page-subhead {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+
+  .page-subhead h2 {
+    font-size: 22px;
+  }
+
+  .page-subhead p {
+    font-size: 13.5px;
+  }
+
+  .page-subhead-actions,
+  .page-subhead-actions .btn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  /* Profile section card */
+  .profile-section-card {
+    padding: 16px;
+    border-radius: 14px;
+    gap: 12px;
+  }
+
+  .profile-section-card h3 {
+    font-size: 16px;
+  }
+
+  /* Personal room card: full-width title on top, responsive actions grid below */
+  .profile-section-head {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+
+  .profile-room-actions {
+    width: 100%;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+
+  .profile-room-actions .btn {
+    justify-content: center;
+    padding: 8px 10px;
+    font-size: 12px;
+    text-align: center;
+  }
+
+  .profile-room-actions .btn.primary {
+    grid-column: 1 / -1;
+    padding: 10px 14px;
+    font-size: 13.5px;
+  }
+
+  /* Configured custom rooms row */
+  .meetings-rooms-list .row {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+    padding: 14px 0;
+  }
+
+  .meetings-rooms-list .row > div:last-child {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    width: 100%;
+  }
+
+  .meetings-rooms-list .row > div:last-child .btn {
+    justify-content: center;
+  }
+
+  /* History item row */
+  .history-item-row {
+    flex-direction: column;
+    align-items: stretch;
+    padding: 14px;
+    gap: 12px;
+  }
+
+  .history-title-line {
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .history-title-line strong {
+    font-size: 14px;
+    width: 100%;
+  }
+
+  .history-item-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    width: 100%;
+  }
+
+  .history-item-actions .btn {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
 
 /* ================= PHASE 3: MEETING NOTES & ACTION ITEMS HUB ================= */
 
@@ -5490,6 +5676,18 @@ aside.context-bar {
 .pwa-install-pill:hover {
   transform: translateY(-1px);
   border-color: var(--accent);
+}
+
+@media (max-width: 640px) {
+  .pwa-install-pill {
+    left: 12px;
+    right: 12px;
+    bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+    border-radius: 14px;
+    padding: 8px 12px;
+    justify-content: space-between;
+    font-size: 11.5px;
+  }
 }
 
 /* Network Quality Bars Badge per Tile */

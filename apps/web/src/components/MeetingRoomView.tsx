@@ -2034,7 +2034,7 @@ export function MeetingRoomView({
           </button>
 
           <div className="lobby-header-right">
-            <BackendStatusIndicator />
+            <BackendStatusIndicator compact />
             <div className="room-code-pill" title="Meeting room code">
               <span>{roomCode}</span>
               <button
