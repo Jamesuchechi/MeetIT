@@ -8,7 +8,6 @@ import {
 import {
   getEffectiveApiKeys,
   savePreferredProvider,
-  saveUserApiKey,
   testAIConnectivity,
   type AIProvider,
 } from '../lib/aiService';
@@ -91,8 +90,6 @@ export function SettingsView({
     loadAppSettings(),
   );
   const [aiKeys, setAiKeys] = useState(() => getEffectiveApiKeys());
-  const [groqKeyInput, setGroqKeyInput] = useState('');
-  const [mistralKeyInput, setMistralKeyInput] = useState('');
   const [isTestingAI, setIsTestingAI] = useState(false);
   const [testResult, setTestResult] = useState<string | null>(null);
   const [integrationsConfig, setIntegrationsConfig] =
@@ -130,20 +127,6 @@ export function SettingsView({
     savePreferredProvider(provider);
     setAiKeys(getEffectiveApiKeys());
     onToast(`Preferred AI provider set to ${provider}.`);
-  };
-
-  const handleSaveGroqKey = () => {
-    saveUserApiKey('groq', groqKeyInput);
-    setAiKeys(getEffectiveApiKeys());
-    setGroqKeyInput('');
-    onToast('Groq API Key saved.');
-  };
-
-  const handleSaveMistralKey = () => {
-    saveUserApiKey('mistral', mistralKeyInput);
-    setAiKeys(getEffectiveApiKeys());
-    setMistralKeyInput('');
-    onToast('Mistral API Key saved.');
   };
 
   const handleTestAI = async () => {
@@ -448,81 +431,85 @@ export function SettingsView({
               </select>
             </label>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
+                gap: 12,
+              }}
+            >
               <div
                 style={{
+                  background: 'var(--soft, #f8fafc)',
+                  border: '1px solid var(--line)',
+                  borderRadius: 10,
+                  padding: '12px 14px',
                   display: 'flex',
-                  justifyContent: 'space-between',
                   alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: 10,
                 }}
               >
-                <span style={{ fontSize: 13.5, fontWeight: 600 }}>
-                  Groq API Key
-                </span>
-                <span className="badge" style={{ fontSize: 11 }}>
-                  {aiKeys.groqKey ? '✓ Active & Connected' : 'Not configured'}
-                </span>
-              </div>
-              <div style={{ display: 'flex', gap: 8 }}>
-                <input
-                  type="password"
-                  placeholder={
-                    aiKeys.groqKey
-                      ? '•••••••••••••••• (Active)'
-                      : 'Enter Groq API Key (gsk_…)'
-                  }
-                  value={groqKeyInput}
-                  onChange={(e) => setGroqKeyInput(e.target.value)}
-                  style={{ flex: 1 }}
-                />
-                <button
-                  type="button"
-                  className="btn"
-                  onClick={handleSaveGroqKey}
-                  disabled={!groqKeyInput.trim()}
+                <div>
+                  <div style={{ fontWeight: 600, fontSize: 13.5 }}>
+                    Groq AI Engine
+                  </div>
+                  <small style={{ color: 'var(--muted)', display: 'block' }}>
+                    Llama 3.3 70B Versatile
+                  </small>
+                </div>
+                <span
+                  className="badge"
+                  style={{
+                    fontSize: 11,
+                    background: aiKeys.groqKey
+                      ? 'rgba(34, 197, 94, 0.15)'
+                      : 'var(--soft)',
+                    color: aiKeys.groqKey ? '#16a34a' : 'var(--muted)',
+                    borderColor: aiKeys.groqKey
+                      ? 'rgba(34, 197, 94, 0.3)'
+                      : 'var(--line)',
+                  }}
                 >
-                  Save
-                </button>
+                  {aiKeys.groqKey ? '✓ Active & Connected' : 'Managed'}
+                </span>
               </div>
-            </div>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               <div
                 style={{
+                  background: 'var(--soft, #f8fafc)',
+                  border: '1px solid var(--line)',
+                  borderRadius: 10,
+                  padding: '12px 14px',
                   display: 'flex',
-                  justifyContent: 'space-between',
                   alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: 10,
                 }}
               >
-                <span style={{ fontSize: 13.5, fontWeight: 600 }}>
-                  Mistral API Key
-                </span>
-                <span className="badge" style={{ fontSize: 11 }}>
-                  {aiKeys.mistralKey
-                    ? '✓ Active & Connected'
-                    : 'Not configured'}
-                </span>
-              </div>
-              <div style={{ display: 'flex', gap: 8 }}>
-                <input
-                  type="password"
-                  placeholder={
-                    aiKeys.mistralKey
-                      ? '•••••••••••••••• (Active)'
-                      : 'Enter Mistral API Key'
-                  }
-                  value={mistralKeyInput}
-                  onChange={(e) => setMistralKeyInput(e.target.value)}
-                  style={{ flex: 1 }}
-                />
-                <button
-                  type="button"
-                  className="btn"
-                  onClick={handleSaveMistralKey}
-                  disabled={!mistralKeyInput.trim()}
+                <div>
+                  <div style={{ fontWeight: 600, fontSize: 13.5 }}>
+                    Mistral AI Engine
+                  </div>
+                  <small style={{ color: 'var(--muted)', display: 'block' }}>
+                    Mistral Small Latest
+                  </small>
+                </div>
+                <span
+                  className="badge"
+                  style={{
+                    fontSize: 11,
+                    background: aiKeys.mistralKey
+                      ? 'rgba(34, 197, 94, 0.15)'
+                      : 'var(--soft)',
+                    color: aiKeys.mistralKey ? '#16a34a' : 'var(--muted)',
+                    borderColor: aiKeys.mistralKey
+                      ? 'rgba(34, 197, 94, 0.3)'
+                      : 'var(--line)',
+                  }}
                 >
-                  Save
-                </button>
+                  {aiKeys.mistralKey ? '✓ Active & Connected' : 'Managed'}
+                </span>
               </div>
             </div>
 
