@@ -199,12 +199,12 @@ Every phase has an **exit criteria** block. Do not start the next phase until ex
 
 ### Captions and transcripts
 
-- [ ] [P0] Live captions via streaming STT (Deepgram or Whisper streaming), caption overlay
-- [ ] [P0] Caption language selector, font size, position
-- [ ] [P1] Post-meeting transcript with speaker labels and timestamps
-- [ ] [P1] Searchable transcripts across meetings
-- [ ] [P1] Transcript export: TXT, SRT, VTT, DOCX
-- [ ] [P2] Custom vocabulary (names, jargon)
+- [x] [P0] Live captions via streaming STT (Deepgram or Whisper streaming), caption overlay
+- [x] [P0] Caption language selector, font size, position
+- [x] [P1] Post-meeting transcript with speaker labels and timestamps
+- [x] [P1] Searchable transcripts across meetings
+- [x] [P1] Transcript export: TXT, SRT, VTT, DOCX
+- [x] [P2] Custom vocabulary (names, jargon)
 
 ### AI meeting notes & intelligence
 

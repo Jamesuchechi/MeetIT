@@ -993,6 +993,26 @@ export function buildSignalingApp(
           break;
         }
 
+        case 'caption.send': {
+          const now = Date.now();
+          const cuePayload = {
+            id: msg.payload.cueId || randomUUID(),
+            from: peer.id,
+            displayName: peer.displayName,
+            text: msg.payload.text,
+            ts: now,
+            isFinal: msg.payload.isFinal,
+            ...(msg.payload.language ? { language: msg.payload.language } : {}),
+          };
+          room.broadcast({
+            v: 1,
+            ts: now,
+            type: 'caption.cue',
+            payload: cuePayload,
+          });
+          break;
+        }
+
         case 'host.action': {
           const actionPayload = msg.payload;
           if (!room.canModerate(peer.id)) {

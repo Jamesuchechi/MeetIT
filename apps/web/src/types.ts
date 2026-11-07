@@ -12,6 +12,7 @@ export type DashboardTab =
   | 'schedule'
   | 'notes'
   | 'recordings'
+  | 'transcripts'
   | 'settings'
   | 'profile'
   | 'profile-edit';

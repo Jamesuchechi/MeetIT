@@ -52,6 +52,7 @@ import { MeetingsView } from './MeetingsView';
 import { ScheduleView } from './ScheduleView';
 import { NotesView } from './NotesView';
 import { RecordingsView } from './RecordingsView';
+import { TranscriptsView } from './TranscriptsView';
 import { BackendStatusIndicator } from './BackendStatusIndicator';
 
 interface DashboardViewProps {
@@ -71,6 +72,7 @@ const TAB_LABELS: Record<DashboardTab, string> = {
   schedule: 'Schedule',
   notes: 'Notes & Action Items',
   recordings: 'Recordings',
+  transcripts: 'Transcripts & Captions',
   settings: 'Settings',
   profile: 'Public Profile',
   'profile-edit': 'Edit Profile',
@@ -361,6 +363,18 @@ export function DashboardView({
           >
             <RecIcon />
             <span>Recordings</span>
+          </button>
+          <button
+            type="button"
+            aria-current={activeTab === 'transcripts' ? 'page' : undefined}
+            onClick={() => {
+              selectTab('transcripts');
+              setIsNavDrawerOpen(false);
+            }}
+            data-testid="sidebar-transcripts-btn"
+          >
+            <span>💬</span>
+            <span>Transcripts</span>
           </button>
           <button
             type="button"
@@ -689,6 +703,12 @@ export function DashboardView({
             />
           ) : activeTab === 'recordings' ? (
             <RecordingsView
+              user={user ?? null}
+              onToast={onToast}
+              onEnterRoom={onEnterRoom}
+            />
+          ) : activeTab === 'transcripts' ? (
+            <TranscriptsView
               user={user ?? null}
               onToast={onToast}
               onEnterRoom={onEnterRoom}

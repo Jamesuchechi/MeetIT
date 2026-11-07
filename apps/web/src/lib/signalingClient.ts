@@ -243,6 +243,7 @@ export class SignalingClient implements SignalingChannel {
     'state.updated': new Set(),
     'chat.message': new Set(),
     'reaction.received': new Set(),
+    'caption.cue': new Set(),
     'room.updated': new Set(),
     'recording.started': new Set(),
     'recording.stopped': new Set(),
@@ -489,6 +490,27 @@ export class SignalingClient implements SignalingChannel {
           emoji,
           ts: Date.now(),
         });
+      } else if (msg.type === 'caption.send') {
+        const raw = msg as unknown as {
+          text?: string;
+          isFinal?: boolean;
+          language?: string;
+          cueId?: string;
+        };
+        const text = raw.text ?? '';
+        if (text) {
+          this.emit('caption.cue', {
+            id:
+              raw.cueId ||
+              `cue-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+            from: msg.senderId,
+            displayName: msg.displayName,
+            text,
+            ts: Date.now(),
+            isFinal: raw.isFinal ?? true,
+            ...(raw.language ? { language: raw.language } : {}),
+          });
+        }
       }
     });
 
@@ -742,6 +764,29 @@ export class SignalingClient implements SignalingChannel {
           displayName: this.displayName,
           emoji: d.payload.emoji,
         });
+      } else if (d.type === 'caption.send') {
+        const now = Date.now();
+        const cuePayload = {
+          id:
+            d.payload.cueId ||
+            `cue-${now}-${Math.random().toString(36).slice(2, 6)}`,
+          from: this.selfId,
+          displayName: this.displayName,
+          text: d.payload.text,
+          ts: now,
+          isFinal: d.payload.isFinal,
+          ...(d.payload.language ? { language: d.payload.language } : {}),
+        };
+        this.emit('caption.cue', cuePayload);
+        this.broadcast.postMessage({
+          type: 'caption.send',
+          senderId: this.selfId,
+          displayName: this.displayName,
+          text: d.payload.text,
+          isFinal: d.payload.isFinal,
+          language: d.payload.language,
+          cueId: cuePayload.id,
+        });
       }
     }
   }
@@ -762,6 +807,19 @@ export class SignalingClient implements SignalingChannel {
       v: 1,
       type: 'reaction.send',
       payload: { emoji },
+    });
+  }
+
+  sendCaption(options: {
+    text: string;
+    isFinal: boolean;
+    language?: string;
+    cueId?: string;
+  }): void {
+    this.send({
+      v: 1,
+      type: 'caption.send',
+      payload: options,
     });
   }
 

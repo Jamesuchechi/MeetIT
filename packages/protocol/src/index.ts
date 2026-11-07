@@ -96,6 +96,25 @@ export const chatMessageSchema = z.object({
 });
 export type ChatMessagePayload = z.infer<typeof chatMessageSchema>;
 
+export const captionCueSchema = z.object({
+  id: z.string().min(1),
+  from: z.string().uuid(),
+  displayName: z.string().trim().min(1).max(80),
+  text: z.string().min(1).max(2000),
+  ts: z.number(),
+  isFinal: z.boolean(),
+  language: z.string().max(16).optional(),
+});
+export type CaptionCuePayload = z.infer<typeof captionCueSchema>;
+
+export const customVocabularyItemSchema = z.object({
+  id: z.string().optional(),
+  term: z.string().min(1).max(100),
+  soundsLike: z.string().max(100).optional(),
+  category: z.string().max(50).optional(),
+});
+export type CustomVocabularyItem = z.infer<typeof customVocabularyItemSchema>;
+
 export const sdpSchema = z.object({
   type: z.enum(['offer', 'answer', 'pranswer', 'rollback']),
   sdp: z.string().optional(),
@@ -256,6 +275,18 @@ export const clientMessageSchema = z.discriminatedUnion('type', [
     v: z.literal(1),
     id: z.string().uuid().optional(),
     ts: z.number().optional(),
+    type: z.literal('caption.send'),
+    payload: z.object({
+      text: z.string().trim().min(1).max(2000),
+      isFinal: z.boolean(),
+      language: z.string().max(16).optional(),
+      cueId: z.string().optional(),
+    }),
+  }),
+  z.object({
+    v: z.literal(1),
+    id: z.string().uuid().optional(),
+    ts: z.number().optional(),
     type: z.literal('host.action'),
     payload: hostActionPayloadSchema,
   }),
@@ -361,6 +392,15 @@ export interface SignalingEvents {
     displayName: string;
     emoji: ReactionEmoji;
     ts: number;
+  };
+  'caption.cue': {
+    id: string;
+    from: string;
+    displayName: string;
+    text: string;
+    ts: number;
+    isFinal: boolean;
+    language?: string | undefined;
   };
   'room.updated': {
     locked: boolean;

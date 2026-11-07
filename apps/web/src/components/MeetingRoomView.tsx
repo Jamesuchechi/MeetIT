@@ -85,6 +85,16 @@ import {
   hasEndedMediaTracks,
   REAL_DEVICE_TEST_MATRIX,
 } from '../lib/safariIosWorkarounds';
+import { CaptionsOverlay, type DisplayCaptionCue } from './CaptionsOverlay';
+import {
+  CaptionSettingsModal,
+  type CaptionConfig,
+} from './CaptionSettingsModal';
+import {
+  SpeechRecognitionService,
+  isSpeechRecognitionSupported,
+} from '../lib/speechRecognition';
+import { persistTranscript, type TranscriptCue } from '../lib/transcriptsStore';
 import { copyToClipboard, type AuthUser } from '../types';
 import { BackendStatusIndicator } from './BackendStatusIndicator';
 
@@ -619,6 +629,20 @@ export function MeetingRoomView({
   const [recordingIsoChoice, setRecordingIsoChoice] = useState(false);
   const [recordingRetentionChoice, setRecordingRetentionChoice] =
     useState<number>(30);
+
+  // Closed Captions & Transcription State
+  const [captionsEnabled, setCaptionsEnabled] = useState(false);
+  const [showCaptionSettings, setShowCaptionSettings] = useState(false);
+  const [captionConfig, setCaptionConfig] = useState<CaptionConfig>({
+    language: 'en-US',
+    fontSize: 'medium',
+    position: 'bottom',
+    vocabulary: [],
+  });
+  const [liveCues, setLiveCues] = useState<DisplayCaptionCue[]>([]);
+  const speechServiceRef = useRef<SpeechRecognitionService | null>(null);
+  const transcriptCuesRef = useRef<TranscriptCue[]>([]);
+  const meetingStartTimestampRef = useRef<number>(Date.now());
 
   useEffect(() => {
     if (!isRecording || !recordingStartedAt) {
@@ -1911,6 +1935,40 @@ export function MeetingRoomView({
       announce(`${by} stopped recording`);
     });
 
+    signaling.on('caption.cue', (cue) => {
+      const displayCue: DisplayCaptionCue = {
+        id: cue.id,
+        from: cue.from,
+        displayName: cue.displayName,
+        text: cue.text,
+        ts: cue.ts,
+        isFinal: cue.isFinal,
+        ...(cue.language ? { language: cue.language } : {}),
+      };
+
+      setLiveCues((prev) => {
+        const existingIdx = prev.findIndex((c) => c.id === cue.id);
+        if (existingIdx >= 0) {
+          const next = [...prev];
+          next[existingIdx] = displayCue;
+          return next;
+        }
+        return [...prev.slice(-9), displayCue];
+      });
+
+      if (cue.isFinal) {
+        const startMs = Math.max(0, cue.ts - meetingStartTimestampRef.current);
+        transcriptCuesRef.current.push({
+          id: cue.id,
+          speakerName: cue.displayName,
+          text: cue.text,
+          startMs,
+          cueOrder: transcriptCuesRef.current.length,
+          ...(cue.language ? { language: cue.language } : {}),
+        });
+      }
+    });
+
     signaling.on('host.command', (cmd) => {
       if (cmd.command === 'mute') {
         setAudioMuted(true);
@@ -2108,8 +2166,129 @@ export function MeetingRoomView({
       }
       localScreenStreamRef.current = null;
     }
+
+    if (speechServiceRef.current) {
+      speechServiceRef.current.destroy();
+      speechServiceRef.current = null;
+    }
+
+    if (transcriptCuesRef.current.length > 0) {
+      const durSecs = callStartedAtRef.current
+        ? Math.max(
+            1,
+            Math.floor((Date.now() - callStartedAtRef.current) / 1000),
+          )
+        : callSeconds || 60;
+      void persistTranscript({
+        id: `tr-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+        roomCode,
+        roomTitle,
+        startedAt: callStartedAtRef.current
+          ? new Date(callStartedAtRef.current).toISOString()
+          : new Date().toISOString(),
+        endedAt: new Date().toISOString(),
+        durationSeconds: durSecs,
+        ...(user?.id ? { createdBy: user.id } : {}),
+        cues: [...transcriptCuesRef.current],
+      });
+      transcriptCuesRef.current = [];
+    }
+
     onLeaveCall(roomCode);
   };
+
+  const handleToggleCaptions = () => {
+    if (!isSpeechRecognitionSupported()) {
+      onToast(
+        'Speech recognition is not supported in this browser. Try Chrome, Edge, or Safari.',
+      );
+      return;
+    }
+    setCaptionsEnabled((prev) => {
+      const next = !prev;
+      if (next) {
+        onToast('Closed Captions enabled');
+      } else {
+        onToast('Closed Captions disabled');
+      }
+      return next;
+    });
+  };
+
+  useEffect(() => {
+    if (!captionsEnabled || audioMuted || stage !== 'call') {
+      if (speechServiceRef.current) {
+        speechServiceRef.current.stop();
+      }
+      return;
+    }
+
+    if (!speechServiceRef.current) {
+      speechServiceRef.current = new SpeechRecognitionService({
+        language: captionConfig.language,
+        vocabulary: captionConfig.vocabulary,
+        onResult: (text, isFinal, lang) => {
+          const selfDisplayName = displayName || user?.displayName || 'Me';
+          const cueId = `cue-${signalingRef.current?.getSelfId() || 'me'}-${Date.now()}`;
+          signalingRef.current?.sendCaption({
+            text,
+            isFinal,
+            language: lang,
+            cueId,
+          });
+          const now = Date.now();
+          const cue: DisplayCaptionCue = {
+            id: cueId,
+            from: signalingRef.current?.getSelfId() || 'self',
+            displayName: selfDisplayName,
+            text,
+            ts: now,
+            isFinal,
+            language: lang,
+          };
+          setLiveCues((prev) => {
+            const existingIdx = prev.findIndex((c) => c.id === cue.id);
+            if (existingIdx >= 0) {
+              const updated = [...prev];
+              updated[existingIdx] = cue;
+              return updated;
+            }
+            return [...prev.slice(-9), cue];
+          });
+          if (isFinal) {
+            const startMs = Math.max(0, now - meetingStartTimestampRef.current);
+            transcriptCuesRef.current.push({
+              id: cue.id,
+              speakerName: selfDisplayName,
+              text,
+              startMs,
+              cueOrder: transcriptCuesRef.current.length,
+              language: lang,
+            });
+          }
+        },
+        onError: (err) => {
+          console.warn('Speech recognition warning:', err);
+        },
+      });
+    } else {
+      speechServiceRef.current.setLanguage(captionConfig.language);
+      speechServiceRef.current.setVocabulary(captionConfig.vocabulary);
+    }
+
+    speechServiceRef.current.start();
+
+    return () => {
+      speechServiceRef.current?.stop();
+    };
+  }, [
+    captionsEnabled,
+    audioMuted,
+    stage,
+    captionConfig,
+    displayName,
+    user?.displayName,
+  ]);
 
   const formatDuration = (secs: number) => {
     const mins = Math.floor(secs / 60);
@@ -4000,6 +4179,42 @@ export function MeetingRoomView({
             </button>
           )}
 
+          {/* Closed Captions button */}
+          <button
+            type="button"
+            className={`dock-btn icon-pill ${captionsEnabled ? 'active-panel' : ''}`}
+            onClick={handleToggleCaptions}
+            aria-pressed={captionsEnabled}
+            aria-label={
+              captionsEnabled
+                ? 'Turn off closed captions'
+                : 'Turn on closed captions (CC)'
+            }
+            title={
+              captionsEnabled
+                ? 'Turn off captions (click ⚙ on captions for settings)'
+                : 'Turn on closed captions (CC)'
+            }
+            data-testid="call-captions-btn"
+          >
+            <span
+              aria-hidden="true"
+              style={{
+                fontSize: 12,
+                fontWeight: 800,
+                border: '1.5px solid currentColor',
+                borderRadius: 4,
+                padding: '0 3px',
+                lineHeight: '14px',
+              }}
+            >
+              CC
+            </span>
+            <span className="dock-btn-label">
+              {captionsEnabled ? 'CC On' : 'CC'}
+            </span>
+          </button>
+
           {/* Devices & Sound Settings popover */}
           <div className="dock-popover-anchor">
             <button
@@ -4431,6 +4646,29 @@ export function MeetingRoomView({
             </div>
           </div>
         </div>
+      )}
+
+      {/* Closed Captions Overlay */}
+      {captionsEnabled && liveCues.length > 0 && (
+        <CaptionsOverlay
+          cues={liveCues}
+          fontSize={captionConfig.fontSize}
+          position={captionConfig.position}
+          onOpenSettings={() => setShowCaptionSettings(true)}
+          onToggleCaptions={handleToggleCaptions}
+        />
+      )}
+
+      {/* Caption Settings Modal */}
+      {showCaptionSettings && (
+        <CaptionSettingsModal
+          config={captionConfig}
+          onSave={(newConfig) => {
+            setCaptionConfig(newConfig);
+            onToast('Updated closed caption settings');
+          }}
+          onClose={() => setShowCaptionSettings(false)}
+        />
       )}
     </div>
   );
