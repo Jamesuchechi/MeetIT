@@ -206,3 +206,4 @@ resource "aws_eip" "livekit_eip" {
     Environment = var.environment
   }
 }
+

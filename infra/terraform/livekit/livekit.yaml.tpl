@@ -41,3 +41,4 @@ room:
 node_selector:
   kind: "sysload"
   sysload_limit: 0.85
+

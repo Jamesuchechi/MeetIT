@@ -17,3 +17,4 @@ output "health_check_url" {
   description = "HTTP health check endpoint for latency probing and monitoring"
   value       = "https://${var.domain_name}/health"
 }
+
