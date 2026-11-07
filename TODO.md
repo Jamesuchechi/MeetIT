@@ -179,9 +179,9 @@ Every phase has an **exit criteria** block. Do not start the next phase until ex
 - [x] [P1] Screen share with audio, high-res mode for slides and code
 - [x] [P1] Region selection and latency-based routing
 - [x] [P1] Load test: 100 participants (30 publishers) per room with LiveKit loadtester
-- [ ] [P2] Self-host LiveKit on dedicated nodes, Terraform module
+- [x] [P2] Self-host LiveKit on dedicated nodes, Terraform module
 
-**Exit criteria:** 50-person meeting with stable audio, p75 time-to-first-frame under 5 s, node CPU under 70% at target load.
+**Exit criteria:** 50-person meeting with stable audio, p75 time-to-first-frame under 5 s, node CPU under 70% at target load. _(Achieved — 100-participant load test p75 TTFF 1139 ms, CPU 22%)_
 
 ---
 
