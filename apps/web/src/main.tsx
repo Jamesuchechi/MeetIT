@@ -1,13 +1,19 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { App } from './App';
+import { AppErrorBoundary, initTelemetry } from './lib/telemetry';
 import './style.css';
+
+// Initialize Sentry and diagnostic telemetry
+initTelemetry();
 
 const rootEl = document.getElementById('root');
 if (rootEl) {
   ReactDOM.createRoot(rootEl).render(
     <React.StrictMode>
-      <App />
+      <AppErrorBoundary>
+        <App />
+      </AppErrorBoundary>
     </React.StrictMode>,
   );
 }

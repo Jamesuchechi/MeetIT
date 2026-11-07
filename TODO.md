@@ -157,10 +157,10 @@ Every phase has an **exit criteria** block. Do not start the next phase until ex
 ### Ops
 
 - [x] [P0] Deploy: web on Vercel, signaling + coturn + Redis on Fly/VPS
-- [ ] [P0] Sentry, uptime checks, basic dashboards
-- [ ] [P1] Staging environment + preview deployments per PR
+- [x] [P0] Sentry, uptime checks, basic dashboards
+- [x] [P1] Staging environment + preview deployments per PR
 
-**Exit criteria:** Public alpha. Strangers can sign in, schedule, host with waiting room, and recover from network drops. Join success rate above 97% in telemetry.
+**Exit criteria:** Public alpha. Strangers can sign in, schedule, host with waiting room, and recover from network drops. Join success rate above 97% in telemetry. _(Achieved)_
 
 ---
 

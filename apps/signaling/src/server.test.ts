@@ -89,6 +89,24 @@ describe('Signaling server integration tests', () => {
     expect(healthRes.status).toBe(200);
     expect(await healthRes.json()).toEqual({ status: 'ok' });
 
+    const uptimeRes = await fetch(`${address}/health`);
+    expect(uptimeRes.status).toBe(200);
+    const uptimeBody = (await uptimeRes.json()) as {
+      status: string;
+      uptimeSeconds: number;
+    };
+    expect(uptimeBody.status).toBe('ok');
+    expect(typeof uptimeBody.uptimeSeconds).toBe('number');
+
+    const metricsRes = await fetch(`${address}/metrics`);
+    expect(metricsRes.status).toBe(200);
+    const metricsBody = (await metricsRes.json()) as {
+      status: string;
+      rooms: { active: number };
+    };
+    expect(metricsBody.status).toBe('ok');
+    expect(metricsBody.rooms.active).toBe(0);
+
     const createRes = await fetch(`${address}/rooms`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

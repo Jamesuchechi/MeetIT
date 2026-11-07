@@ -38,6 +38,9 @@ export interface SignalingMetrics {
   invalidFrames: number;
   rateLimitedFrames: number;
   activeConnections: number;
+  totalConnections: number;
+  roomsCreated: number;
+  startedAt: number;
 }
 
 export interface SignalingServerInstance {
@@ -111,6 +114,9 @@ export function buildSignalingApp(
     invalidFrames: 0,
     rateLimitedFrames: 0,
     activeConnections: 0,
+    totalConnections: 0,
+    roomsCreated: 0,
+    startedAt: Date.now(),
   };
 
   const app = Fastify({
@@ -138,7 +144,9 @@ export function buildSignalingApp(
   app.addHook('onRequest', async (request, reply) => {
     const origin = request.headers.origin;
     const isPublicHealth =
-      request.url.startsWith('/healthz') || request.url.startsWith('/readyz');
+      request.url.startsWith('/health') ||
+      request.url.startsWith('/readyz') ||
+      request.url.startsWith('/metrics');
 
     if (origin) {
       if (isPublicHealth || isOriginAllowed(origin)) {
@@ -161,6 +169,15 @@ export function buildSignalingApp(
     }
   });
 
+  app.get('/health', async (request, reply) => {
+    reply.header('Access-Control-Allow-Origin', '*');
+    return {
+      status: 'ok',
+      uptimeSeconds: Math.floor(process.uptime()),
+      timestamp: new Date().toISOString(),
+    };
+  });
+
   app.get('/healthz', async (request, reply) => {
     reply.header('Access-Control-Allow-Origin', '*');
     return { status: 'ok' };
@@ -170,9 +187,39 @@ export function buildSignalingApp(
     reply.header('Access-Control-Allow-Origin', '*');
     return {
       status: 'ready',
+      uptimeSeconds: Math.floor(process.uptime()),
       rooms: roomManager.size,
       activeConnections: metrics.activeConnections,
+      totalConnections: metrics.totalConnections,
       invalidFrames: metrics.invalidFrames,
+      rateLimitedFrames: metrics.rateLimitedFrames,
+    };
+  });
+
+  app.get('/metrics', async (request, reply) => {
+    reply.header('Access-Control-Allow-Origin', '*');
+    const memory = process.memoryUsage();
+    return {
+      status: 'ok',
+      uptimeSeconds: Math.floor(process.uptime()),
+      timestamp: new Date().toISOString(),
+      rooms: {
+        active: roomManager.size,
+        totalCreated: metrics.roomsCreated,
+      },
+      connections: {
+        active: metrics.activeConnections,
+        total: metrics.totalConnections,
+      },
+      frames: {
+        invalid: metrics.invalidFrames,
+        rateLimited: metrics.rateLimitedFrames,
+      },
+      memory: {
+        heapUsedMb: Number((memory.heapUsed / 1024 / 1024).toFixed(2)),
+        rssMb: Number((memory.rss / 1024 / 1024).toFixed(2)),
+      },
+      nodeVersion: process.version,
     };
   });
 
@@ -224,6 +271,8 @@ export function buildSignalingApp(
         ? { maxParticipants: body.maxParticipants }
         : {}),
     });
+
+    metrics.roomsCreated += 1;
 
     persistence.recordRoomCreated({
       code: room.code,
@@ -400,6 +449,7 @@ export function buildSignalingApp(
 
   wss.on('connection', (ws: WebSocket) => {
     metrics.activeConnections += 1;
+    metrics.totalConnections += 1;
     const ctx: SocketContext = {
       traceId: randomUUID(),
       isAlive: true,

@@ -1,4 +1,13 @@
+import * as Sentry from '@sentry/node';
 import { buildSignalingApp } from './app.js';
+
+if (process.env.SENTRY_DSN) {
+  Sentry.init({
+    dsn: process.env.SENTRY_DSN,
+    environment: process.env.NODE_ENV ?? 'production',
+    tracesSampleRate: 0.1,
+  });
+}
 
 const { app, close } = buildSignalingApp();
 
@@ -13,6 +22,9 @@ try {
 }
 
 const shutdown = async () => {
+  if (process.env.SENTRY_DSN) {
+    await Sentry.close(2000);
+  }
   await close();
   process.exit(0);
 };

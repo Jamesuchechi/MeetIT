@@ -68,6 +68,11 @@ import {
 } from '../lib/meetingsStore';
 import { ensureNoteForCompletedMeeting } from '../lib/notesStore';
 import {
+  recordCallJoinAttempt,
+  recordCallJoinSuccess,
+  recordCallJoinFailure,
+} from '../lib/telemetry';
+import {
   runPreCallDiagnosticsProbe,
   type PreCallDiagnosticsReport,
 } from '../lib/DiagnosticsProbe';
@@ -1445,6 +1450,7 @@ export function MeetingRoomView({
     };
 
     callStartedAtRef.current = Date.now();
+    recordCallJoinAttempt(roomCode);
     seenAttendeesRef.current = new Map([
       [
         user?.id ?? 'local-self',
@@ -1673,6 +1679,8 @@ export function MeetingRoomView({
         playCallChime('join');
       }
 
+      recordCallJoinSuccess(roomCode);
+
       void (async () => {
         if (!hasConnectedTransportRef.current) {
           hasConnectedTransportRef.current = true;
@@ -1866,11 +1874,13 @@ export function MeetingRoomView({
 
     signaling.on('error', (err) => {
       if (err.code === 'ROOM_FULL') {
+        recordCallJoinFailure(roomCode, err.code);
         setRoomFull(true);
         setStage('lobby');
         signaling.disconnect();
         void transport.disconnect();
       } else if (err.code === 'ROOM_LOCKED') {
+        recordCallJoinFailure(roomCode, err.code);
         setRoomLocked(true);
         setStage('lobby');
         signaling.disconnect();
@@ -1881,6 +1891,7 @@ export function MeetingRoomView({
         err.code === 'NOT_ADMITTED'
       ) {
         if (err.code !== 'FORBIDDEN' || stage !== 'call') {
+          recordCallJoinFailure(roomCode, err.code);
           setLobbyError(err.message);
           setStage('lobby');
           signaling.disconnect();
