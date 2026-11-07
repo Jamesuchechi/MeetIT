@@ -2775,6 +2775,176 @@ aside.context-bar {
   grid-template-rows: minmax(0, 1fr);
 }
 
+/* WhatsApp / FaceTime 1:1 Picture-in-Picture mode */
+.call-stage.mode-pip {
+  position: relative;
+  display: block;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.call-stage.mode-pip .call-tile:not(.pip-floating-tile) {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  min-height: 100%;
+  border-radius: 0;
+  border: none;
+  z-index: 1;
+}
+
+@media (min-width: 768px) {
+  .call-stage.mode-pip {
+    padding: 8px 16px;
+  }
+  .call-stage.mode-pip .call-tile:not(.pip-floating-tile) {
+    border-radius: 18px;
+    inset: 8px 16px;
+    width: calc(100% - 32px);
+    height: calc(100% - 16px);
+  }
+}
+
+.pip-floating-tile {
+  position: absolute !important;
+  z-index: 40 !important;
+  width: 112px !important;
+  height: 168px !important;
+  min-height: unset !important;
+  border-radius: 14px !important;
+  overflow: hidden !important;
+  background: #1e1f22 !important;
+  border: 2px solid rgba(255, 255, 255, 0.28) !important;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.65), 0 2px 8px rgba(0, 0, 0, 0.4) !important;
+  touch-action: none;
+  user-select: none;
+  cursor: grab;
+  transition: all 0.24s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s ease;
+}
+
+@media (min-width: 480px) {
+  .pip-floating-tile {
+    width: 136px !important;
+    height: 204px !important;
+    border-radius: 16px !important;
+  }
+}
+
+.pip-floating-tile.dragging {
+  cursor: grabbing !important;
+  transition: none !important;
+  box-shadow: 0 20px 42px rgba(0, 0, 0, 0.85), 0 0 0 2px var(--brand, #3b82f6) !important;
+  transform: scale(1.02);
+}
+
+.pip-floating-tile.corner-bottom-right {
+  right: 14px;
+  bottom: 14px;
+  top: auto;
+  left: auto;
+}
+
+.pip-floating-tile.corner-bottom-left {
+  left: 14px;
+  bottom: 14px;
+  top: auto;
+  right: auto;
+}
+
+.pip-floating-tile.corner-top-right {
+  right: 14px;
+  top: 14px;
+  bottom: auto;
+  left: auto;
+}
+
+.pip-floating-tile.corner-top-left {
+  left: 14px;
+  top: 14px;
+  bottom: auto;
+  right: auto;
+}
+
+.pip-floating-tile .tile-hover-actions {
+  display: none !important;
+}
+
+.pip-floating-tile .tile-badges-left {
+  transform: scale(0.8);
+  transform-origin: top left;
+  top: 6px;
+  left: 6px;
+}
+
+.pip-floating-tile .tile-meta-bar {
+  padding: 4px 6px;
+  left: 6px;
+  right: 6px;
+  bottom: 6px;
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.75) 0%, transparent 100%);
+}
+
+.pip-floating-tile .tile-name-badge {
+  font-size: 11px;
+  padding: 2px 6px;
+  background: rgba(19, 19, 20, 0.75);
+  border-radius: 6px;
+}
+
+.pip-floating-tile .tile-name-badge span {
+  max-width: 60px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pip-floating-tile .tile-status-icons {
+  transform: scale(0.85);
+  transform-origin: right center;
+}
+
+.pip-floating-tile .tile-avatar-circle {
+  width: 48px !important;
+  height: 48px !important;
+  font-size: 18px !important;
+}
+
+.pip-swap-btn {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.65);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+  cursor: pointer;
+  padding: 0;
+  transition: transform 0.15s ease, background 0.15s ease;
+}
+
+.pip-swap-btn:hover {
+  background: rgba(0, 0, 0, 0.88);
+  transform: scale(1.1);
+}
+
+.pip-swap-btn svg {
+  width: 15px;
+  height: 15px;
+  stroke: currentColor;
+  stroke-width: 2.2;
+  fill: none;
+}
+
 .call-tile {
   position: relative;
   width: 100%;

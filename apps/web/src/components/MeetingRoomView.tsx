@@ -36,6 +36,8 @@ import {
   CloseIcon,
   InfoIcon,
   UsrIcon,
+  SwapIcon,
+  PanelRightIcon,
 } from './Icons';
 import {
   acquireDisplayMedia,
@@ -173,6 +175,14 @@ function RemoteVideoTile({
   isSpeaking,
   isPinned,
   canModerate,
+  isFloating = false,
+  pipCorner = 'bottom-right',
+  dragOffset = null,
+  onPipPointerDown,
+  onPipPointerMove,
+  onPipPointerUp,
+  onPipPointerCancel,
+  onPipSwap,
   onTogglePin,
   onMutePeer,
   onAskUnmutePeer,
@@ -186,6 +196,19 @@ function RemoteVideoTile({
   isSpeaking: boolean;
   isPinned: boolean;
   canModerate: boolean;
+  isFloating?: boolean | undefined;
+  pipCorner?:
+    'bottom-right' | 'bottom-left' | 'top-right' | 'top-left' | undefined;
+  dragOffset?: { x: number; y: number } | null | undefined;
+  onPipPointerDown?:
+    ((e: React.PointerEvent<HTMLDivElement>) => void) | undefined;
+  onPipPointerMove?:
+    ((e: React.PointerEvent<HTMLDivElement>) => void) | undefined;
+  onPipPointerUp?:
+    ((e: React.PointerEvent<HTMLDivElement>) => void) | undefined;
+  onPipPointerCancel?:
+    ((e: React.PointerEvent<HTMLDivElement>) => void) | undefined;
+  onPipSwap?: (() => void) | undefined;
   onTogglePin: () => void;
   onMutePeer: () => void;
   onAskUnmutePeer: () => void;
@@ -244,7 +267,22 @@ function RemoteVideoTile({
 
   return (
     <div
-      className={`call-tile remote-tile ${isSpeaking ? 'active-speaker-ring' : ''} ${isPinned ? 'pinned-tile' : ''} ${!hasVideo ? 'camera-off-studio' : ''}`}
+      className={`call-tile remote-tile ${isSpeaking ? 'active-speaker-ring' : ''} ${isPinned ? 'pinned-tile' : ''} ${!hasVideo ? 'camera-off-studio' : ''} ${
+        isFloating
+          ? `pip-floating-tile corner-${pipCorner} ${dragOffset ? 'dragging' : ''}`
+          : ''
+      }`}
+      style={
+        isFloating && dragOffset
+          ? {
+              transform: `translate3d(${dragOffset.x}px, ${dragOffset.y}px, 0)`,
+            }
+          : undefined
+      }
+      onPointerDown={isFloating ? onPipPointerDown : undefined}
+      onPointerMove={isFloating ? onPipPointerMove : undefined}
+      onPointerUp={isFloating ? onPipPointerUp : undefined}
+      onPointerCancel={isFloating ? onPipPointerCancel : undefined}
       data-testid="remote-tile"
     >
       <video
@@ -258,12 +296,28 @@ function RemoteVideoTile({
           <div className={`tile-avatar-ring ${isSpeaking ? 'speaking' : ''}`}>
             <div className="tile-avatar-circle">{initial}</div>
           </div>
-          {audioOnlyMode && participant.state.video && (
+          {audioOnlyMode && participant.state.video && !isFloating && (
             <small className="audio-only-tile-note">
               Audio-only mode active
             </small>
           )}
         </div>
+      )}
+
+      {isFloating && onPipSwap && (
+        <button
+          type="button"
+          className="pip-swap-btn"
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => {
+            e.stopPropagation();
+            onPipSwap();
+          }}
+          aria-label="Swap video views"
+          title="Swap video views"
+        >
+          <SwapIcon />
+        </button>
       )}
 
       {/* Top-right tile quick actions: Pin, PiP, Moderation, Hand Raised */}
@@ -552,8 +606,102 @@ export function MeetingRoomView({
   const [pinnedTargetId, setPinnedTargetId] = useState<string | null>(null);
   const [activeSpeakerId, setActiveSpeakerId] = useState<string | null>(null);
   const [isPortrait, setIsPortrait] = useState<boolean>(() =>
-    typeof window !== 'undefined' ? window.innerWidth < 768 : false,
+    typeof window !== 'undefined'
+      ? window.innerWidth < 768 || window.innerHeight > window.innerWidth
+      : false,
   );
+
+  // 1:1 Mobile Picture-in-Picture (WhatsApp style) state
+  const [manualPipPreference, setManualPipPreference] = useState<
+    boolean | null
+  >(null);
+  const [isPiPSwapped, setIsPiPSwapped] = useState(false);
+  const [pipCorner, setPipCorner] = useState<
+    'bottom-right' | 'bottom-left' | 'top-right' | 'top-left'
+  >('bottom-right');
+  const [dragOffset, setDragOffset] = useState<{ x: number; y: number } | null>(
+    null,
+  );
+  const dragStartRef = useRef<{ clientX: number; clientY: number } | null>(
+    null,
+  );
+  const hasDraggedRef = useRef(false);
+  const isDraggingRef = useRef(false);
+  const callStageRef = useRef<HTMLElement>(null);
+
+  const handlePipPointerDown = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      if (e.button !== 0) return;
+      dragStartRef.current = { clientX: e.clientX, clientY: e.clientY };
+      hasDraggedRef.current = false;
+      isDraggingRef.current = true;
+      try {
+        e.currentTarget.setPointerCapture(e.pointerId);
+      } catch {
+        // pointer capture fallback
+      }
+    },
+    [],
+  );
+
+  const handlePipPointerMove = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      if (!isDraggingRef.current || !dragStartRef.current) return;
+      const dx = e.clientX - dragStartRef.current.clientX;
+      const dy = e.clientY - dragStartRef.current.clientY;
+      if (!hasDraggedRef.current && Math.hypot(dx, dy) > 8) {
+        hasDraggedRef.current = true;
+      }
+      if (hasDraggedRef.current) {
+        setDragOffset({ x: dx, y: dy });
+      }
+    },
+    [],
+  );
+
+  const handlePipPointerUp = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      if (!isDraggingRef.current) return;
+      isDraggingRef.current = false;
+      try {
+        if (e.currentTarget.hasPointerCapture(e.pointerId)) {
+          e.currentTarget.releasePointerCapture(e.pointerId);
+        }
+      } catch {
+        // pointer capture fallback
+      }
+
+      if (hasDraggedRef.current) {
+        const stage = callStageRef.current;
+        if (stage) {
+          const rect = stage.getBoundingClientRect();
+          const midX = rect.left + rect.width / 2;
+          const midY = rect.top + rect.height / 2;
+          const isLeft = e.clientX < midX;
+          const isTop = e.clientY < midY;
+          if (isTop && isLeft) setPipCorner('top-left');
+          else if (isTop && !isLeft) setPipCorner('top-right');
+          else if (!isTop && isLeft) setPipCorner('bottom-left');
+          else setPipCorner('bottom-right');
+        }
+      } else {
+        // Tap/click: swap primary and secondary video views
+        setIsPiPSwapped((prev) => !prev);
+      }
+
+      setDragOffset(null);
+      hasDraggedRef.current = false;
+      dragStartRef.current = null;
+    },
+    [],
+  );
+
+  const handlePipPointerCancel = useCallback(() => {
+    isDraggingRef.current = false;
+    setDragOffset(null);
+    hasDraggedRef.current = false;
+    dragStartRef.current = null;
+  }, []);
 
   // Chat, Reactions, & Accessibility live announcements
   const [chatMessages, setChatMessages] = useState<ChatItem[]>([]);
@@ -621,7 +769,9 @@ export function MeetingRoomView({
   // Track viewport orientation for computeLayout
   useEffect(() => {
     const onResize = () => {
-      setIsPortrait(window.innerWidth < 768);
+      setIsPortrait(
+        window.innerWidth < 768 || window.innerHeight > window.innerWidth,
+      );
     };
     window.addEventListener('resize', onResize);
     return () => window.removeEventListener('resize', onResize);
@@ -1878,9 +2028,21 @@ export function MeetingRoomView({
       computeLayout(totalParticipantCount, {
         hasSpotlight: Boolean(effectiveSpotlightId),
         isPortrait,
+        ...(manualPipPreference !== null
+          ? { preferPip: manualPipPreference }
+          : {}),
       }),
-    [totalParticipantCount, effectiveSpotlightId, isPortrait],
+    [
+      totalParticipantCount,
+      effectiveSpotlightId,
+      isPortrait,
+      manualPipPreference,
+    ],
   );
+
+  const isPipActive = Boolean(layout.isPip && remoteList.length === 1);
+  const isLocalFloating = isPipActive && !isPiPSwapped;
+  const isRemoteFloating = isPipActive && isPiPSwapped;
 
   const canModerate = selfRole === 'host' || selfRole === 'cohost';
   const isHost = selfRole === 'host';
@@ -2585,6 +2747,30 @@ export function MeetingRoomView({
             <span>{totalParticipantCount}</span>
           </div>
 
+          {totalParticipantCount === 2 && !effectiveSpotlightId && (
+            <button
+              type="button"
+              className="call-topbar-icon-btn"
+              onClick={() =>
+                setManualPipPreference((prev) =>
+                  prev !== null ? !prev : !layout.isPip,
+                )
+              }
+              aria-label={
+                layout.isPip
+                  ? 'Switch to side-by-side grid'
+                  : 'Switch to Picture-in-Picture'
+              }
+              title={
+                layout.isPip
+                  ? 'Switch to side-by-side grid'
+                  : 'Switch to Picture-in-Picture'
+              }
+            >
+              {layout.isPip ? <PanelRightIcon /> : <SwapIcon />}
+            </button>
+          )}
+
           <button
             type="button"
             className="call-topbar-icon-btn"
@@ -2613,10 +2799,11 @@ export function MeetingRoomView({
         className={`call-body ${showChatPanel || showHostPanel ? 'with-chat' : ''}`}
       >
         <main
+          ref={callStageRef}
           className={`call-stage mode-${layout.mode}`}
           style={{
             gridTemplateColumns:
-              layout.mode === 'spotlight'
+              layout.mode === 'spotlight' || layout.mode === 'pip'
                 ? undefined
                 : `repeat(${layout.columns}, minmax(0, 1fr))`,
           }}
@@ -2805,33 +2992,65 @@ export function MeetingRoomView({
           )}
 
           {/* Remote Participant Tiles */}
-          {remoteList.map((peer) => (
-            <RemoteVideoTile
-              key={peer.id}
-              participant={peer}
-              stats={peerStatsMap[peer.id]}
-              audioOnlyMode={bandwidthMode === 'audio_only'}
-              isSpeaking={activeSpeakerId === peer.id}
-              isPinned={effectiveSpotlightId === peer.id}
-              canModerate={canModerate}
-              onTogglePin={() =>
-                setPinnedTargetId((curr) => (curr === peer.id ? null : peer.id))
-              }
-              onMutePeer={() => handleHostMutePeer(peer.id)}
-              onAskUnmutePeer={() =>
-                handleHostAskUnmute(peer.id, peer.displayName)
-              }
-              onRemovePeer={() =>
-                handleHostRemovePeer(peer.id, peer.displayName, false)
-              }
-              onAudioAutoplayBlocked={() => setSafariAudioBlocked(true)}
-              onToast={onToast}
-            />
-          ))}
+          {remoteList.map((peer) => {
+            const isFloating = Boolean(isPipActive && isRemoteFloating);
+            return (
+              <RemoteVideoTile
+                key={peer.id}
+                participant={peer}
+                stats={peerStatsMap[peer.id]}
+                audioOnlyMode={bandwidthMode === 'audio_only'}
+                isSpeaking={activeSpeakerId === peer.id}
+                isPinned={effectiveSpotlightId === peer.id}
+                canModerate={canModerate}
+                isFloating={isFloating}
+                pipCorner={isFloating ? pipCorner : undefined}
+                dragOffset={isFloating ? dragOffset : undefined}
+                onPipPointerDown={isFloating ? handlePipPointerDown : undefined}
+                onPipPointerMove={isFloating ? handlePipPointerMove : undefined}
+                onPipPointerUp={isFloating ? handlePipPointerUp : undefined}
+                onPipPointerCancel={
+                  isFloating ? handlePipPointerCancel : undefined
+                }
+                onPipSwap={() => setIsPiPSwapped((prev) => !prev)}
+                onTogglePin={() =>
+                  setPinnedTargetId((curr) =>
+                    curr === peer.id ? null : peer.id,
+                  )
+                }
+                onMutePeer={() => handleHostMutePeer(peer.id)}
+                onAskUnmutePeer={() =>
+                  handleHostAskUnmute(peer.id, peer.displayName)
+                }
+                onRemovePeer={() =>
+                  handleHostRemovePeer(peer.id, peer.displayName, false)
+                }
+                onAudioAutoplayBlocked={() => setSafariAudioBlocked(true)}
+                onToast={onToast}
+              />
+            );
+          })}
 
           {/* Local Participant Tile */}
           <div
-            className={`call-tile local-tile ${activeSpeakerId === 'local' ? 'active-speaker-ring' : ''} ${effectiveSpotlightId === 'local' ? 'pinned-tile' : ''} ${!hasLocalVideoTrack ? 'camera-off-studio' : ''}`}
+            className={`call-tile local-tile ${activeSpeakerId === 'local' ? 'active-speaker-ring' : ''} ${effectiveSpotlightId === 'local' ? 'pinned-tile' : ''} ${!hasLocalVideoTrack ? 'camera-off-studio' : ''} ${
+              isLocalFloating
+                ? `pip-floating-tile corner-${pipCorner} ${dragOffset ? 'dragging' : ''}`
+                : ''
+            }`}
+            style={
+              isLocalFloating && dragOffset
+                ? {
+                    transform: `translate3d(${dragOffset.x}px, ${dragOffset.y}px, 0)`,
+                  }
+                : undefined
+            }
+            onPointerDown={isLocalFloating ? handlePipPointerDown : undefined}
+            onPointerMove={isLocalFloating ? handlePipPointerMove : undefined}
+            onPointerUp={isLocalFloating ? handlePipPointerUp : undefined}
+            onPointerCancel={
+              isLocalFloating ? handlePipPointerCancel : undefined
+            }
             data-testid="local-tile"
           >
             <video
@@ -2852,12 +3071,28 @@ export function MeetingRoomView({
                     className="tile-avatar-circle"
                   />
                 </div>
-                {bandwidthMode === 'audio_only' && (
+                {bandwidthMode === 'audio_only' && !isLocalFloating && (
                   <small className="audio-only-tile-note">
                     Audio-Only mode active
                   </small>
                 )}
               </div>
+            )}
+
+            {isLocalFloating && (
+              <button
+                type="button"
+                className="pip-swap-btn"
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setIsPiPSwapped((prev) => !prev);
+                }}
+                aria-label="Swap video views"
+                title="Swap video views"
+              >
+                <SwapIcon />
+              </button>
             )}
 
             <div className="tile-top-bar">

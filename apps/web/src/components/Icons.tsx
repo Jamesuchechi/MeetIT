@@ -134,6 +134,14 @@ export function PanelRightIcon({ className = 'ic', ...props }: IconProps) {
   );
 }
 
+export function SwapIcon({ className = 'ic', ...props }: IconProps) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" {...props}>
+      <path d="M7 16V4m0 0L3 8m4-4l4 4m6 4v12m0 0l4-4m-4 4l-4-4" />
+    </svg>
+  );
+}
+
 export function InfoIcon({ className = 'ic', ...props }: IconProps) {
   return (
     <svg className={className} viewBox="0 0 24 24" {...props}>

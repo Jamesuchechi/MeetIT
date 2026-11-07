@@ -92,12 +92,24 @@ describe('computeLayout (1 to 4 mesh participants)', () => {
 
   it('computes spotlight and mobile portrait layouts accurately', () => {
     const portraitPair = computeLayout(2, { isPortrait: true });
+    expect(portraitPair.mode).toBe('pip');
     expect(portraitPair.columns).toBe(1);
-    expect(portraitPair.rows).toBe(2);
+    expect(portraitPair.rows).toBe(1);
+    expect(portraitPair.isPip).toBe(true);
+
+    const standardPair = computeLayout(2, {
+      isPortrait: true,
+      preferPip: false,
+    });
+    expect(standardPair.mode).toBe('pair');
+    expect(standardPair.columns).toBe(1);
+    expect(standardPair.rows).toBe(2);
+    expect(standardPair.isPip).toBe(false);
 
     const spotlight = computeLayout(3, { hasSpotlight: true });
     expect(spotlight.mode).toBe('spotlight');
     expect(spotlight.filmstripCount).toBe(3);
+    expect(spotlight.isPip).toBe(false);
   });
 });
 
