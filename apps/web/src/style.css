@@ -6825,3 +6825,186 @@ aside.context-bar {
   max-height: 60vh;
   object-fit: contain;
 }
+
+/* ================= MODERN STUDIO HUB STATS & CONTROLS ================= */
+
+.hub-stats-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 14px;
+  margin-bottom: 24px;
+}
+
+.hub-stat-card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 14px 18px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  transition: transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.hub-stat-card:hover {
+  border-color: var(--primary, #3b82f6);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
+}
+
+.hub-stat-icon {
+  width: 42px;
+  height: 42px;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  font-size: 20px;
+  background: var(--soft, rgba(59, 130, 246, 0.1));
+  color: var(--primary, #3b82f6);
+  flex-shrink: 0;
+}
+
+.hub-stat-content {
+  display: flex;
+  flex-direction: column;
+}
+
+.hub-stat-value {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--ink);
+  line-height: 1.2;
+}
+
+.hub-stat-label {
+  font-size: 0.8rem;
+  color: var(--muted);
+  margin-top: 2px;
+}
+
+/* Table View for Recordings */
+.recordings-table-wrap {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
+.recordings-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+  font-size: 13.5px;
+}
+
+.recordings-table th {
+  background: var(--soft, #f8fafc);
+  padding: 12px 16px;
+  font-weight: 600;
+  color: var(--muted);
+  border-bottom: 1px solid var(--line);
+  white-space: nowrap;
+}
+
+.recordings-table td {
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--line);
+  vertical-align: middle;
+}
+
+.recordings-table tr:last-child td {
+  border-bottom: none;
+}
+
+.recordings-table tr:hover td {
+  background: var(--surface-hover, rgba(0, 0, 0, 0.02));
+}
+
+.view-toggle-group {
+  display: inline-flex;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--surface);
+}
+
+.view-toggle-btn {
+  border: none;
+  background: transparent;
+  padding: 6px 12px;
+  font-size: 13px;
+  cursor: pointer;
+  color: var(--muted);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.15s ease;
+}
+
+.view-toggle-btn.active {
+  background: var(--primary, #3b82f6);
+  color: #fff;
+  font-weight: 600;
+}
+
+/* Studio Player Enhanced Controls */
+.player-theater-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 14px;
+  padding: 10px 14px;
+  background: var(--soft, rgba(0, 0, 0, 0.04));
+  border-radius: 10px;
+}
+
+.player-speed-pill {
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 12px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.player-speed-pill.active {
+  background: var(--primary, #3b82f6);
+  color: #fff;
+  border-color: var(--primary, #3b82f6);
+}
+
+/* Dialogue Highlights & Cards */
+.dialogue-bubble {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: var(--surface);
+  border: 1px solid var(--line-subtle, rgba(0, 0, 0, 0.06));
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.dialogue-bubble:hover {
+  border-color: var(--primary-subtle, rgba(59, 130, 246, 0.3));
+  background: var(--surface-hover, rgba(59, 130, 246, 0.02));
+}
+
+.dialogue-bubble.active-speech {
+  border-left: 3px solid var(--primary, #3b82f6);
+  background: rgba(59, 130, 246, 0.05);
+}
+
+.dialogue-highlight {
+  background: rgba(250, 204, 21, 0.4);
+  color: inherit;
+  padding: 1px 3px;
+  border-radius: 3px;
+  font-weight: 600;
+}
+

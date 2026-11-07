@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   fetchRecordings,
   deleteRecording,
@@ -19,6 +19,8 @@ interface RecordingsViewProps {
   onEnterRoom?: (code: string) => void;
 }
 
+type SortOption = 'newest' | 'oldest' | 'duration' | 'size' | 'title';
+
 export function RecordingsView({
   user,
   onToast,
@@ -33,12 +35,21 @@ export function RecordingsView({
   const [layoutFilter, setLayoutFilter] = useState<'all' | RecordingLayout>(
     'all',
   );
+  const [sortBy, setSortBy] = useState<SortOption>('newest');
+  const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
+
   const [playingRecording, setPlayingRecording] =
+    useState<RecordingItem | null>(null);
+  const [sharingRecording, setSharingRecording] =
     useState<RecordingItem | null>(null);
   const [deletingRecording, setDeletingRecording] =
     useState<RecordingItem | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  // Player controls state
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const [playbackSpeed, setPlaybackSpeed] = useState<number>(1);
 
   const loadData = async () => {
     setLoading(true);
@@ -54,6 +65,27 @@ export function RecordingsView({
     void loadData();
   }, [user?.id]);
 
+  // Overall Vault Metrics
+  const stats = useMemo(() => {
+    const count = recordings.length;
+    const totalDurationSecs = recordings.reduce(
+      (acc, r) => acc + (r.durationSeconds || 0),
+      0,
+    );
+    const totalBytes = recordings.reduce(
+      (acc, r) => acc + (r.fileSizeBytes || 0),
+      0,
+    );
+    const hours = Math.floor(totalDurationSecs / 3600);
+    const minutes = Math.floor((totalDurationSecs % 3600) / 60);
+    const durationLabel = hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
+    return {
+      count,
+      durationLabel,
+      storageLabel: formatFileSize(totalBytes),
+    };
+  }, [recordings]);
+
   const handleCopyLink = async (rec: RecordingItem) => {
     const url =
       rec.downloadUrl ||
@@ -62,8 +94,20 @@ export function RecordingsView({
     const ok = await copyToClipboard(url);
     if (ok) {
       setCopiedId(rec.id);
-      onToast(`Recording link copied.`);
+      onToast(`Recording link copied to clipboard.`);
       window.setTimeout(() => setCopiedId(null), 2000);
+    }
+  };
+
+  const handleCopyEmbedCode = async (rec: RecordingItem) => {
+    const url =
+      rec.playUrl ||
+      rec.downloadUrl ||
+      `${window.location.origin}/recordings/${rec.id}`;
+    const snippet = `<iframe src="${url}" width="640" height="360" frameborder="0" allow="autoplay; fullscreen" allowfullscreen></iframe>`;
+    const ok = await copyToClipboard(snippet);
+    if (ok) {
+      onToast(`Embed iframe snippet copied!`);
     }
   };
 
@@ -86,29 +130,115 @@ export function RecordingsView({
     }
   };
 
-  const filtered = recordings.filter((r) => {
-    if (statusFilter !== 'all' && r.status !== statusFilter) return false;
-    if (layoutFilter !== 'all' && r.layout !== layoutFilter) return false;
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase().trim();
-      const matchesTitle = r.roomTitle.toLowerCase().includes(q);
-      const matchesCode = r.roomCode.toLowerCase().includes(q);
-      if (!matchesTitle && !matchesCode) return false;
+  const handleSpeedChange = (speed: number) => {
+    setPlaybackSpeed(speed);
+    if (videoRef.current) {
+      videoRef.current.playbackRate = speed;
     }
-    return true;
-  });
+  };
+
+  const handleJumpTime = (deltaSeconds: number) => {
+    if (videoRef.current) {
+      videoRef.current.currentTime = Math.max(
+        0,
+        videoRef.current.currentTime + deltaSeconds,
+      );
+    }
+  };
+
+  const handlePictureInPicture = async () => {
+    if (videoRef.current && document.pictureInPictureEnabled) {
+      try {
+        if (document.pictureInPictureElement) {
+          await document.exitPictureInPicture();
+        } else {
+          await videoRef.current.requestPictureInPicture();
+        }
+      } catch {
+        onToast('Picture-in-Picture not supported in this window.');
+      }
+    }
+  };
+
+  const filtered = useMemo(() => {
+    const result = recordings.filter((r) => {
+      if (statusFilter !== 'all' && r.status !== statusFilter) return false;
+      if (layoutFilter !== 'all' && r.layout !== layoutFilter) return false;
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase().trim();
+        const matchesTitle = r.roomTitle.toLowerCase().includes(q);
+        const matchesCode = r.roomCode.toLowerCase().includes(q);
+        if (!matchesTitle && !matchesCode) return false;
+      }
+      return true;
+    });
+
+    return result.sort((a, b) => {
+      switch (sortBy) {
+        case 'newest':
+          return (
+            new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime()
+          );
+        case 'oldest':
+          return (
+            new Date(a.startedAt).getTime() - new Date(b.startedAt).getTime()
+          );
+        case 'duration':
+          return (b.durationSeconds || 0) - (a.durationSeconds || 0);
+        case 'size':
+          return (b.fileSizeBytes || 0) - (a.fileSizeBytes || 0);
+        case 'title':
+          return a.roomTitle.localeCompare(b.roomTitle);
+      }
+    });
+  }, [recordings, statusFilter, layoutFilter, searchQuery, sortBy]);
 
   return (
     <div className="recordings-page" data-testid="recordings-page">
       {/* Header section */}
-      <div className="head" style={{ marginBottom: 24 }}>
+      <div className="head" style={{ marginBottom: 20 }}>
         <div>
-          <span className="eyebrow">Studio Vault</span>
+          <span className="eyebrow">Studio Media Vault</span>
           <h2>Meeting Recordings</h2>
           <p>
-            Review, stream, download, and manage your cloud composite session
-            recordings.
+            Stream, download, organize, and inspect full composite and ISO stem
+            meeting recordings.
           </p>
+        </div>
+      </div>
+
+      {/* Vault Overview Stats Cards */}
+      <div className="hub-stats-row">
+        <div className="hub-stat-card">
+          <div className="hub-stat-icon">📹</div>
+          <div className="hub-stat-content">
+            <span className="hub-stat-value">{stats.count}</span>
+            <span className="hub-stat-label">Total Recordings</span>
+          </div>
+        </div>
+
+        <div className="hub-stat-card">
+          <div className="hub-stat-icon">⏱️</div>
+          <div className="hub-stat-content">
+            <span className="hub-stat-value">{stats.durationLabel}</span>
+            <span className="hub-stat-label">Total Captured Time</span>
+          </div>
+        </div>
+
+        <div className="hub-stat-card">
+          <div className="hub-stat-icon">💾</div>
+          <div className="hub-stat-content">
+            <span className="hub-stat-value">{stats.storageLabel}</span>
+            <span className="hub-stat-label">Cloud Storage Used</span>
+          </div>
+        </div>
+
+        <div className="hub-stat-card">
+          <div className="hub-stat-icon">🔒</div>
+          <div className="hub-stat-content">
+            <span className="hub-stat-value">30-Day Policy</span>
+            <span className="hub-stat-label">Auto-Purge Retention</span>
+          </div>
         </div>
       </div>
 
@@ -117,7 +247,7 @@ export function RecordingsView({
         <div className="recordings-search-wrap">
           <input
             type="search"
-            placeholder="Search by meeting title or room code..."
+            placeholder="Search recordings by meeting title or room code..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="input"
@@ -127,6 +257,21 @@ export function RecordingsView({
         </div>
 
         <div className="recordings-filter-group">
+          <label className="recordings-select-label">
+            <span>Sort by:</span>
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value as SortOption)}
+              aria-label="Sort recordings"
+            >
+              <option value="newest">Newest first</option>
+              <option value="oldest">Oldest first</option>
+              <option value="duration">Longest duration</option>
+              <option value="size">Largest file size</option>
+              <option value="title">Alphabetical (A-Z)</option>
+            </select>
+          </label>
+
           <label className="recordings-select-label">
             <span>Layout:</span>
             <select
@@ -157,14 +302,34 @@ export function RecordingsView({
               <option value="failed">Failed</option>
             </select>
           </label>
+
+          {/* View Mode Switcher */}
+          <div className="view-toggle-group">
+            <button
+              type="button"
+              className={`view-toggle-btn ${viewMode === 'grid' ? 'active' : ''}`}
+              onClick={() => setViewMode('grid')}
+              title="Grid card view"
+            >
+              ▦ Grid
+            </button>
+            <button
+              type="button"
+              className={`view-toggle-btn ${viewMode === 'table' ? 'active' : ''}`}
+              onClick={() => setViewMode('table')}
+              title="Table list view"
+            >
+              ☰ Table
+            </button>
+          </div>
         </div>
       </div>
 
-      {/* Recordings List / Grid */}
+      {/* Main Content: Loading, Empty, or Data */}
       {loading ? (
         <div className="recordings-loading">
           <div className="spinner" />
-          <p>Loading your recordings...</p>
+          <p>Loading your recordings vault...</p>
         </div>
       ) : filtered.length === 0 ? (
         <div className="recordings-empty" data-testid="recordings-empty">
@@ -174,8 +339,8 @@ export function RecordingsView({
           <h3>No recordings found</h3>
           <p>
             {searchQuery || statusFilter !== 'all' || layoutFilter !== 'all'
-              ? 'No recordings match your current filters. Try clearing search criteria.'
-              : 'You have not recorded any meetings yet. Start a call and click "Record" to record your first session.'}
+              ? 'No recordings match your current filters. Try resetting your search parameters.'
+              : 'You have not recorded any meetings yet. Start a call and click "Record" to archive your sessions.'}
           </p>
           {(searchQuery ||
             statusFilter !== 'all' ||
@@ -193,7 +358,8 @@ export function RecordingsView({
             </button>
           )}
         </div>
-      ) : (
+      ) : viewMode === 'grid' ? (
+        /* GRID VIEW */
         <div className="recordings-grid" data-testid="recordings-grid">
           {filtered.map((rec) => (
             <article
@@ -316,6 +482,15 @@ export function RecordingsView({
 
                   <button
                     type="button"
+                    className="btn btn-sm"
+                    onClick={() => setSharingRecording(rec)}
+                    title="Share recording & embed code"
+                  >
+                    Share
+                  </button>
+
+                  <button
+                    type="button"
                     className="btn btn-sm btn-icon"
                     onClick={() => void handleCopyLink(rec)}
                     aria-label="Copy recording link"
@@ -339,9 +514,126 @@ export function RecordingsView({
             </article>
           ))}
         </div>
+      ) : (
+        /* TABLE VIEW */
+        <div className="recordings-table-wrap">
+          <table
+            className="recordings-table"
+            aria-label="Recordings data table"
+          >
+            <thead>
+              <tr>
+                <th>Meeting Title &amp; Room</th>
+                <th>Recorded Date</th>
+                <th>Duration</th>
+                <th>Size</th>
+                <th>Layout</th>
+                <th>Status</th>
+                <th style={{ textAlign: 'right' }}>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map((rec) => (
+                <tr key={rec.id}>
+                  <td>
+                    <div>
+                      <strong>{rec.roomTitle}</strong>
+                      <div style={{ marginTop: 2 }}>
+                        <code className="note-room-pill">{rec.roomCode}</code>
+                        {rec.isoTracks && (
+                          <span
+                            className="badge"
+                            style={{
+                              marginLeft: 6,
+                              fontSize: 10,
+                              background: 'var(--soft)',
+                            }}
+                          >
+                            ISO Stems
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </td>
+                  <td>
+                    <div>{formatRecordingDate(rec.startedAt)}</div>
+                    {rec.expiresAt && (
+                      <small style={{ color: '#f59e0b', fontSize: 11 }}>
+                        ⏳ {formatExpiryCountdown(rec.expiresAt)}
+                      </small>
+                    )}
+                  </td>
+                  <td>
+                    <code>{formatRecordingDuration(rec.durationSeconds)}</code>
+                  </td>
+                  <td>{formatFileSize(rec.fileSizeBytes)}</td>
+                  <td>
+                    <span
+                      className="badge"
+                      style={{ textTransform: 'capitalize' }}
+                    >
+                      {rec.layout}
+                    </span>
+                  </td>
+                  <td>
+                    <span className={`rec-status-tag ${rec.status}`}>
+                      {rec.status}
+                    </span>
+                  </td>
+                  <td style={{ textAlign: 'right' }}>
+                    <div
+                      style={{
+                        display: 'flex',
+                        gap: 6,
+                        justifyContent: 'flex-end',
+                      }}
+                    >
+                      <button
+                        type="button"
+                        className="btn btn-sm primary"
+                        onClick={() => setPlayingRecording(rec)}
+                        title="Stream video"
+                      >
+                        ▶ Play
+                      </button>
+                      {rec.downloadUrl && (
+                        <a
+                          href={rec.downloadUrl}
+                          download={`${rec.roomCode}.mp4`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="btn btn-sm"
+                          title="Download MP4"
+                        >
+                          ⬇
+                        </a>
+                      )}
+                      <button
+                        type="button"
+                        className="btn btn-sm"
+                        onClick={() => setSharingRecording(rec)}
+                        title="Share"
+                      >
+                        Share
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-sm danger-outline-btn btn-icon"
+                        onClick={() => setDeletingRecording(rec)}
+                        title="Delete"
+                      >
+                        🗑
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
 
-      {/* Built-in Video Player Modal */}
+      {/* Enhanced Studio Theater Video Player Modal */}
       {playingRecording && (
         <div
           className="shortcuts-modal-backdrop"
@@ -353,6 +645,7 @@ export function RecordingsView({
         >
           <div
             className="shortcuts-modal-card recording-player-modal-card"
+            style={{ maxWidth: 880 }}
             onClick={(e) => e.stopPropagation()}
           >
             <div className="shortcuts-modal-head">
@@ -363,8 +656,8 @@ export function RecordingsView({
                   {formatRecordingDate(playingRecording.startedAt)} ·{' '}
                   {formatRecordingDuration(playingRecording.durationSeconds)} ·{' '}
                   {playingRecording.layout === 'speaker'
-                    ? 'Speaker layout'
-                    : 'Grid layout'}
+                    ? 'Speaker view'
+                    : 'Grid gallery'}
                 </small>
               </div>
               <button
@@ -377,8 +670,10 @@ export function RecordingsView({
               </button>
             </div>
 
+            {/* Video Canvas Container */}
             <div className="recording-video-wrapper">
               <video
+                ref={videoRef}
                 controls
                 autoPlay
                 playsInline
@@ -396,6 +691,59 @@ export function RecordingsView({
               </video>
             </div>
 
+            {/* Theater Advanced Controls Bar */}
+            <div className="player-theater-controls">
+              <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                <span
+                  style={{
+                    fontSize: 12,
+                    color: 'var(--muted)',
+                    marginRight: 4,
+                  }}
+                >
+                  Speed:
+                </span>
+                {[0.75, 1, 1.25, 1.5, 2].map((speed) => (
+                  <button
+                    key={speed}
+                    type="button"
+                    className={`player-speed-pill ${playbackSpeed === speed ? 'active' : ''}`}
+                    onClick={() => handleSpeedChange(speed)}
+                  >
+                    {speed}x
+                  </button>
+                ))}
+              </div>
+
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <button
+                  type="button"
+                  className="btn btn-sm"
+                  onClick={() => handleJumpTime(-10)}
+                  title="Rewind 10 seconds"
+                >
+                  ↺ 10s
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-sm"
+                  onClick={() => handleJumpTime(10)}
+                  title="Forward 10 seconds"
+                >
+                  10s ↻
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-sm"
+                  onClick={() => void handlePictureInPicture()}
+                  title="Picture in Picture Mode"
+                >
+                  ⧉ PiP
+                </button>
+              </div>
+            </div>
+
+            {/* Player Footer Actions & Info */}
             <div
               style={{
                 display: 'flex',
@@ -406,8 +754,21 @@ export function RecordingsView({
             >
               <div style={{ fontSize: '0.875rem', color: 'var(--muted)' }}>
                 Size: {formatFileSize(playingRecording.fileSizeBytes)}
+                {playingRecording.expiresAt && (
+                  <span style={{ marginLeft: 12, color: '#f59e0b' }}>
+                    ⏳ Expires in{' '}
+                    {formatExpiryCountdown(playingRecording.expiresAt)}
+                  </span>
+                )}
               </div>
               <div style={{ display: 'flex', gap: 10 }}>
+                <button
+                  type="button"
+                  className="btn btn-sm"
+                  onClick={() => setSharingRecording(playingRecording)}
+                >
+                  Share &amp; Embed
+                </button>
                 {playingRecording.downloadUrl && (
                   <a
                     href={playingRecording.downloadUrl}
@@ -427,6 +788,97 @@ export function RecordingsView({
                   Close
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Share & Embed Modal Dialog */}
+      {sharingRecording && (
+        <div
+          className="shortcuts-modal-backdrop"
+          onClick={() => setSharingRecording(null)}
+          role="dialog"
+          aria-modal="true"
+        >
+          <div
+            className="shortcuts-modal-card"
+            style={{ maxWidth: 520 }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="shortcuts-modal-head">
+              <h3>Share Recording: {sharingRecording.roomTitle}</h3>
+              <button
+                type="button"
+                className="btn-icon-subtle"
+                onClick={() => setSharingRecording(null)}
+                aria-label="Close"
+              >
+                <CloseIcon />
+              </button>
+            </div>
+
+            <div
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 14,
+                margin: '16px 0',
+              }}
+            >
+              <label className="form-field">
+                <span>Direct Shareable Link</span>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <input
+                    type="text"
+                    readOnly
+                    value={
+                      sharingRecording.downloadUrl ||
+                      sharingRecording.playUrl ||
+                      `${window.location.origin}/recordings/${sharingRecording.id}`
+                    }
+                    style={{ flex: 1 }}
+                  />
+                  <button
+                    type="button"
+                    className="btn primary"
+                    onClick={() => void handleCopyLink(sharingRecording)}
+                  >
+                    Copy Link
+                  </button>
+                </div>
+              </label>
+
+              <label className="form-field">
+                <span>Embed Code Snippet</span>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <input
+                    type="text"
+                    readOnly
+                    value={`<iframe src="${sharingRecording.playUrl || sharingRecording.downloadUrl}" width="640" height="360" allowfullscreen></iframe>`}
+                    style={{ flex: 1 }}
+                  />
+                  <button
+                    type="button"
+                    className="btn"
+                    onClick={() => void handleCopyEmbedCode(sharingRecording)}
+                  >
+                    Copy Embed
+                  </button>
+                </div>
+              </label>
+            </div>
+
+            <div
+              style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}
+            >
+              <button
+                type="button"
+                className="btn"
+                onClick={() => setSharingRecording(null)}
+              >
+                Done
+              </button>
             </div>
           </div>
         </div>

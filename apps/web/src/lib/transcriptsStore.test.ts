@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import {
   formatMsToTimecode,
   formatMsToClock,
@@ -12,6 +12,11 @@ import {
   deleteTranscript,
   type MeetingTranscript,
 } from './transcriptsStore';
+
+vi.mock('./supabase', () => ({
+  supabase: null,
+  isSupabaseConfigured: false,
+}));
 
 describe('transcriptsStore and subtitle exporters suite', () => {
   let store: Record<string, string> = {};
