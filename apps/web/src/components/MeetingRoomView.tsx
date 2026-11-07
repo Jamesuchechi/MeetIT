@@ -600,6 +600,46 @@ export function MeetingRoomView({
   const [roomFull, setRoomFull] = useState(false);
   const [copiedInvite, setCopiedInvite] = useState(false);
   const [callSeconds, setCallSeconds] = useState(0);
+
+  // Recording state
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingStartedAt, setRecordingStartedAt] = useState<number | null>(
+    null,
+  );
+  const [recordingDuration, setRecordingDuration] = useState('00:00');
+  const [showRecordingConsentNotice, setShowRecordingConsentNotice] =
+    useState(false);
+  const [showStartRecordingConfirm, setShowStartRecordingConfirm] =
+    useState(false);
+
+  useEffect(() => {
+    if (!isRecording || !recordingStartedAt) {
+      setRecordingDuration('00:00');
+      return;
+    }
+    const update = () => {
+      const elapsedSecs = Math.max(
+        0,
+        Math.floor((Date.now() - recordingStartedAt) / 1000),
+      );
+      const hrs = Math.floor(elapsedSecs / 3600);
+      const mins = Math.floor((elapsedSecs % 3600) / 60);
+      const secs = elapsedSecs % 60;
+      if (hrs > 0) {
+        setRecordingDuration(
+          `${String(hrs).padStart(2, '0')}:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`,
+        );
+      } else {
+        setRecordingDuration(
+          `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`,
+        );
+      }
+    };
+    update();
+    const timer = window.setInterval(update, 1000);
+    return () => window.clearInterval(timer);
+  }, [isRecording, recordingStartedAt]);
+
   const [connectionBanner, setConnectionBanner] = useState<{
     tone: 'warn' | 'ok' | 'danger';
     text: string;
@@ -1683,6 +1723,19 @@ export function MeetingRoomView({
       if (payload.roomState.description) {
         setRoomDescription(payload.roomState.description);
       }
+      if (payload.roomState.recording) {
+        setIsRecording(true);
+        if (payload.roomState.recordingStartedAt) {
+          setRecordingStartedAt(payload.roomState.recordingStartedAt);
+        }
+        if (payload.role !== 'host') {
+          setShowRecordingConsentNotice(true);
+        }
+      } else {
+        setIsRecording(false);
+        setRecordingStartedAt(null);
+        setShowRecordingConsentNotice(false);
+      }
 
       const isReconnect = hasConnectedTransportRef.current;
 
@@ -1827,6 +1880,26 @@ export function MeetingRoomView({
       if (permissions) {
         setRoomPermissions(permissions);
       }
+    });
+
+    signaling.on('recording.started', (payload) => {
+      setIsRecording(true);
+      setRecordingStartedAt(payload.startedAt);
+      const by = payload.byDisplayName || 'The host';
+      onToast(`${by} started recording this meeting.`);
+      announce(`${by} started recording this meeting`);
+      if (payload.byPeerId !== signaling.getSelfId()) {
+        setShowRecordingConsentNotice(true);
+      }
+    });
+
+    signaling.on('recording.stopped', (payload) => {
+      setIsRecording(false);
+      setRecordingStartedAt(null);
+      setShowRecordingConsentNotice(false);
+      const by = payload.byDisplayName || 'The host';
+      onToast(`${by} stopped recording.`);
+      announce(`${by} stopped recording`);
     });
 
     signaling.on('host.command', (cmd) => {
@@ -2277,6 +2350,20 @@ export function MeetingRoomView({
   const handleHostEndMeeting = () => {
     signalingRef.current?.sendHostAction({ action: 'end_meeting' });
     handleHangUp();
+  };
+
+  const handleToggleRecording = () => {
+    if (!canModerate) return;
+    if (isRecording) {
+      signalingRef.current?.stopRecording();
+    } else {
+      setShowStartRecordingConfirm(true);
+    }
+  };
+
+  const handleConfirmStartRecording = () => {
+    setShowStartRecordingConfirm(false);
+    signalingRef.current?.startRecording();
   };
 
   if (stage === 'waiting_room') {
@@ -2857,6 +2944,19 @@ export function MeetingRoomView({
               {bandwidthMode === 'audio_only' ? 'Audio-Only' : 'Data Saver'}
             </span>
           )}
+          {isRecording && (
+            <div
+              className="recording-indicator-chip"
+              role="status"
+              aria-label={`Recording in progress, duration ${recordingDuration}`}
+              title={`Recording in progress (${recordingDuration})`}
+              data-testid="recording-indicator"
+            >
+              <span className="recording-dot-pulse" aria-hidden="true" />
+              <span className="recording-label">REC</span>
+              <span className="recording-timer">{recordingDuration}</span>
+            </div>
+          )}
         </div>
 
         {connectionBanner && (
@@ -3094,6 +3194,46 @@ export function MeetingRoomView({
               </div>
             </div>
           )}
+
+          {/* Recording Consent Notice Banner */}
+          {showRecordingConsentNotice && (
+            <div
+              className="recording-consent-banner"
+              role="alert"
+              aria-live="assertive"
+              data-testid="recording-consent-banner"
+            >
+              <div className="recording-consent-content">
+                <span className="recording-consent-icon" aria-hidden="true">
+                  🔴
+                </span>
+                <div className="recording-consent-text">
+                  <strong>Recording in progress</strong>
+                  <span>
+                    This meeting is being recorded by the host. By staying, you
+                    consent to being recorded.
+                  </span>
+                </div>
+              </div>
+              <div className="recording-consent-actions">
+                <button
+                  type="button"
+                  className="btn btn-sm danger-outline-btn"
+                  onClick={handleHangUp}
+                >
+                  Leave call
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-sm primary"
+                  onClick={() => setShowRecordingConsentNotice(false)}
+                >
+                  I understand
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Floating ephemeral reactions overlay */}
           {floatingReactions.length > 0 && (
             <div
@@ -3402,6 +3542,14 @@ export function MeetingRoomView({
                       data-testid="host-lock-btn"
                     >
                       {roomLocked ? '🔒 Unlock room' : '🔓 Lock room'}
+                    </button>
+                    <button
+                      type="button"
+                      className={`btn ${isRecording ? 'danger' : ''}`}
+                      onClick={handleToggleRecording}
+                      data-testid="host-recording-btn"
+                    >
+                      {isRecording ? '⏹ Stop recording' : '⏺ Record meeting'}
                     </button>
                     <button
                       type="button"
@@ -3815,6 +3963,29 @@ export function MeetingRoomView({
             </span>
           </button>
 
+          {canModerate && (
+            <button
+              type="button"
+              className={`dock-btn icon-pill ${isRecording ? 'recording-active-dock-btn' : ''}`}
+              onClick={handleToggleRecording}
+              aria-pressed={isRecording}
+              aria-label={isRecording ? 'Stop recording' : 'Record meeting'}
+              title={
+                isRecording
+                  ? `Stop recording (${recordingDuration})`
+                  : 'Record meeting'
+              }
+              data-testid="call-record-btn"
+            >
+              <span aria-hidden="true" style={{ fontSize: 16 }}>
+                {isRecording ? '⏹' : '⏺'}
+              </span>
+              <span className="dock-btn-label">
+                {isRecording ? 'Rec' : 'Record'}
+              </span>
+            </button>
+          )}
+
           {/* Devices & Sound Settings popover */}
           <div className="dock-popover-anchor">
             <button
@@ -4106,6 +4277,70 @@ export function MeetingRoomView({
                 <kbd>?</kbd>
               </li>
             </ul>
+          </div>
+        </div>
+      )}
+
+      {/* Confirmation modal before starting recording */}
+      {showStartRecordingConfirm && (
+        <div
+          className="shortcuts-modal-backdrop"
+          onClick={() => setShowStartRecordingConfirm(false)}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="rec-confirm-title"
+          data-testid="start-recording-modal"
+        >
+          <div
+            className="shortcuts-modal-card"
+            style={{ maxWidth: 440 }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="shortcuts-modal-head">
+              <h3 id="rec-confirm-title">Start recording this meeting?</h3>
+              <button
+                type="button"
+                className="btn-icon-subtle"
+                onClick={() => setShowStartRecordingConfirm(false)}
+                aria-label="Close"
+              >
+                <CloseIcon />
+              </button>
+            </div>
+            <p
+              style={{
+                margin: '14px 0 20px',
+                fontSize: '0.925rem',
+                lineHeight: 1.5,
+                color: 'var(--muted)',
+              }}
+            >
+              All participants will see a persistent recording indicator and
+              receive a consent notice that this meeting is being recorded.
+            </p>
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'flex-end',
+                gap: '10px',
+              }}
+            >
+              <button
+                type="button"
+                className="btn"
+                onClick={() => setShowStartRecordingConfirm(false)}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn primary"
+                onClick={handleConfirmStartRecording}
+                data-testid="confirm-start-recording-btn"
+              >
+                Start recording
+              </button>
+            </div>
           </div>
         </div>
       )}

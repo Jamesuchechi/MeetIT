@@ -189,7 +189,7 @@ Every phase has an **exit criteria** block. Do not start the next phase until ex
 
 ### Recording
 
-- [ ] [P0] Start/stop recording (host only), persistent indicator, join-time consent notice
+- [x] [P0] Start/stop recording (host only), persistent indicator, join-time consent notice
 - [ ] [P0] LiveKit Egress composite layout to object storage
 - [ ] [P0] Recording library page: list, play, download, delete
 - [ ] [P1] Speaker-view vs grid-view recording layouts

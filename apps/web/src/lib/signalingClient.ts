@@ -244,6 +244,8 @@ export class SignalingClient implements SignalingChannel {
     'chat.message': new Set(),
     'reaction.received': new Set(),
     'room.updated': new Set(),
+    'recording.started': new Set(),
+    'recording.stopped': new Set(),
     'host.command': new Set(),
     'transport.promoted': new Set(),
     error: new Set(),
@@ -637,6 +639,18 @@ export class SignalingClient implements SignalingChannel {
           msg.payload as SignalingEvents['room.updated'],
         );
         break;
+      case 'recording.started':
+        this.emit(
+          'recording.started',
+          msg.payload as SignalingEvents['recording.started'],
+        );
+        break;
+      case 'recording.stopped':
+        this.emit(
+          'recording.stopped',
+          msg.payload as SignalingEvents['recording.stopped'],
+        );
+        break;
       case 'host.command':
         this.emit(
           'host.command',
@@ -757,6 +771,14 @@ export class SignalingClient implements SignalingChannel {
       type: 'host.action',
       payload,
     });
+  }
+
+  startRecording(): void {
+    this.sendHostAction({ action: 'start_recording' });
+  }
+
+  stopRecording(): void {
+    this.sendHostAction({ action: 'stop_recording' });
   }
 
   setPreferredRegion(region: string | undefined): void {

@@ -946,4 +946,136 @@ describe('Signaling server integration tests', () => {
 
     ws.close();
   });
+
+  it('supports host start/stop recording, enforces permissions, and broadcasts recording state', async () => {
+    instance = buildSignalingApp({ logger: false });
+    const address = await instance.app.listen({ port: 0, host: '127.0.0.1' });
+    const wsUrl = address.replace('http', 'ws');
+    const code = generateRoomCode();
+
+    // 1. Host joins
+    const hostWs = new WebSocket(wsUrl);
+    const hostJoinedP = waitForMessage(hostWs, (m) => m.type === 'joined');
+    await new Promise<void>((resolve) => hostWs.once('open', resolve));
+    hostWs.send(
+      JSON.stringify({
+        v: 1,
+        type: 'join',
+        payload: {
+          roomCode: code,
+          displayName: 'Host Jane',
+          token: 'user-token',
+        },
+      }),
+    );
+    const hostJoined = (await hostJoinedP).payload as { selfId: string };
+
+    // 2. Guest joins
+    const guestWs = new WebSocket(wsUrl);
+    const guestJoinedP = waitForMessage(guestWs, (m) => m.type === 'joined');
+    await new Promise<void>((resolve) => guestWs.once('open', resolve));
+    guestWs.send(
+      JSON.stringify({
+        v: 1,
+        type: 'join',
+        payload: {
+          roomCode: code,
+          displayName: 'Guest Bob',
+          token: 'guest-token',
+        },
+      }),
+    );
+    await guestJoinedP;
+
+    // 3. Guest tries to start recording -> should receive FORBIDDEN error
+    const guestErrorP = waitForMessage(guestWs, (m) => m.type === 'error');
+    guestWs.send(
+      JSON.stringify({
+        v: 1,
+        type: 'host.action',
+        payload: { action: 'start_recording' },
+      }),
+    );
+    const err = (await guestErrorP).payload as { code: string };
+    expect(err.code).toBe('FORBIDDEN');
+
+    // 4. Host starts recording -> both host and guest receive recording.started
+    const hostRecP = waitForMessage(
+      hostWs,
+      (m) => m.type === 'recording.started',
+    );
+    const guestRecP = waitForMessage(
+      guestWs,
+      (m) => m.type === 'recording.started',
+    );
+    hostWs.send(
+      JSON.stringify({
+        v: 1,
+        type: 'host.action',
+        payload: { action: 'start_recording' },
+      }),
+    );
+
+    const [hostRec, guestRec] = await Promise.all([hostRecP, guestRecP]);
+    const recPayload = guestRec.payload as {
+      startedAt: number;
+      byDisplayName: string;
+      byPeerId: string;
+    };
+    expect(recPayload.byDisplayName).toBe('Host Jane');
+    expect(recPayload.byPeerId).toBe(hostJoined.selfId);
+    expect(recPayload.startedAt).toBeGreaterThan(0);
+    expect((hostRec.payload as typeof recPayload).startedAt).toBe(
+      recPayload.startedAt,
+    );
+
+    // 5. Late attendee joins while recording is active -> receives roomState.recording: true
+    const lateWs = new WebSocket(wsUrl);
+    const lateJoinedP = waitForMessage(lateWs, (m) => m.type === 'joined');
+    await new Promise<void>((resolve) => lateWs.once('open', resolve));
+    lateWs.send(
+      JSON.stringify({
+        v: 1,
+        type: 'join',
+        payload: {
+          roomCode: code,
+          displayName: 'Late Attendee',
+          token: 'guest-token',
+        },
+      }),
+    );
+    const lateJoined = (await lateJoinedP).payload as {
+      roomState: { recording?: boolean; recordingStartedAt?: number };
+    };
+    expect(lateJoined.roomState.recording).toBe(true);
+    expect(lateJoined.roomState.recordingStartedAt).toBe(recPayload.startedAt);
+
+    // 6. Host stops recording -> recording.stopped broadcast
+    const hostStopP = waitForMessage(
+      hostWs,
+      (m) => m.type === 'recording.stopped',
+    );
+    const guestStopP = waitForMessage(
+      guestWs,
+      (m) => m.type === 'recording.stopped',
+    );
+    hostWs.send(
+      JSON.stringify({
+        v: 1,
+        type: 'host.action',
+        payload: { action: 'stop_recording' },
+      }),
+    );
+    const [hostStop, guestStop] = await Promise.all([hostStopP, guestStopP]);
+    expect((guestStop.payload as { byDisplayName: string }).byDisplayName).toBe(
+      'Host Jane',
+    );
+    expect((hostStop.payload as { byDisplayName: string }).byDisplayName).toBe(
+      'Host Jane',
+    );
+
+    hostWs.close();
+    guestWs.close();
+    lateWs.close();
+  });
 });

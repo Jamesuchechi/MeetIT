@@ -174,6 +174,12 @@ export const hostActionPayloadSchema = z.discriminatedUnion('action', [
   z.object({
     action: z.literal('end_meeting'),
   }),
+  z.object({
+    action: z.literal('start_recording'),
+  }),
+  z.object({
+    action: z.literal('stop_recording'),
+  }),
 ]);
 export type HostActionPayload = z.infer<typeof hostActionPayloadSchema>;
 
@@ -289,6 +295,8 @@ export const serverJoinedPayloadSchema = z.object({
     permissions: roomPermissionsSchema.optional(),
     waitingPeers: z.array(waitingPeerSchema).optional(),
     chatHistory: z.array(chatMessageSchema).optional(),
+    recording: z.boolean().optional(),
+    recordingStartedAt: z.number().optional(),
   }),
 });
 
@@ -358,6 +366,16 @@ export interface SignalingEvents {
   'transport.promoted': {
     transport: 'sfu';
     livekit: LivekitConfig;
+  };
+  'recording.started': {
+    startedAt: number;
+    byPeerId: string;
+    byDisplayName: string;
+  };
+  'recording.stopped': {
+    stoppedAt: number;
+    byPeerId: string;
+    byDisplayName: string;
   };
   'host.command': HostCommandEvent;
   error: { code: ErrorCode; message: string };

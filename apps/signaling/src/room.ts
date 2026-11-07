@@ -115,6 +115,9 @@ export class Room {
   permissions: RoomPermissions;
   transport: 'mesh' | 'sfu';
   maxParticipants: number;
+  isRecording = false;
+  recordingStartedAt: number | null = null;
+  recordedByPeerId: string | null = null;
   readonly createdAt: number = Date.now();
 
   private readonly peers = new Map<string, Peer>();
@@ -173,6 +176,22 @@ export class Room {
     if (this.maxParticipants < 100) {
       this.maxParticipants = 100;
     }
+    return true;
+  }
+
+  startRecording(peerId: string): boolean {
+    if (this.isRecording) return false;
+    this.isRecording = true;
+    this.recordingStartedAt = Date.now();
+    this.recordedByPeerId = peerId;
+    return true;
+  }
+
+  stopRecording(): boolean {
+    if (!this.isRecording) return false;
+    this.isRecording = false;
+    this.recordingStartedAt = null;
+    this.recordedByPeerId = null;
     return true;
   }
 

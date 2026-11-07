@@ -466,6 +466,10 @@ export function buildSignalingApp(
             ? { waitingPeers: room.listWaitingPeerInfos() }
             : {}),
           ...(chatBackfill.length > 0 ? { chatHistory: chatBackfill } : {}),
+          recording: room.isRecording,
+          ...(room.recordingStartedAt
+            ? { recordingStartedAt: room.recordingStartedAt }
+            : {}),
         },
       },
     });
@@ -1126,6 +1130,40 @@ export function buildSignalingApp(
                 peerId: peer.id,
                 remainingParticipants: 0,
               });
+              break;
+            }
+
+            case 'start_recording': {
+              const started = room.startRecording(peer.id);
+              if (started && room.recordingStartedAt) {
+                room.broadcast({
+                  v: 1,
+                  ts: Date.now(),
+                  type: 'recording.started',
+                  payload: {
+                    startedAt: room.recordingStartedAt,
+                    byPeerId: peer.id,
+                    byDisplayName: peer.displayName,
+                  },
+                });
+              }
+              break;
+            }
+
+            case 'stop_recording': {
+              const stopped = room.stopRecording();
+              if (stopped) {
+                room.broadcast({
+                  v: 1,
+                  ts: Date.now(),
+                  type: 'recording.stopped',
+                  payload: {
+                    stoppedAt: Date.now(),
+                    byPeerId: peer.id,
+                    byDisplayName: peer.displayName,
+                  },
+                });
+              }
               break;
             }
           }
