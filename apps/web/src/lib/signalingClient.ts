@@ -773,8 +773,17 @@ export class SignalingClient implements SignalingChannel {
     });
   }
 
-  startRecording(): void {
-    this.sendHostAction({ action: 'start_recording' });
+  startRecording(options?: {
+    layout?: 'grid' | 'speaker';
+    audioOnly?: boolean;
+  }): void {
+    this.sendHostAction({
+      action: 'start_recording',
+      ...(options?.layout ? { layout: options.layout } : {}),
+      ...(options?.audioOnly !== undefined
+        ? { audioOnly: options.audioOnly }
+        : {}),
+    });
   }
 
   stopRecording(): void {

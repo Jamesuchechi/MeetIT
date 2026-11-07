@@ -1021,10 +1021,12 @@ describe('Signaling server integration tests', () => {
       startedAt: number;
       byDisplayName: string;
       byPeerId: string;
+      egressId?: string;
     };
     expect(recPayload.byDisplayName).toBe('Host Jane');
     expect(recPayload.byPeerId).toBe(hostJoined.selfId);
     expect(recPayload.startedAt).toBeGreaterThan(0);
+    expect(recPayload.egressId).toBeDefined();
     expect((hostRec.payload as typeof recPayload).startedAt).toBe(
       recPayload.startedAt,
     );
@@ -1067,10 +1069,15 @@ describe('Signaling server integration tests', () => {
       }),
     );
     const [hostStop, guestStop] = await Promise.all([hostStopP, guestStopP]);
-    expect((guestStop.payload as { byDisplayName: string }).byDisplayName).toBe(
-      'Host Jane',
-    );
-    expect((hostStop.payload as { byDisplayName: string }).byDisplayName).toBe(
+    const stopPayload = guestStop.payload as {
+      byDisplayName: string;
+      egressId?: string;
+      storagePath?: string;
+    };
+    expect(stopPayload.byDisplayName).toBe('Host Jane');
+    expect(stopPayload.egressId).toBe(recPayload.egressId);
+    expect(stopPayload.storagePath).toBeDefined();
+    expect((hostStop.payload as typeof stopPayload).byDisplayName).toBe(
       'Host Jane',
     );
 

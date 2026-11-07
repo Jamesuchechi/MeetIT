@@ -24,6 +24,13 @@ import {
   isLiveKitConfigured,
   getSupportedRegions,
 } from './livekit.js';
+import {
+  startRoomCompositeRecording,
+  stopRoomCompositeRecording,
+  handleLiveKitWebhook,
+  type EgressStorageConfig,
+} from './egress.js';
+import type { EgressClient } from 'livekit-server-sdk';
 
 export interface SignalingAppOptions {
   logger?: boolean;
@@ -41,6 +48,8 @@ export interface SignalingAppOptions {
   livekitApiKey?: string;
   livekitApiSecret?: string;
   livekitRegionalUrls?: Record<string, string>;
+  egressStorage?: EgressStorageConfig;
+  egressClient?: EgressClient;
 }
 
 export interface SignalingMetrics {
@@ -364,6 +373,30 @@ export function buildSignalingApp(
     meetings: persistence.listMeetingsHistory(50),
   }));
 
+  app.post('/webhooks/livekit', async (request, reply) => {
+    reply.header('Access-Control-Allow-Origin', '*');
+    const authHeader = request.headers.authorization;
+    const rawBody =
+      typeof request.body === 'string'
+        ? request.body
+        : JSON.stringify(request.body);
+    const key = options.livekitApiKey ?? process.env.LIVEKIT_API_KEY ?? '';
+    const secret =
+      options.livekitApiSecret ?? process.env.LIVEKIT_API_SECRET ?? '';
+
+    if (!key || !secret) {
+      return reply.code(501).send({ error: 'LiveKit webhooks not configured' });
+    }
+
+    const event = await handleLiveKitWebhook(rawBody, authHeader, key, secret);
+    if (!event) {
+      return reply.code(401).send({ error: 'Unauthorized webhook' });
+    }
+
+    app.log.info({ event: event.event }, 'Received LiveKit webhook event');
+    return reply.code(200).send({ received: true });
+  });
+
   const wss = new WebSocketServer({
     noServer: true,
     maxPayload: maxPayloadBytes,
@@ -534,7 +567,7 @@ export function buildSignalingApp(
       }
     });
 
-    ws.on('message', (rawData) => {
+    ws.on('message', async (rawData) => {
       ctx.isAlive = true;
       if (ctx.peer) {
         ctx.peer.isAlive = true;
@@ -1134,7 +1167,47 @@ export function buildSignalingApp(
             }
 
             case 'start_recording': {
-              const started = room.startRecording(peer.id);
+              const recLayout =
+                'layout' in actionPayload &&
+                (actionPayload.layout === 'grid' ||
+                  actionPayload.layout === 'speaker')
+                  ? actionPayload.layout
+                  : undefined;
+              const recAudioOnly =
+                'audioOnly' in actionPayload &&
+                typeof actionPayload.audioOnly === 'boolean'
+                  ? actionPayload.audioOnly
+                  : undefined;
+
+              let egressResult: {
+                egressId: string;
+                filepath: string;
+              } | null = null;
+              try {
+                egressResult = await startRoomCompositeRecording({
+                  roomCode: room.code,
+                  ...(recLayout ? { layout: recLayout } : {}),
+                  ...(recAudioOnly !== undefined
+                    ? { audioOnly: recAudioOnly }
+                    : {}),
+                  livekitUrl: options.livekitUrl,
+                  apiKey: options.livekitApiKey,
+                  apiSecret: options.livekitApiSecret,
+                  storage: options.egressStorage,
+                  client: options.egressClient,
+                });
+              } catch (err) {
+                app.log.warn(
+                  { err, roomCode: room.code },
+                  'Failed to start LiveKit composite egress recording',
+                );
+              }
+
+              const started = room.startRecording(
+                peer.id,
+                egressResult?.egressId,
+                egressResult?.filepath,
+              );
               if (started && room.recordingStartedAt) {
                 room.broadcast({
                   v: 1,
@@ -1144,6 +1217,9 @@ export function buildSignalingApp(
                     startedAt: room.recordingStartedAt,
                     byPeerId: peer.id,
                     byDisplayName: peer.displayName,
+                    ...(egressResult?.egressId
+                      ? { egressId: egressResult.egressId }
+                      : {}),
                   },
                 });
               }
@@ -1151,8 +1227,25 @@ export function buildSignalingApp(
             }
 
             case 'stop_recording': {
-              const stopped = room.stopRecording();
-              if (stopped) {
+              const active = room.stopRecording();
+              if (active) {
+                if (active.egressId) {
+                  try {
+                    await stopRoomCompositeRecording({
+                      egressId: active.egressId,
+                      livekitUrl: options.livekitUrl,
+                      apiKey: options.livekitApiKey,
+                      apiSecret: options.livekitApiSecret,
+                      client: options.egressClient,
+                    });
+                  } catch (err) {
+                    app.log.warn(
+                      { err, egressId: active.egressId },
+                      'Failed to stop LiveKit composite egress',
+                    );
+                  }
+                }
+
                 room.broadcast({
                   v: 1,
                   ts: Date.now(),
@@ -1161,6 +1254,10 @@ export function buildSignalingApp(
                     stoppedAt: Date.now(),
                     byPeerId: peer.id,
                     byDisplayName: peer.displayName,
+                    ...(active.egressId ? { egressId: active.egressId } : {}),
+                    ...(active.storagePath
+                      ? { storagePath: active.storagePath }
+                      : {}),
                   },
                 });
               }

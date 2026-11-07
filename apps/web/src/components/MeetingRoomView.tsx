@@ -611,6 +611,11 @@ export function MeetingRoomView({
     useState(false);
   const [showStartRecordingConfirm, setShowStartRecordingConfirm] =
     useState(false);
+  const [recordingLayoutChoice, setRecordingLayoutChoice] = useState<
+    'grid' | 'speaker'
+  >('grid');
+  const [recordingAudioOnlyChoice, setRecordingAudioOnlyChoice] =
+    useState(false);
 
   useEffect(() => {
     if (!isRecording || !recordingStartedAt) {
@@ -2363,7 +2368,10 @@ export function MeetingRoomView({
 
   const handleConfirmStartRecording = () => {
     setShowStartRecordingConfirm(false);
-    signalingRef.current?.startRecording();
+    signalingRef.current?.startRecording({
+      layout: recordingLayoutChoice,
+      audioOnly: recordingAudioOnlyChoice,
+    });
   };
 
   if (stage === 'waiting_room') {
@@ -4309,7 +4317,7 @@ export function MeetingRoomView({
             </div>
             <p
               style={{
-                margin: '14px 0 20px',
+                margin: '14px 0 16px',
                 fontSize: '0.925rem',
                 lineHeight: 1.5,
                 color: 'var(--muted)',
@@ -4318,6 +4326,49 @@ export function MeetingRoomView({
               All participants will see a persistent recording indicator and
               receive a consent notice that this meeting is being recorded.
             </p>
+
+            <div
+              style={{
+                margin: '0 0 20px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '12px',
+              }}
+            >
+              <label className="device-select-group">
+                <span style={{ fontSize: '0.85rem', fontWeight: 600 }}>
+                  Composite Recording Layout
+                </span>
+                <select
+                  value={recordingLayoutChoice}
+                  onChange={(e) =>
+                    setRecordingLayoutChoice(
+                      e.target.value as 'grid' | 'speaker',
+                    )
+                  }
+                  data-testid="recording-layout-select"
+                >
+                  <option value="grid">Grid Gallery (All participants)</option>
+                  <option value="speaker">
+                    Speaker View (Active speaker spotlight)
+                  </option>
+                </select>
+              </label>
+
+              <label className="popover-checkbox-row">
+                <input
+                  type="checkbox"
+                  checked={recordingAudioOnlyChoice}
+                  onChange={(e) =>
+                    setRecordingAudioOnlyChoice(e.target.checked)
+                  }
+                  data-testid="recording-audio-only-check"
+                />
+                <span style={{ fontSize: '0.85rem' }}>
+                  Audio-only recording
+                </span>
+              </label>
+            </div>
             <div
               style={{
                 display: 'flex',

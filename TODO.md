@@ -190,10 +190,10 @@ Every phase has an **exit criteria** block. Do not start the next phase until ex
 ### Recording
 
 - [x] [P0] Start/stop recording (host only), persistent indicator, join-time consent notice
-- [ ] [P0] LiveKit Egress composite layout to object storage
+- [x] [P0] LiveKit Egress composite layout to object storage
 - [ ] [P0] Recording library page: list, play, download, delete
-- [ ] [P1] Speaker-view vs grid-view recording layouts
-- [ ] [P1] Audio-only recording option
+- [x] [P1] Speaker-view vs grid-view recording layouts
+- [x] [P1] Audio-only recording option
 - [ ] [P1] Per-workspace retention policies + scheduled hard delete
 - [ ] [P2] Separate per-participant (ISO) tracks for editors
 

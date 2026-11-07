@@ -118,6 +118,8 @@ export class Room {
   isRecording = false;
   recordingStartedAt: number | null = null;
   recordedByPeerId: string | null = null;
+  activeEgressId: string | null = null;
+  recordingStoragePath: string | null = null;
   readonly createdAt: number = Date.now();
 
   private readonly peers = new Map<string, Peer>();
@@ -179,20 +181,35 @@ export class Room {
     return true;
   }
 
-  startRecording(peerId: string): boolean {
+  startRecording(
+    peerId: string,
+    egressId?: string,
+    storagePath?: string,
+  ): boolean {
     if (this.isRecording) return false;
     this.isRecording = true;
     this.recordingStartedAt = Date.now();
     this.recordedByPeerId = peerId;
+    this.activeEgressId = egressId ?? null;
+    this.recordingStoragePath = storagePath ?? null;
     return true;
   }
 
-  stopRecording(): boolean {
-    if (!this.isRecording) return false;
+  stopRecording(): {
+    egressId: string | null;
+    storagePath: string | null;
+  } | null {
+    if (!this.isRecording) return null;
+    const result = {
+      egressId: this.activeEgressId,
+      storagePath: this.recordingStoragePath,
+    };
     this.isRecording = false;
     this.recordingStartedAt = null;
     this.recordedByPeerId = null;
-    return true;
+    this.activeEgressId = null;
+    this.recordingStoragePath = null;
+    return result;
   }
 
   get hasPasscode(): boolean {

@@ -176,6 +176,8 @@ export const hostActionPayloadSchema = z.discriminatedUnion('action', [
   }),
   z.object({
     action: z.literal('start_recording'),
+    layout: z.enum(['grid', 'speaker']).optional(),
+    audioOnly: z.boolean().optional(),
   }),
   z.object({
     action: z.literal('stop_recording'),
@@ -371,11 +373,14 @@ export interface SignalingEvents {
     startedAt: number;
     byPeerId: string;
     byDisplayName: string;
+    egressId?: string;
   };
   'recording.stopped': {
     stoppedAt: number;
     byPeerId: string;
     byDisplayName: string;
+    egressId?: string;
+    storagePath?: string;
   };
   'host.command': HostCommandEvent;
   error: { code: ErrorCode; message: string };
