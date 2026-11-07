@@ -65,10 +65,25 @@ describe('recordingsStore unit tests', () => {
     expect(formatExpiryCountdown(futureHours)).toBe('Expires in 4h');
   });
 
-  it('seeds demo recordings if localStorage is empty', () => {
+  it('returns empty array if localStorage is empty and purges legacy demo recordings', () => {
     const items = loadLocalRecordings();
-    expect(items.length).toBeGreaterThanOrEqual(1);
-    expect(items[0]!.roomCode).toBeDefined();
+    expect(items).toEqual([]);
+
+    // Test purging of any previously cached demo recordings
+    saveLocalRecordings([
+      {
+        id: 'rec-demo-legacy',
+        roomCode: 'demo-room',
+        roomTitle: 'Demo Review',
+        startedAt: new Date().toISOString(),
+        durationSeconds: 100,
+        fileSizeBytes: 500,
+        status: 'ready',
+        layout: 'grid',
+        storagePath: 'dummy',
+      },
+    ]);
+    expect(loadLocalRecordings()).toEqual([]);
   });
 
   it('saves and deletes recordings in local storage', async () => {
