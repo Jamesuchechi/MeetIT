@@ -51,6 +51,7 @@ import { SettingsView } from './SettingsView';
 import { MeetingsView } from './MeetingsView';
 import { ScheduleView } from './ScheduleView';
 import { NotesView } from './NotesView';
+import { RecordingsView } from './RecordingsView';
 import { BackendStatusIndicator } from './BackendStatusIndicator';
 
 interface DashboardViewProps {
@@ -221,10 +222,6 @@ export function DashboardView({
     onEnterRoom(code);
   };
 
-  const handleComingSoon = (feature: string) => {
-    onToast(`${feature} is coming in the next release.`);
-  };
-
   const handleToggleContextTask = async (taskId: string) => {
     await toggleActionItem(taskId);
     refreshMeetingsData();
@@ -359,8 +356,8 @@ export function DashboardView({
             onClick={() => {
               selectTab('recordings');
               setIsNavDrawerOpen(false);
-              handleComingSoon('Recordings archive');
             }}
+            data-testid="sidebar-recordings-btn"
           >
             <RecIcon />
             <span>Recordings</span>
@@ -689,6 +686,12 @@ export function DashboardView({
               onRefreshData={refreshMeetingsData}
               onEnterRoom={onEnterRoom}
               onToast={onToast}
+            />
+          ) : activeTab === 'recordings' ? (
+            <RecordingsView
+              user={user ?? null}
+              onToast={onToast}
+              onEnterRoom={onEnterRoom}
             />
           ) : (
             <>
