@@ -68,6 +68,7 @@ import {
   MoreHorizontal as MoreHorizontalIcon,
   X as XIcon,
   Sliders as SlidersIcon,
+  Clock as ClockIcon,
 } from 'lucide-react';
 import { Logo } from './Logo';
 import { Avatar } from './Avatar';
@@ -903,6 +904,7 @@ export function MeetingRoomView({
   const [showQAPanel, setShowQAPanel] = useState(false);
   const [showWhiteboardModal, setShowWhiteboardModal] = useState(false);
   const [showSharedNotesPanel, setShowSharedNotesPanel] = useState(false);
+  const [showTimerConfigModal, setShowTimerConfigModal] = useState(false);
 
   const [breakoutState, setBreakoutState] = useState<BreakoutState>({
     active: false,
@@ -3586,6 +3588,8 @@ export function MeetingRoomView({
             onSendTimerAction={(params) =>
               signalingRef.current?.sendTimerAction(params)
             }
+            isConfigOpen={showTimerConfigModal}
+            onToggleConfig={setShowTimerConfigModal}
           />
         </div>
 
@@ -5614,6 +5618,24 @@ export function MeetingRoomView({
                   </div>
                   <span>Notes</span>
                 </button>
+
+                {/* Timer & Agenda Controls */}
+                {canModerate && (
+                  <button
+                    type="button"
+                    className={`mobile-activity-card ${showTimerConfigModal ? 'active' : ''}`}
+                    onClick={() => {
+                      setShowTimerConfigModal(true);
+                      setShowMoreActivitiesSheet(false);
+                    }}
+                    data-testid="mobile-sheet-timer-btn"
+                  >
+                    <div className="mobile-activity-icon-wrap">
+                      <ClockIcon size={18} />
+                    </div>
+                    <span>Timer</span>
+                  </button>
+                )}
 
                 {/* People & Host Controls */}
                 <button
