@@ -3,6 +3,14 @@ import {
   exportAnalyticsToCsv,
   fetchWebinarAnalyticsApi,
 } from '../lib/webinarStore';
+import {
+  TrendingUp,
+  Download,
+  X,
+  Users,
+  MessageSquare,
+  BarChart3,
+} from 'lucide-react';
 
 interface WebinarAnalyticsModalProps {
   isOpen: boolean;
@@ -36,16 +44,16 @@ export const WebinarAnalyticsModal: React.FC<WebinarAnalyticsModalProps> = ({
   useEffect(() => {
     if (!isOpen) return;
     setLoading(true);
+    setError(null);
     fetchWebinarAnalyticsApi(roomCode)
       .then((data) => {
         setReport(data.report);
         setPeakViewers(data.peakViewers);
-        setLoading(false);
       })
       .catch((err) => {
-        setError(
-          err instanceof Error ? err.message : 'Failed to fetch analytics',
-        );
+        setError(err.message || 'Failed to fetch attendee analytics');
+      })
+      .finally(() => {
         setLoading(false);
       });
   }, [isOpen, roomCode]);
@@ -65,139 +73,279 @@ export const WebinarAnalyticsModal: React.FC<WebinarAnalyticsModalProps> = ({
       : 0;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-fade-in">
-      <div className="w-full max-w-3xl rounded-2xl bg-slate-900 border border-slate-800 text-slate-100 shadow-2xl p-6 relative flex flex-col max-h-[85vh]">
-        <button
-          onClick={onClose}
-          className="absolute top-4 right-4 text-slate-400 hover:text-white p-1 rounded-lg"
-        >
-          ✕
-        </button>
-
-        <div className="flex items-center justify-between mb-5 pr-8">
-          <div>
-            <h2 className="text-xl font-bold text-white flex items-center gap-2">
-              <span>📊</span> Webinar Attendee Analytics
-            </h2>
-            <p className="text-xs text-slate-400">
-              Live engagement scores, session duration, and attendee
-              interactions.
-            </p>
+    <div
+      className="app-modal-backdrop"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="analytics-modal-title"
+      onClick={onClose}
+    >
+      <div
+        className="app-modal-dialog wide"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="app-modal-header">
+          <div className="app-modal-title-group">
+            <div className="app-modal-icon">
+              <TrendingUp size={20} />
+            </div>
+            <div>
+              <h2 id="analytics-modal-title" className="app-modal-title">
+                Webinar Attendee Analytics
+              </h2>
+              <p className="app-modal-subtitle">
+                Live engagement scores, session duration, and attendee
+                interactions
+              </p>
+            </div>
           </div>
-          <button
-            onClick={handleExport}
-            disabled={report.length === 0}
-            className="py-2 px-3.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-semibold text-xs flex items-center gap-1.5 shadow-md shadow-indigo-600/20"
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <button
+              type="button"
+              onClick={handleExport}
+              disabled={report.length === 0}
+              className="panel-btn-primary"
+              style={{ padding: '6px 12px', fontSize: '12px' }}
+            >
+              <Download size={14} /> Export CSV
+            </button>
+            <button
+              type="button"
+              onClick={onClose}
+              className="app-modal-close"
+              aria-label="Close modal"
+            >
+              <X size={18} />
+            </button>
+          </div>
+        </div>
+
+        <div className="app-modal-body">
+          {/* Top metrics summary cards */}
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(3, 1fr)',
+              gap: '12px',
+            }}
           >
-            <span>📥</span> Export CSV
-          </button>
-        </div>
+            <div className="panel-card" style={{ padding: '14px' }}>
+              <span
+                style={{
+                  fontSize: '12px',
+                  color: 'var(--muted)',
+                  display: 'block',
+                }}
+              >
+                Peak Viewers
+              </span>
+              <strong style={{ fontSize: '24px', color: 'var(--ink)' }}>
+                {peakViewers}
+              </strong>
+            </div>
+            <div className="panel-card" style={{ padding: '14px' }}>
+              <span
+                style={{
+                  fontSize: '12px',
+                  color: 'var(--muted)',
+                  display: 'block',
+                }}
+              >
+                Total Attendees
+              </span>
+              <strong style={{ fontSize: '24px', color: 'var(--ink)' }}>
+                {report.length}
+              </strong>
+            </div>
+            <div className="panel-card" style={{ padding: '14px' }}>
+              <span
+                style={{
+                  fontSize: '12px',
+                  color: 'var(--muted)',
+                  display: 'block',
+                }}
+              >
+                Avg Engagement
+              </span>
+              <strong style={{ fontSize: '24px', color: '#22c55e' }}>
+                {avgEngagement}%
+              </strong>
+            </div>
+          </div>
 
-        {/* Top metrics summary cards */}
-        <div className="grid grid-cols-3 gap-3 mb-5">
-          <div className="p-3.5 rounded-xl bg-slate-800/80 border border-slate-750">
-            <span className="text-xs text-slate-400 block mb-1">
-              Peak Viewers
-            </span>
-            <span className="text-2xl font-bold text-white">{peakViewers}</span>
-          </div>
-          <div className="p-3.5 rounded-xl bg-slate-800/80 border border-slate-750">
-            <span className="text-xs text-slate-400 block mb-1">
-              Total Attendees
-            </span>
-            <span className="text-2xl font-bold text-white">
-              {report.length}
-            </span>
-          </div>
-          <div className="p-3.5 rounded-xl bg-slate-800/80 border border-slate-750">
-            <span className="text-xs text-slate-400 block mb-1">
-              Avg Engagement
-            </span>
-            <span className="text-2xl font-bold text-emerald-400">
-              {avgEngagement}%
-            </span>
-          </div>
-        </div>
-
-        {/* Attendees List / Table */}
-        <div className="flex-1 overflow-y-auto rounded-xl border border-slate-800">
-          {loading ? (
-            <div className="text-center py-12 text-slate-400 text-sm">
-              Loading attendee analytics...
-            </div>
-          ) : error ? (
-            <div className="text-center py-12 text-rose-400 text-sm">
-              {error}
-            </div>
-          ) : report.length === 0 ? (
-            <div className="text-center py-12 text-slate-500 text-sm">
-              No attendee sessions recorded yet.
-            </div>
-          ) : (
-            <table className="w-full text-left border-collapse text-xs">
-              <thead className="bg-slate-800/90 text-slate-300 uppercase tracking-wider sticky top-0">
-                <tr>
-                  <th className="py-2.5 px-3">Attendee</th>
-                  <th className="py-2.5 px-3">Role</th>
-                  <th className="py-2.5 px-3">Duration</th>
-                  <th className="py-2.5 px-3 text-center">Polls</th>
-                  <th className="py-2.5 px-3 text-center">Q&A</th>
-                  <th className="py-2.5 px-3 text-center">Chat</th>
-                  <th className="py-2.5 px-3">Engagement</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-800">
-                {report.map((att) => {
-                  const mins = Math.floor(att.durationSeconds / 60);
-                  const secs = att.durationSeconds % 60;
-                  return (
-                    <tr key={att.peerId} className="hover:bg-slate-800/40">
-                      <td className="py-2.5 px-3 font-medium text-slate-200">
-                        {att.displayName}
-                      </td>
-                      <td className="py-2.5 px-3 text-slate-400 capitalize">
-                        {att.role}
-                      </td>
-                      <td className="py-2.5 px-3 text-slate-300 font-mono">
-                        {mins}m {secs}s
-                      </td>
-                      <td className="py-2.5 px-3 text-center text-slate-300">
-                        {att.pollVotesCount}
-                      </td>
-                      <td className="py-2.5 px-3 text-center text-slate-300">
-                        {att.qaCount}
-                      </td>
-                      <td className="py-2.5 px-3 text-center text-slate-300">
-                        {att.chatCount}
-                      </td>
-                      <td className="py-2.5 px-3">
-                        <div className="flex items-center gap-2">
-                          <div className="flex-1 h-1.5 rounded-full bg-slate-800 overflow-hidden">
+          {/* Attendees List / Table */}
+          <div
+            style={{
+              border: '1px solid var(--line)',
+              borderRadius: '12px',
+              overflow: 'hidden',
+              maxHeight: '360px',
+              overflowY: 'auto',
+            }}
+          >
+            {loading ? (
+              <div
+                style={{
+                  textAlign: 'center',
+                  padding: '36px',
+                  color: 'var(--muted)',
+                  fontSize: '13px',
+                }}
+              >
+                Loading attendee analytics...
+              </div>
+            ) : error ? (
+              <div
+                style={{
+                  textAlign: 'center',
+                  padding: '36px',
+                  color: 'var(--danger)',
+                  fontSize: '13px',
+                }}
+              >
+                {error}
+              </div>
+            ) : report.length === 0 ? (
+              <div
+                style={{
+                  textAlign: 'center',
+                  padding: '36px',
+                  color: 'var(--muted)',
+                  fontSize: '13px',
+                }}
+              >
+                No attendee sessions recorded yet.
+              </div>
+            ) : (
+              <table
+                style={{
+                  width: '100%',
+                  borderCollapse: 'collapse',
+                  fontSize: '12.5px',
+                  textAlign: 'left',
+                }}
+              >
+                <thead
+                  style={{
+                    background: 'var(--bg)',
+                    color: 'var(--muted)',
+                    borderBottom: '1px solid var(--line)',
+                    textTransform: 'uppercase',
+                    fontSize: '11px',
+                    letterSpacing: '0.04em',
+                  }}
+                >
+                  <tr>
+                    <th style={{ padding: '10px 12px' }}>Attendee</th>
+                    <th style={{ padding: '10px 12px' }}>Role</th>
+                    <th style={{ padding: '10px 12px' }}>Duration</th>
+                    <th style={{ padding: '10px 12px', textAlign: 'center' }}>
+                      Polls
+                    </th>
+                    <th style={{ padding: '10px 12px', textAlign: 'center' }}>
+                      Q&amp;A
+                    </th>
+                    <th style={{ padding: '10px 12px', textAlign: 'center' }}>
+                      Chat
+                    </th>
+                    <th style={{ padding: '10px 12px' }}>Engagement</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {report.map((att) => {
+                    const mins = Math.floor(att.durationSeconds / 60);
+                    const secs = att.durationSeconds % 60;
+                    return (
+                      <tr
+                        key={att.peerId}
+                        style={{ borderBottom: '1px solid var(--line)' }}
+                      >
+                        <td
+                          style={{
+                            padding: '10px 12px',
+                            fontWeight: 600,
+                            color: 'var(--ink)',
+                          }}
+                        >
+                          {att.displayName}
+                        </td>
+                        <td
+                          style={{
+                            padding: '10px 12px',
+                            color: 'var(--muted)',
+                            textTransform: 'capitalize',
+                          }}
+                        >
+                          {att.role}
+                        </td>
+                        <td
+                          style={{
+                            padding: '10px 12px',
+                            fontFamily: 'monospace',
+                            color: 'var(--ink)',
+                          }}
+                        >
+                          {mins}m {secs}s
+                        </td>
+                        <td
+                          style={{ padding: '10px 12px', textAlign: 'center' }}
+                        >
+                          {att.pollVotesCount}
+                        </td>
+                        <td
+                          style={{ padding: '10px 12px', textAlign: 'center' }}
+                        >
+                          {att.qaCount}
+                        </td>
+                        <td
+                          style={{ padding: '10px 12px', textAlign: 'center' }}
+                        >
+                          {att.chatCount}
+                        </td>
+                        <td style={{ padding: '10px 12px' }}>
+                          <div
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '8px',
+                            }}
+                          >
                             <div
-                              className="h-full rounded-full bg-indigo-500"
-                              style={{ width: `${att.engagementScore}%` }}
-                            />
+                              style={{
+                                flex: 1,
+                                height: '6px',
+                                borderRadius: '3px',
+                                background: 'var(--line)',
+                                overflow: 'hidden',
+                              }}
+                            >
+                              <div
+                                style={{
+                                  height: '100%',
+                                  borderRadius: '3px',
+                                  background: 'var(--accent)',
+                                  width: `${att.engagementScore}%`,
+                                }}
+                              />
+                            </div>
+                            <span
+                              style={{
+                                fontSize: '11px',
+                                fontFamily: 'monospace',
+                                width: '32px',
+                              }}
+                            >
+                              {att.engagementScore}%
+                            </span>
                           </div>
-                          <span className="font-semibold text-slate-300 w-8 text-right">
-                            {att.engagementScore}%
-                          </span>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          )}
-        </div>
-
-        <div className="mt-4 pt-3 border-t border-slate-800 flex justify-end">
-          <button
-            onClick={onClose}
-            className="py-2 px-5 rounded-xl bg-slate-800 hover:bg-slate-750 text-slate-300 text-xs font-semibold"
-          >
-            Close
-          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            )}
+          </div>
         </div>
       </div>
     </div>

@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import type { WebinarBranding, WebinarState } from '@meetit/protocol';
+import { Clock, Radio, Users } from 'lucide-react';
 
 interface WebinarWaitingScreenProps {
   webinar: WebinarState;
@@ -21,7 +22,6 @@ export const WebinarWaitingScreen: React.FC<WebinarWaitingScreenProps> = ({
   const [timeUntilStart, setTimeUntilStart] = useState<string>('');
 
   useEffect(() => {
-    // If webinar has startedAt or a target start time in future
     const targetMs = webinar.startedAt;
     if (!targetMs) return;
 
@@ -39,99 +39,267 @@ export const WebinarWaitingScreen: React.FC<WebinarWaitingScreenProps> = ({
     return () => clearInterval(interval);
   }, [webinar.startedAt]);
 
-  const primaryColor = branding.primaryColor || '#6366f1';
-  const bgColor = branding.backgroundColor || '#0f172a';
+  const primaryColor = branding.primaryColor || 'var(--accent)';
+  const bgColor = branding.backgroundColor || 'var(--surface)';
 
   return (
     <div
-      className="flex flex-col items-center justify-center min-h-[70vh] p-6 text-white rounded-2xl shadow-2xl relative overflow-hidden my-4 border border-slate-700/60"
-      style={{ backgroundColor: bgColor }}
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        minHeight: '70vh',
+        padding: '36px 20px',
+        color: 'var(--ink)',
+        background: bgColor,
+        borderRadius: '20px',
+        boxShadow: '0 20px 50px rgba(0, 0, 0, 0.35)',
+        position: 'relative',
+        overflow: 'hidden',
+        border: '1px solid var(--line)',
+        margin: '16px auto',
+        maxWidth: '860px',
+        width: '100%',
+        textAlign: 'center',
+      }}
     >
       {/* Banner backdrop if available */}
       {branding.bannerUrl && (
         <div
-          className="absolute inset-0 bg-cover bg-center opacity-15 pointer-events-none"
-          style={{ backgroundImage: `url(${branding.bannerUrl})` }}
+          style={{
+            position: 'absolute',
+            inset: 0,
+            backgroundSize: 'cover',
+            backgroundPosition: 'center',
+            opacity: 0.12,
+            pointerEvents: 'none',
+            backgroundImage: `url(${branding.bannerUrl})`,
+          }}
         />
       )}
 
       {/* Brand logo or fallback badge */}
-      <div className="z-10 flex flex-col items-center text-center max-w-2xl">
+      <div
+        style={{
+          position: 'relative',
+          zIndex: 1,
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          maxWidth: '640px',
+        }}
+      >
         {branding.logoUrl ? (
           <img
             src={branding.logoUrl}
             alt="Webinar Logo"
-            className="h-16 mb-6 object-contain"
+            style={{
+              height: '64px',
+              marginBottom: '24px',
+              objectFit: 'contain',
+            }}
           />
         ) : (
           <div
-            className="w-16 h-16 rounded-2xl flex items-center justify-center mb-6 shadow-lg shadow-indigo-500/20 text-3xl font-black"
-            style={{ backgroundColor: primaryColor }}
+            className="app-modal-icon"
+            style={{
+              width: '56px',
+              height: '56px',
+              borderRadius: '16px',
+              marginBottom: '20px',
+              fontSize: '22px',
+              fontWeight: 800,
+            }}
           >
-            M
+            <Radio size={28} />
           </div>
         )}
 
-        <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-800/80 border border-slate-700 text-xs font-semibold text-indigo-400 mb-4 backdrop-blur-sm">
-          <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />
+        <div
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '8px',
+            padding: '6px 14px',
+            borderRadius: '999px',
+            background: 'var(--soft)',
+            border: '1px solid var(--line)',
+            fontSize: '12px',
+            fontWeight: 600,
+            color: 'var(--accent)',
+            marginBottom: '16px',
+          }}
+        >
+          <span
+            style={{
+              width: '8px',
+              height: '8px',
+              borderRadius: '50%',
+              background: '#eab308',
+            }}
+          />
           <span>Green Room Practice Session Active</span>
         </div>
 
-        <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight text-slate-100 mb-3">
+        <h1
+          style={{
+            fontSize: '28px',
+            fontWeight: 800,
+            letterSpacing: '-0.02em',
+            margin: '0 0 12px',
+            color: 'var(--ink)',
+          }}
+        >
           {branding.headline || roomTitle || 'Webinar Starting Soon'}
         </h1>
 
-        <p className="text-slate-300 text-base md:text-lg mb-8 leading-relaxed">
+        <p
+          style={{
+            fontSize: '15px',
+            color: 'var(--muted)',
+            margin: '0 0 24px',
+            lineHeight: 1.6,
+          }}
+        >
           {branding.description ||
             'The host and panelists are finalizing preparations in the practice session. Your broadcast will automatically start as soon as the host goes live.'}
         </p>
 
         {timeUntilStart && (
-          <div className="mb-8 px-6 py-3 rounded-xl bg-slate-800/90 border border-slate-700 text-center">
-            <span className="text-xs uppercase tracking-wider text-slate-400 block mb-1">
+          <div
+            className="panel-card"
+            style={{
+              marginBottom: '24px',
+              padding: '12px 24px',
+              textAlign: 'center',
+            }}
+          >
+            <span
+              style={{
+                fontSize: '11px',
+                textTransform: 'uppercase',
+                letterSpacing: '0.05em',
+                color: 'var(--muted)',
+                display: 'block',
+                marginBottom: '4px',
+              }}
+            >
               Estimated Countdown
             </span>
-            <span className="text-2xl font-mono font-bold text-amber-400">
+            <strong
+              style={{
+                fontSize: '24px',
+                fontFamily: 'monospace',
+                color: 'var(--accent)',
+              }}
+            >
               {timeUntilStart}
-            </span>
+            </strong>
           </div>
         )}
 
         {/* Speaker Bios Section */}
         {branding.speakerBios && branding.speakerBios.length > 0 && (
-          <div className="w-full mt-4">
-            <h2 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-4">
-              Featured Speakers & Panelists
-            </h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-left">
+          <div style={{ width: '100%', marginTop: '16px' }}>
+            <span
+              style={{
+                fontSize: '11px',
+                fontWeight: 700,
+                textTransform: 'uppercase',
+                letterSpacing: '0.05em',
+                color: 'var(--muted)',
+                display: 'block',
+                marginBottom: '12px',
+              }}
+            >
+              Featured Speakers &amp; Panelists
+            </span>
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
+                gap: '12px',
+                textAlign: 'left',
+              }}
+            >
               {branding.speakerBios.map((speaker, idx) => (
                 <div
                   key={idx}
-                  className="flex items-start gap-3 p-3.5 rounded-xl bg-slate-800/60 border border-slate-750 backdrop-blur-sm"
+                  className="panel-card"
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: '12px',
+                    padding: '12px',
+                  }}
                 >
                   {speaker.avatarUrl ? (
                     <img
                       src={speaker.avatarUrl}
                       alt={speaker.name}
-                      className="w-12 h-12 rounded-full object-cover border-2 border-indigo-500/40"
+                      style={{
+                        width: '44px',
+                        height: '44px',
+                        borderRadius: '50%',
+                        objectFit: 'cover',
+                      }}
                     />
                   ) : (
-                    <div className="w-12 h-12 rounded-full bg-slate-700 flex items-center justify-center font-bold text-indigo-300 text-lg">
+                    <div
+                      className="app-modal-icon"
+                      style={{
+                        width: '44px',
+                        height: '44px',
+                        borderRadius: '50%',
+                        fontSize: '16px',
+                        fontWeight: 700,
+                      }}
+                    >
                       {speaker.name[0]}
                     </div>
                   )}
-                  <div className="flex-1 min-w-0">
-                    <h3 className="font-semibold text-slate-200 text-sm truncate">
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <strong
+                      style={{
+                        fontSize: '13.5px',
+                        color: 'var(--ink)',
+                        display: 'block',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
                       {speaker.name}
-                    </h3>
-                    <p className="text-xs text-indigo-400 truncate">
+                    </strong>
+                    <span
+                      style={{
+                        fontSize: '12px',
+                        color: 'var(--accent)',
+                        display: 'block',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
                       {speaker.role}{' '}
-                      {speaker.company ? `• ${speaker.company}` : ''}
-                    </p>
+                      {speaker.company ? `· ${speaker.company}` : ''}
+                    </span>
                     {speaker.bio && (
-                      <p className="text-xs text-slate-400 mt-1 line-clamp-2">
+                      <span
+                        style={{
+                          fontSize: '11.5px',
+                          color: 'var(--muted)',
+                          display: '-webkit-box',
+                          WebkitLineClamp: 2,
+                          WebkitBoxOrient: 'vertical',
+                          overflow: 'hidden',
+                          marginTop: '2px',
+                        }}
+                      >
                         {speaker.bio}
-                      </p>
+                      </span>
                     )}
                   </div>
                 </div>
@@ -140,26 +308,17 @@ export const WebinarWaitingScreen: React.FC<WebinarWaitingScreenProps> = ({
           </div>
         )}
 
-        <div className="mt-8 flex items-center gap-2 text-xs text-slate-400">
-          <svg
-            className="w-4 h-4 animate-spin text-indigo-400"
-            fill="none"
-            viewBox="0 0 24 24"
-          >
-            <circle
-              className="opacity-25"
-              cx="12"
-              cy="12"
-              r="10"
-              stroke="currentColor"
-              strokeWidth="4"
-            />
-            <path
-              className="opacity-75"
-              fill="currentColor"
-              d="M4 12a8 8 0 018-8v8H4z"
-            />
-          </svg>
+        <div
+          style={{
+            marginTop: '28px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            fontSize: '12.5px',
+            color: 'var(--muted)',
+          }}
+        >
+          <Clock size={16} style={{ color: 'var(--accent)' }} />
           <span>Waiting for host to broadcast live stage...</span>
         </div>
       </div>

@@ -48,6 +48,24 @@ import { QAPanel } from './QAPanel';
 import { WhiteboardModal } from './WhiteboardModal';
 import { SharedNotesPanel } from './SharedNotesPanel';
 import { TimerAgendaWidget } from './TimerAgendaWidget';
+import {
+  Users as UsersIcon,
+  BarChart3 as BarChartIcon,
+  ClipboardList as ClipboardIcon,
+  HelpCircle as HelpIcon,
+  Paintbrush as PaintbrushIcon,
+  FileText as FileTextIcon,
+  Radio as RadioIcon,
+  TrendingUp as TrendingUpIcon,
+  MessageSquare as MessageSquareIcon,
+  Smile as SmileIcon,
+  Hand as HandIcon,
+  Circle as CircleIcon,
+  Paperclip as PaperclipIcon,
+  Lock as LockIcon,
+  Unlock as UnlockIcon,
+  Square as SquareIcon,
+} from 'lucide-react';
 import { Logo } from './Logo';
 import { Avatar } from './Avatar';
 import {
@@ -2327,22 +2345,22 @@ export function MeetingRoomView({
     signaling.on('breakout.updated', (state) => {
       setBreakoutState(state);
       if (state.active) {
-        onToast('🚪 Breakout rooms started.');
+        onToast('Breakout rooms started.');
         announce('Breakout rooms started');
       } else {
-        onToast('🚪 Breakout rooms ended.');
+        onToast('Breakout rooms ended.');
         announce('Breakout rooms ended');
       }
     });
 
     signaling.on('breakout.broadcast', ({ message, from }) => {
-      onToast(`📢 Broadcast from ${from}: ${message}`);
+      onToast(`Broadcast from ${from}: ${message}`);
       announce(`Broadcast from ${from}: ${message}`);
     });
 
     signaling.on('poll.updated', ({ poll }) => {
       setPolls((prev) => [poll, ...prev.filter((p) => p.id !== poll.id)]);
-      onToast(`📊 Poll update: ${poll.question}`);
+      onToast(`Poll update: ${poll.question}`);
       announce(`Poll update: ${poll.question}`);
     });
 
@@ -2354,7 +2372,7 @@ export function MeetingRoomView({
       setFormItSession(session);
       if (session) {
         setShowFormItModal(true);
-        onToast(`📋 FormIT survey launched: ${session.title || session.slug}`);
+        onToast(`FormIT survey launched: ${session.title || session.slug}`);
       }
     });
 
@@ -3365,7 +3383,12 @@ export function MeetingRoomView({
 
             {roomHasPasscode && (
               <div className="lobby-field">
-                <label htmlFor="lobbyPasscodeInput">🔒 Room passcode *</label>
+                <label
+                  htmlFor="lobbyPasscodeInput"
+                  style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+                >
+                  <LockIcon size={14} /> Room passcode *
+                </label>
                 <input
                   id="lobbyPasscodeInput"
                   type="password"
@@ -3631,8 +3654,10 @@ export function MeetingRoomView({
 
       {breakoutState?.active && (
         <div className="active-breakout-banner" data-testid="breakout-banner">
-          <span>
-            🚪 <strong>Breakout Session Active</strong>
+          <span
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
+          >
+            <UsersIcon size={15} /> <strong>Breakout Session Active</strong>
             {breakoutState.rooms.find((r) =>
               r.peerIds.includes(signalingRef.current?.selfId ?? ''),
             )
@@ -3837,7 +3862,7 @@ export function MeetingRoomView({
             >
               <div className="webinar-status-info">
                 <span className="webinar-status-badge">
-                  {webinarState.isLive ? '🔴 LIVE' : '🟡 GREEN ROOM (PRACTICE)'}
+                  {webinarState.isLive ? 'LIVE' : 'GREEN ROOM (PRACTICE)'}
                 </span>
                 <span className="webinar-status-desc">
                   {webinarState.isLive
@@ -4245,16 +4270,44 @@ export function MeetingRoomView({
                       className={`btn ${roomLocked ? 'primary' : ''}`}
                       onClick={handleHostToggleLock}
                       data-testid="host-lock-btn"
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 6,
+                      }}
                     >
-                      {roomLocked ? '🔒 Unlock room' : '🔓 Lock room'}
+                      {roomLocked ? (
+                        <>
+                          <UnlockIcon size={14} /> Unlock room
+                        </>
+                      ) : (
+                        <>
+                          <LockIcon size={14} /> Lock room
+                        </>
+                      )}
                     </button>
                     <button
                       type="button"
                       className={`btn ${isRecording ? 'danger' : ''}`}
                       onClick={handleToggleRecording}
                       data-testid="host-recording-btn"
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 6,
+                      }}
                     >
-                      {isRecording ? '⏹ Stop recording' : '⏺ Record meeting'}
+                      {isRecording ? (
+                        <>
+                          <SquareIcon size={13} fill="currentColor" /> Stop
+                          recording
+                        </>
+                      ) : (
+                        <>
+                          <CircleIcon size={13} fill="currentColor" /> Record
+                          meeting
+                        </>
+                      )}
                     </button>
                     <button
                       type="button"
@@ -4542,7 +4595,9 @@ export function MeetingRoomView({
                     {msg.text && <p>{msg.text}</p>}
                     {msg.file && (
                       <div className="chat-file-attachment">
-                        <span className="file-icon">📎</span>
+                        <span className="file-icon">
+                          <PaperclipIcon size={14} />
+                        </span>
                         <div className="file-info">
                           <a
                             href={msg.file.url}
@@ -4636,7 +4691,15 @@ export function MeetingRoomView({
 
             {chatAttachment && (
               <div className="chat-attachment-preview">
-                <span>📎 {chatAttachment.name}</span>
+                <span
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 4,
+                  }}
+                >
+                  <PaperclipIcon size={13} /> {chatAttachment.name}
+                </span>
                 <button
                   type="button"
                   className="btn-close-reply"
@@ -4661,7 +4724,7 @@ export function MeetingRoomView({
                 title="Attach file (up to 25MB)"
                 onClick={() => fileInputRef.current?.click()}
               >
-                📎
+                <PaperclipIcon size={16} />
               </button>
               <input
                 type="text"
@@ -4800,9 +4863,7 @@ export function MeetingRoomView({
               title="Send a reaction"
               data-testid="call-react-btn"
             >
-              <span aria-hidden="true" style={{ fontSize: 18 }}>
-                😊
-              </span>
+              <SmileIcon size={18} />
               <span className="dock-btn-label">React</span>
             </button>
 
@@ -4836,9 +4897,7 @@ export function MeetingRoomView({
             title={handRaised ? 'Lower hand (H)' : 'Raise hand (H)'}
             data-testid="call-hand-btn"
           >
-            <span aria-hidden="true" style={{ fontSize: 17 }}>
-              ✋
-            </span>
+            <HandIcon size={18} />
             <span className="dock-btn-label">
               {handRaised ? 'Lower' : 'Hand'}
             </span>
@@ -4858,9 +4917,10 @@ export function MeetingRoomView({
               }
               data-testid="call-record-btn"
             >
-              <span aria-hidden="true" style={{ fontSize: 16 }}>
-                {isRecording ? '⏹' : '⏺'}
-              </span>
+              <CircleIcon
+                size={16}
+                fill={isRecording ? 'currentColor' : 'none'}
+              />
               <span className="dock-btn-label">
                 {isRecording ? 'Rec' : 'Record'}
               </span>
@@ -5091,7 +5151,7 @@ export function MeetingRoomView({
             title="Breakout Rooms"
             data-testid="call-breakout-btn"
           >
-            <span style={{ fontSize: 16 }}>🚪</span>
+            <UsersIcon size={16} />
             <span>Rooms</span>
             {breakoutState?.active && (
               <span
@@ -5113,7 +5173,7 @@ export function MeetingRoomView({
             title="Polls & Quizzes"
             data-testid="call-polls-btn"
           >
-            <span style={{ fontSize: 16 }}>📊</span>
+            <BarChartIcon size={16} />
             <span>Polls</span>
             {polls.filter((p) => !p.closed).length > 0 && (
               <span className="unread-chat-badge">
@@ -5132,7 +5192,7 @@ export function MeetingRoomView({
             title="FormIT Survey"
             data-testid="call-formit-btn"
           >
-            <span style={{ fontSize: 16 }}>📋</span>
+            <ClipboardIcon size={16} />
             <span>FormIT</span>
             {formItSession && (
               <span
@@ -5154,7 +5214,7 @@ export function MeetingRoomView({
             title="Q&A"
             data-testid="call-qa-btn"
           >
-            <span style={{ fontSize: 16 }}>❓</span>
+            <HelpIcon size={16} />
             <span>Q&amp;A</span>
             {qaQuestions.filter((q) => !q.answered && !q.dismissed).length >
               0 && (
@@ -5175,7 +5235,7 @@ export function MeetingRoomView({
               title="Webinar Audience Q&A"
               data-testid="call-webinar-qa-btn"
             >
-              <span style={{ fontSize: 16 }}>💬</span>
+              <MessageSquareIcon size={16} />
               <span>Webinar Q&amp;A</span>
               {webinarQaQuestions.filter(
                 (q) => q.status === 'pending' || q.status === 'approved',
@@ -5202,7 +5262,7 @@ export function MeetingRoomView({
               title="Broadcast to YouTube / RTMP / HLS"
               data-testid="call-webinar-stream-btn"
             >
-              <span style={{ fontSize: 16 }}>📡</span>
+              <RadioIcon size={16} />
               <span>Stream</span>
               {webinarState?.streamOut?.status === 'live' && (
                 <span
@@ -5226,7 +5286,7 @@ export function MeetingRoomView({
               title="Webinar Analytics & Attendance"
               data-testid="call-webinar-analytics-btn"
             >
-              <span style={{ fontSize: 16 }}>📈</span>
+              <TrendingUpIcon size={16} />
               <span>Analytics</span>
             </button>
           )}
@@ -5241,7 +5301,7 @@ export function MeetingRoomView({
             title="Shared Whiteboard"
             data-testid="call-whiteboard-btn"
           >
-            <span style={{ fontSize: 16 }}>🎨</span>
+            <PaintbrushIcon size={16} />
             <span>Board</span>
           </button>
 
@@ -5255,7 +5315,7 @@ export function MeetingRoomView({
             title="Collaborative Notes"
             data-testid="call-notes-btn"
           >
-            <span style={{ fontSize: 16 }}>📝</span>
+            <FileTextIcon size={16} />
             <span>Notes</span>
           </button>
 

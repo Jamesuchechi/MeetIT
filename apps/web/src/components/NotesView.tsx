@@ -32,6 +32,11 @@ import { formatEmailDigest } from '../lib/aiService';
 import { AskMeetingModal } from './AskMeetingModal';
 import { EmailDigestModal } from './EmailDigestModal';
 import { CheckIcon, CloseIcon, LnkIcon, NotesIcon, PlusIcon } from './Icons';
+import {
+  ClipboardList as ClipboardIcon,
+  BarChart3 as BarChartIcon,
+  FileText as FileTextIcon,
+} from 'lucide-react';
 
 interface NotesViewProps {
   user: AuthUser | null;
@@ -1209,7 +1214,15 @@ export function NotesView({
                         }}
                       >
                         <div className="note-section-head">
-                          <h4>📋 FormIT Survey / Feedback</h4>
+                          <h4
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 6,
+                            }}
+                          >
+                            <ClipboardIcon size={16} /> FormIT Survey / Feedback
+                          </h4>
                           <a
                             href={selectedNote.formItSurvey.formUrl}
                             target="_blank"
@@ -1245,8 +1258,14 @@ export function NotesView({
                           }}
                         >
                           <div className="note-section-head">
-                            <h4>
-                              📊 In-Call Poll Results (
+                            <h4
+                              style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 6,
+                              }}
+                            >
+                              <BarChartIcon size={16} /> In-Call Poll Results (
                               {selectedNote.pollResults.length})
                             </h4>
                           </div>
@@ -1302,7 +1321,16 @@ export function NotesView({
                         }}
                       >
                         <div className="note-section-head">
-                          <h4>📝 Collaborative In-Call Notes</h4>
+                          <h4
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 6,
+                            }}
+                          >
+                            <FileTextIcon size={16} /> Collaborative In-Call
+                            Notes
+                          </h4>
                         </div>
                         <pre
                           style={{

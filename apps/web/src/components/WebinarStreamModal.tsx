@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import type { WebinarStreamOut } from '@meetit/protocol';
+import { Radio, X, Copy, Check, Play, Square } from 'lucide-react';
 
 interface WebinarStreamModalProps {
   isOpen: boolean;
@@ -69,148 +70,197 @@ export const WebinarStreamModal: React.FC<WebinarStreamModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-fade-in">
-      <div className="w-full max-w-lg rounded-2xl bg-slate-900 border border-slate-800 text-slate-100 shadow-2xl p-6 relative">
-        <button
-          onClick={onClose}
-          className="absolute top-4 right-4 text-slate-400 hover:text-white p-1 rounded-lg"
-        >
-          ✕
-        </button>
-
-        <div className="flex items-center gap-3 mb-5">
-          <div className="w-10 h-10 rounded-xl bg-red-600/20 text-red-400 flex items-center justify-center font-bold text-lg">
-            📡
+    <div
+      className="app-modal-backdrop"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="stream-modal-title"
+      onClick={onClose}
+    >
+      <div className="app-modal-dialog" onClick={(e) => e.stopPropagation()}>
+        <div className="app-modal-header">
+          <div className="app-modal-title-group">
+            <div className="app-modal-icon">
+              <Radio size={20} />
+            </div>
+            <div>
+              <h2 id="stream-modal-title" className="app-modal-title">
+                Live Stream Broadcast Out
+              </h2>
+              <p className="app-modal-subtitle">
+                Simulcast to YouTube, Facebook, custom RTMP and HLS for 1,000+
+                viewers
+              </p>
+            </div>
           </div>
-          <div>
-            <h2 className="text-lg font-bold text-white">
-              Live Stream Broadcast Out
-            </h2>
-            <p className="text-xs text-slate-400">
-              Simulcast to YouTube, Facebook, custom RTMP and HLS for 1,000+
-              viewers.
-            </p>
-          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="app-modal-close"
+            aria-label="Close modal"
+          >
+            <X size={18} />
+          </button>
         </div>
 
-        {/* Live Status indicator */}
-        <div className="mb-5 p-3 rounded-xl bg-slate-800/80 border border-slate-750 flex items-center justify-between">
-          <div className="flex items-center gap-2 text-xs">
-            <span
-              className={`w-2.5 h-2.5 rounded-full ${
-                isLive ? 'bg-red-500 animate-pulse' : 'bg-slate-500'
-              }`}
-            />
-            <span className="font-semibold text-slate-200">
-              {isLive
-                ? 'Broadcasting Live to External Platforms'
-                : 'Stream Out Idle'}
-            </span>
-          </div>
-          {isLive && (
-            <span className="text-xs px-2 py-0.5 rounded bg-red-500/20 text-red-400 font-bold">
-              LIVE
-            </span>
-          )}
-        </div>
-
-        <form onSubmit={handleSubmit} className="space-y-4">
-          {/* Platform selection pills */}
-          <div>
-            <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-              Select Destination Platform
-            </label>
-            <div className="grid grid-cols-5 gap-1.5">
-              {(
-                ['youtube', 'facebook', 'linkedin', 'twitch', 'custom'] as const
-              ).map((p) => (
-                <button
-                  key={p}
-                  type="button"
-                  disabled={isLive}
-                  onClick={() => handlePlatformChange(p)}
-                  className={`py-1.5 text-xs font-semibold rounded-lg border capitalize transition-colors ${
-                    platform === p
-                      ? 'bg-red-600 text-white border-red-500'
-                      : 'bg-slate-800 text-slate-400 border-slate-700 hover:bg-slate-750'
-                  }`}
-                >
-                  {p}
-                </button>
-              ))}
+        <div className="app-modal-body">
+          {/* Live Status indicator */}
+          <div
+            className="panel-card"
+            style={{
+              flexDirection: 'row',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              background: isLive ? 'rgba(239, 68, 68, 0.08)' : 'var(--bg)',
+              borderColor: isLive ? 'rgba(239, 68, 68, 0.3)' : 'var(--line)',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span className={`panel-badge ${isLive ? 'live' : 'muted'}`}>
+                {isLive ? 'Live' : 'Idle'}
+              </span>
+              <strong style={{ fontSize: '13px', color: 'var(--ink)' }}>
+                {isLive
+                  ? 'Broadcasting Live to External Platforms'
+                  : 'Stream Out Idle'}
+              </strong>
             </div>
           </div>
 
-          <div>
-            <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-              RTMP Destination URL
-            </label>
-            <input
-              type="text"
-              disabled={isLive}
-              value={rtmpUrl}
-              onChange={(e) => setRtmpUrl(e.target.value)}
-              className="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 text-xs text-slate-200 font-mono focus:outline-none focus:ring-2 focus:ring-red-500"
-            />
-          </div>
+          <form
+            onSubmit={handleSubmit}
+            style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}
+          >
+            {/* Platform selection pills */}
+            <div className="panel-form-group">
+              <label>Select Destination Platform</label>
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(5, 1fr)',
+                  gap: '6px',
+                }}
+              >
+                {(
+                  [
+                    'youtube',
+                    'facebook',
+                    'linkedin',
+                    'twitch',
+                    'custom',
+                  ] as const
+                ).map((p) => (
+                  <button
+                    key={p}
+                    type="button"
+                    disabled={isLive}
+                    onClick={() => handlePlatformChange(p)}
+                    style={{
+                      padding: '6px 4px',
+                      fontSize: '11.5px',
+                      fontWeight: 600,
+                      borderRadius: '8px',
+                      textTransform: 'capitalize',
+                      border: `1px solid ${platform === p ? 'var(--accent)' : 'var(--line)'}`,
+                      background:
+                        platform === p ? 'var(--soft)' : 'var(--surface)',
+                      color: platform === p ? 'var(--accent)' : 'var(--ink)',
+                      cursor: isLive ? 'not-allowed' : 'pointer',
+                    }}
+                  >
+                    {p}
+                  </button>
+                ))}
+              </div>
+            </div>
 
-          <div>
-            <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-              Stream Key
-            </label>
-            <input
-              type="password"
-              disabled={isLive}
-              placeholder="Paste stream key here..."
-              value={streamKey}
-              onChange={(e) => setStreamKey(e.target.value)}
-              className="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 text-xs text-slate-200 font-mono focus:outline-none focus:ring-2 focus:ring-red-500"
-            />
-          </div>
-
-          {/* HLS Stream link */}
-          <div className="pt-1">
-            <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-              HLS Player URL (Unlimited Viewers CDN)
-            </label>
-            <div className="flex gap-2">
+            <div className="panel-form-group">
+              <label htmlFor="rtmp-url-input">RTMP Destination URL</label>
               <input
+                id="rtmp-url-input"
                 type="text"
-                readOnly
-                value={customHls}
-                onChange={(e) => setCustomHls(e.target.value)}
-                className="flex-1 px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 text-xs text-slate-200 font-mono"
+                disabled={isLive}
+                value={rtmpUrl}
+                onChange={(e) => setRtmpUrl(e.target.value)}
+                className="panel-input"
+                style={{ fontFamily: 'monospace', fontSize: '12px' }}
               />
+            </div>
+
+            <div className="panel-form-group">
+              <label htmlFor="stream-key-input">Stream Key</label>
+              <input
+                id="stream-key-input"
+                type="password"
+                disabled={isLive}
+                placeholder="Paste stream key here..."
+                value={streamKey}
+                onChange={(e) => setStreamKey(e.target.value)}
+                className="panel-input"
+                style={{ fontFamily: 'monospace', fontSize: '12px' }}
+              />
+            </div>
+
+            {/* HLS Stream link */}
+            <div className="panel-form-group">
+              <label htmlFor="hls-url-input">
+                HLS Player URL (Unlimited Viewers CDN)
+              </label>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <input
+                  id="hls-url-input"
+                  type="text"
+                  readOnly
+                  value={customHls}
+                  onChange={(e) => setCustomHls(e.target.value)}
+                  className="panel-input"
+                  style={{ flex: 1, fontFamily: 'monospace', fontSize: '12px' }}
+                />
+                <button
+                  type="button"
+                  onClick={handleCopyHls}
+                  className="panel-btn-secondary"
+                  style={{ whiteSpace: 'nowrap' }}
+                >
+                  {copiedHls ? (
+                    <>
+                      <Check size={14} /> Copied
+                    </>
+                  ) : (
+                    <>
+                      <Copy size={14} /> Copy
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: '10px', paddingTop: '8px' }}>
+              <button
+                type="submit"
+                className={isLive ? 'panel-btn-danger' : 'panel-btn-primary'}
+                style={{ flex: 1, padding: '10px 16px', fontSize: '13.5px' }}
+              >
+                {isLive ? (
+                  <>
+                    <Square size={16} /> Stop Live Stream Out
+                  </>
+                ) : (
+                  <>
+                    <Play size={16} /> Start Live Broadcast Out
+                  </>
+                )}
+              </button>
               <button
                 type="button"
-                onClick={handleCopyHls}
-                className="px-3 py-2 rounded-xl bg-slate-700 hover:bg-slate-600 text-xs text-white font-medium"
+                onClick={onClose}
+                className="panel-btn-secondary"
               >
-                {copiedHls ? 'Copied' : 'Copy'}
+                Done
               </button>
             </div>
-          </div>
-
-          <div className="pt-2 flex gap-3">
-            <button
-              type="submit"
-              className={`flex-1 py-2.5 px-4 rounded-xl font-bold text-sm transition-all shadow-lg ${
-                isLive
-                  ? 'bg-slate-800 hover:bg-slate-750 text-red-400 border border-red-500/30'
-                  : 'bg-red-600 hover:bg-red-500 text-white shadow-red-600/30'
-              }`}
-            >
-              {isLive ? 'Stop Live Stream Out' : 'Start Live Broadcast Out'}
-            </button>
-            <button
-              type="button"
-              onClick={onClose}
-              className="py-2.5 px-4 rounded-xl bg-slate-800 hover:bg-slate-750 text-slate-300 text-sm font-semibold border border-slate-700"
-            >
-              Done
-            </button>
-          </div>
-        </form>
+          </form>
+        </div>
       </div>
     </div>
   );

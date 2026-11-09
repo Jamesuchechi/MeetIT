@@ -1,5 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import type { AgendaItem, MeetingTimer } from '@meetit/protocol';
+import {
+  Timer,
+  Play,
+  Pause,
+  RotateCcw,
+  Settings,
+  X,
+  ArrowRight,
+  Plus,
+} from 'lucide-react';
 
 interface TimerAgendaWidgetProps {
   timer: MeetingTimer;
@@ -93,63 +103,115 @@ export function TimerAgendaWidget({
   }
 
   return (
-    <div className="relative z-30">
+    <div style={{ position: 'relative', zIndex: 40 }}>
       {/* Mini floating pill */}
-      <div className="flex items-center gap-2 px-3 py-1.5 bg-neutral-900/90 border border-neutral-700/80 backdrop-blur-md rounded-2xl shadow-xl text-neutral-100 text-xs">
-        <span className="flex items-center gap-1 font-mono font-bold text-white">
-          <span
-            className={
-              timer.running ? 'animate-pulse text-rose-400' : 'text-neutral-400'
-            }
-          >
-            ⏱
-          </span>
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px',
+          padding: '6px 12px',
+          background: 'var(--surface)',
+          border: '1px solid var(--line)',
+          borderRadius: '20px',
+          boxShadow: '0 8px 24px rgba(0, 0, 0, 0.25)',
+          color: 'var(--ink)',
+          fontSize: '12px',
+        }}
+      >
+        <span
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px',
+            fontFamily: 'monospace',
+            fontWeight: 700,
+          }}
+        >
+          <Timer
+            size={14}
+            style={{
+              color: timer.running ? 'var(--danger)' : 'var(--muted)',
+            }}
+          />
           {formatTime(secondsDisplay)}
         </span>
 
         {currentAgenda && (
-          <div className="flex items-center gap-1.5 border-l border-neutral-700 pl-2">
-            <span className="text-[10px] bg-indigo-500/20 text-indigo-300 px-1.5 py-0.2 rounded font-medium">
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              borderLeft: '1px solid var(--line)',
+              paddingLeft: '8px',
+            }}
+          >
+            <span className="panel-badge muted" style={{ fontSize: '10px' }}>
               Agenda
             </span>
-            <span className="font-semibold text-neutral-200 max-w-[140px] truncate">
+            <span
+              style={{
+                fontWeight: 600,
+                maxWidth: '140px',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+              }}
+            >
               {currentAgenda.title}
             </span>
           </div>
         )}
 
         {isHost && (
-          <div className="flex items-center gap-1 border-l border-neutral-700 pl-2">
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px',
+              borderLeft: '1px solid var(--line)',
+              paddingLeft: '8px',
+            }}
+          >
             {!timer.running ? (
               <button
+                type="button"
                 onClick={() => onSendTimerAction({ action: 'start' })}
-                className="p-1 hover:text-emerald-400 text-neutral-300"
+                className="app-modal-close"
+                style={{ padding: '3px' }}
                 title="Start timer"
               >
-                ▶
+                <Play size={13} />
               </button>
             ) : (
               <button
+                type="button"
                 onClick={() => onSendTimerAction({ action: 'pause' })}
-                className="p-1 hover:text-amber-400 text-neutral-300"
+                className="app-modal-close"
+                style={{ padding: '3px' }}
                 title="Pause timer"
               >
-                ⏸
+                <Pause size={13} />
               </button>
             )}
             <button
+              type="button"
               onClick={() => onSendTimerAction({ action: 'reset' })}
-              className="p-1 hover:text-neutral-200 text-neutral-400"
+              className="app-modal-close"
+              style={{ padding: '3px' }}
               title="Reset timer"
             >
-              ↺
+              <RotateCcw size={13} />
             </button>
             <button
+              type="button"
               onClick={() => setShowConfig(!showConfig)}
-              className="p-1 hover:text-indigo-400 text-neutral-400"
+              className="app-modal-close"
+              style={{ padding: '3px' }}
               title="Timer & Agenda settings"
             >
-              ⚙
+              <Settings size={13} />
             </button>
           </div>
         )}
@@ -157,42 +219,66 @@ export function TimerAgendaWidget({
 
       {/* Popover Settings & Agenda Manager */}
       {showConfig && isHost && (
-        <div className="absolute top-10 left-0 w-80 p-4 bg-neutral-900 border border-neutral-800 rounded-2xl shadow-2xl flex flex-col gap-4 text-xs text-neutral-100">
-          <div className="flex justify-between items-center border-b border-neutral-800 pb-2">
-            <span className="font-bold text-white">
-              Timer & Agenda Controls
-            </span>
+        <div
+          className="panel-card"
+          style={{
+            position: 'absolute',
+            top: '40px',
+            left: 0,
+            width: '320px',
+            boxShadow: '0 18px 40px rgba(0, 0, 0, 0.35)',
+            zIndex: 100,
+            background: 'var(--surface)',
+          }}
+        >
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              borderBottom: '1px solid var(--line)',
+              paddingBottom: '8px',
+            }}
+          >
+            <strong style={{ fontSize: '13px', color: 'var(--ink)' }}>
+              Timer &amp; Agenda Controls
+            </strong>
             <button
+              type="button"
               onClick={() => setShowConfig(false)}
-              className="text-neutral-400 hover:text-white"
+              className="app-modal-close"
+              aria-label="Close"
             >
-              ✕
+              <X size={14} />
             </button>
           </div>
 
           {/* Quick countdown presets */}
-          <div>
-            <label className="text-neutral-400 font-semibold mb-1 block">
-              Set Countdown
+          <div className="panel-form-group">
+            <label htmlFor="countdown-minutes-input">
+              Set Countdown (minutes)
             </label>
-            <div className="flex gap-2">
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
               <input
+                id="countdown-minutes-input"
                 type="number"
                 min={1}
                 max={120}
                 value={customMinutes}
                 onChange={(e) => setCustomMinutes(Number(e.target.value))}
-                className="w-20 px-2 py-1 bg-neutral-800 border border-neutral-700 rounded-lg text-white"
+                className="panel-input"
+                style={{ width: '80px' }}
               />
-              <span className="self-center text-neutral-400">min</span>
               <button
+                type="button"
                 onClick={() =>
                   onSendTimerAction({
                     action: 'set_countdown',
                     durationSeconds: customMinutes * 60,
                   })
                 }
-                className="flex-1 py-1 bg-indigo-600 hover:bg-indigo-500 font-semibold rounded-lg text-white"
+                className="panel-btn-primary"
+                style={{ flex: 1, padding: '8px 12px', fontSize: '12.5px' }}
               >
                 Set
               </button>
@@ -200,35 +286,99 @@ export function TimerAgendaWidget({
           </div>
 
           {/* Agenda items tracker */}
-          <div className="flex flex-col gap-2 pt-2 border-t border-neutral-800">
-            <div className="flex justify-between items-center">
-              <span className="text-neutral-400 font-semibold">
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '8px',
+              paddingTop: '8px',
+              borderTop: '1px solid var(--line)',
+            }}
+          >
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+              }}
+            >
+              <span
+                style={{
+                  fontSize: '12px',
+                  fontWeight: 600,
+                  color: 'var(--muted)',
+                }}
+              >
                 Agenda Items
               </span>
               {timer.agenda && timer.agenda.length > 0 && (
                 <button
+                  type="button"
                   onClick={() => onSendTimerAction({ action: 'next_agenda' })}
-                  className="text-indigo-400 hover:text-indigo-300 font-medium"
+                  style={{
+                    background: 'transparent',
+                    border: 'none',
+                    color: 'var(--accent)',
+                    fontSize: '11.5px',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                  }}
                 >
-                  Next Item ➔
+                  <span>Next Item</span>
+                  <ArrowRight size={12} />
                 </button>
               )}
             </div>
 
-            <div className="flex flex-col gap-1 max-h-36 overflow-y-auto">
+            <div
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '6px',
+                maxHeight: '140px',
+                overflowY: 'auto',
+              }}
+            >
               {timer.agenda?.map((item, idx) => (
                 <div
                   key={item.id}
-                  className={`p-2 rounded-lg border flex items-center justify-between ${
-                    idx === (timer.activeAgendaIndex ?? 0)
-                      ? 'border-indigo-500 bg-indigo-950/30 text-white font-medium'
-                      : item.completed
-                        ? 'border-neutral-800 bg-neutral-950 text-neutral-500 line-through'
-                        : 'border-neutral-700 bg-neutral-800 text-neutral-300'
-                  }`}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: '6px 10px',
+                    borderRadius: '6px',
+                    border: `1px solid ${idx === (timer.activeAgendaIndex ?? 0) ? 'var(--accent)' : 'var(--line)'}`,
+                    background:
+                      idx === (timer.activeAgendaIndex ?? 0)
+                        ? 'var(--soft)'
+                        : 'var(--bg)',
+                    fontSize: '12px',
+                    color: item.completed ? 'var(--muted)' : 'var(--ink)',
+                    textDecoration: item.completed ? 'line-through' : 'none',
+                  }}
                 >
-                  <span className="truncate flex-1">{item.title}</span>
-                  <span className="text-[10px] text-neutral-400 ml-2 font-mono">
+                  <span
+                    style={{
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                      flex: 1,
+                    }}
+                  >
+                    {item.title}
+                  </span>
+                  <span
+                    style={{
+                      fontSize: '11px',
+                      fontFamily: 'monospace',
+                      color: 'var(--muted)',
+                      marginLeft: '8px',
+                    }}
+                  >
                     {item.durationMinutes}m
                   </span>
                 </div>
@@ -236,13 +386,17 @@ export function TimerAgendaWidget({
             </div>
 
             {/* Add agenda item */}
-            <form onSubmit={handleAddAgenda} className="flex gap-1.5 mt-1">
+            <form
+              onSubmit={handleAddAgenda}
+              style={{ display: 'flex', gap: '6px', marginTop: '4px' }}
+            >
               <input
                 type="text"
                 placeholder="Topic..."
                 value={agendaTitleInput}
                 onChange={(e) => setAgendaTitleInput(e.target.value)}
-                className="flex-1 px-2 py-1 bg-neutral-800 border border-neutral-700 rounded-lg text-white"
+                className="panel-input"
+                style={{ flex: 1, padding: '6px 8px', fontSize: '12px' }}
               />
               <input
                 type="number"
@@ -250,13 +404,22 @@ export function TimerAgendaWidget({
                 max={60}
                 value={agendaDurationInput}
                 onChange={(e) => setAgendaDurationInput(Number(e.target.value))}
-                className="w-14 px-1 py-1 bg-neutral-800 border border-neutral-700 rounded-lg text-white text-center"
+                className="panel-input"
+                style={{
+                  width: '50px',
+                  padding: '6px 4px',
+                  textAlign: 'center',
+                  fontSize: '12px',
+                }}
+                title="Duration in minutes"
               />
               <button
                 type="submit"
-                className="px-2.5 py-1 bg-neutral-700 hover:bg-neutral-600 font-semibold rounded-lg text-white"
+                className="panel-btn-secondary"
+                style={{ padding: '6px 10px' }}
+                title="Add topic"
               >
-                +
+                <Plus size={14} />
               </button>
             </form>
           </div>

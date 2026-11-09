@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import type { WebinarSimulive } from '@meetit/protocol';
+import { Play, Pause, Tv } from 'lucide-react';
 
 interface WebinarSimulivePlayerProps {
   simulive?: WebinarSimulive;
@@ -70,18 +71,63 @@ export const WebinarSimulivePlayer: React.FC<WebinarSimulivePlayerProps> = ({
     'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4';
 
   return (
-    <div className="relative rounded-2xl overflow-hidden bg-black border border-slate-800 shadow-2xl flex flex-col group">
+    <div
+      style={{
+        position: 'relative',
+        borderRadius: '16px',
+        overflow: 'hidden',
+        background: '#000000',
+        border: '1px solid var(--line)',
+        boxShadow: '0 20px 48px rgba(0, 0, 0, 0.4)',
+        display: 'flex',
+        flexDirection: 'column',
+      }}
+    >
       {/* Simulive watermark badge */}
-      <div className="absolute top-4 left-4 z-20 flex items-center gap-2 px-3 py-1 rounded-full bg-red-600/90 text-white text-xs font-bold shadow-lg backdrop-blur-sm">
-        <span className="w-2 h-2 rounded-full bg-white animate-ping" />
+      <div
+        style={{
+          position: 'absolute',
+          top: '12px',
+          left: '12px',
+          zIndex: 20,
+          display: 'flex',
+          alignItems: 'center',
+          gap: '6px',
+          padding: '4px 10px',
+          borderRadius: '999px',
+          background: 'rgba(239, 68, 68, 0.9)',
+          color: '#ffffff',
+          fontSize: '11px',
+          fontWeight: 700,
+          letterSpacing: '0.04em',
+        }}
+      >
+        <span
+          style={{
+            width: '6px',
+            height: '6px',
+            borderRadius: '50%',
+            background: '#ffffff',
+          }}
+        />
         <span>SIMULIVE BROADCAST</span>
       </div>
 
-      <div className="relative aspect-video w-full bg-slate-950 flex items-center justify-center">
+      <div
+        style={{
+          position: 'relative',
+          aspectRatio: '16 / 9',
+          width: '100%',
+          background: '#090d16',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
         <video
           ref={videoRef}
           src={defaultVideoSrc}
-          className="w-full h-full object-contain"
+          style={{ width: '100%', height: '100%', objectFit: 'contain' }}
           playsInline
           onTimeUpdate={() => {
             if (videoRef.current) {
@@ -99,30 +145,69 @@ export const WebinarSimulivePlayer: React.FC<WebinarSimulivePlayerProps> = ({
         {!isPlaying && (
           <div
             onClick={isHostOrModerator ? handleTogglePlay : undefined}
-            className={`absolute inset-0 z-10 flex items-center justify-center bg-black/40 backdrop-blur-[2px] ${
-              isHostOrModerator ? 'cursor-pointer' : ''
-            }`}
+            style={{
+              position: 'absolute',
+              inset: 0,
+              zIndex: 10,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              background: 'rgba(0, 0, 0, 0.45)',
+              cursor: isHostOrModerator ? 'pointer' : 'default',
+            }}
           >
-            <div className="w-16 h-16 rounded-full bg-indigo-600 text-white flex items-center justify-center text-2xl shadow-xl shadow-indigo-600/40">
-              ▶
+            <div
+              className="panel-btn-primary"
+              style={{
+                width: '56px',
+                height: '56px',
+                borderRadius: '50%',
+                padding: 0,
+              }}
+            >
+              <Play size={24} style={{ marginLeft: '2px' }} />
             </div>
           </div>
         )}
       </div>
 
       {/* Synchronized controls bar */}
-      <div className="p-3.5 bg-slate-900 border-t border-slate-800 flex items-center gap-4 text-xs text-slate-300">
+      <div
+        style={{
+          padding: '10px 14px',
+          background: 'var(--surface)',
+          borderTop: '1px solid var(--line)',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '12px',
+          fontSize: '12px',
+          color: 'var(--ink)',
+        }}
+      >
         {isHostOrModerator && (
           <button
             type="button"
             onClick={handleTogglePlay}
-            className="w-8 h-8 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-bold flex items-center justify-center"
+            className="panel-btn-primary"
+            style={{
+              width: '30px',
+              height: '30px',
+              borderRadius: '6px',
+              padding: 0,
+            }}
+            aria-label={isPlaying ? 'Pause' : 'Play'}
           >
-            {isPlaying ? '❚❚' : '▶'}
+            {isPlaying ? <Pause size={14} /> : <Play size={14} />}
           </button>
         )}
 
-        <span className="font-mono text-slate-400">
+        <span
+          style={{
+            fontFamily: 'monospace',
+            color: 'var(--muted)',
+            fontSize: '11.5px',
+          }}
+        >
           {formatTime(currentTime)} / {formatTime(duration)}
         </span>
 
@@ -133,11 +218,14 @@ export const WebinarSimulivePlayer: React.FC<WebinarSimulivePlayerProps> = ({
           value={currentTime}
           disabled={!isHostOrModerator}
           onChange={handleSeek}
-          className="flex-1 accent-indigo-500 disabled:cursor-not-allowed cursor-pointer h-1.5 rounded-lg bg-slate-800"
+          style={{
+            flex: 1,
+            cursor: isHostOrModerator ? 'pointer' : 'not-allowed',
+          }}
         />
 
         {!isHostOrModerator && (
-          <span className="text-[11px] text-slate-400 px-2 py-0.5 rounded bg-slate-800 border border-slate-700">
+          <span className="panel-badge muted" style={{ fontSize: '10.5px' }}>
             Synced with Host
           </span>
         )}

@@ -1,5 +1,13 @@
 import React, { useState } from 'react';
 import type { WebinarQaItem } from '@meetit/protocol';
+import {
+  MessageSquare,
+  ChevronUp,
+  Check,
+  X,
+  Send,
+  CheckCircle2,
+} from 'lucide-react';
 
 interface WebinarQaPanelProps {
   questions: WebinarQaItem[];
@@ -41,83 +49,167 @@ export const WebinarQaPanel: React.FC<WebinarQaPanelProps> = ({
     setReplyText('');
   };
 
-  const filteredQuestions = questions.filter((q) => {
-    if (filter === 'all') return true;
-    return q.status === filter;
-  });
+  const filteredQuestions = questions
+    .filter((q) => {
+      if (filter === 'all') return true;
+      return q.status === filter;
+    })
+    .sort((a, b) => b.upvotes.length - a.upvotes.length);
 
   return (
-    <div className="flex flex-col h-full bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-xl text-slate-100">
+    <div
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        height: '100%',
+        background: 'var(--surface)',
+        color: 'var(--ink)',
+      }}
+    >
       {/* Header with filter tabs */}
-      <div className="p-4 border-b border-slate-800 flex items-center justify-between">
-        <div>
-          <h3 className="font-bold text-sm text-white flex items-center gap-2">
-            <span>💬</span> Audience Q&A
-          </h3>
-          <p className="text-xs text-slate-400">
-            {isHostOrModerator
-              ? 'Moderate audience questions, approve for broadcast, and reply live.'
-              : 'Submit questions and upvote questions you want answered.'}
-          </p>
-        </div>
-
-        {isHostOrModerator && (
-          <div className="flex gap-1 text-[11px] bg-slate-800 p-0.5 rounded-lg border border-slate-700">
-            {(['all', 'pending', 'approved', 'answered'] as const).map((t) => (
-              <button
-                key={t}
-                onClick={() => setFilter(t)}
-                className={`px-2 py-1 rounded font-medium capitalize ${
-                  filter === t
-                    ? 'bg-indigo-600 text-white'
-                    : 'text-slate-400 hover:text-white'
-                }`}
-              >
-                {t}
-              </button>
-            ))}
+      <div
+        style={{ padding: '12px 16px', borderBottom: '1px solid var(--line)' }}
+      >
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: '8px',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <MessageSquare size={16} style={{ color: 'var(--accent)' }} />
+            <strong style={{ fontSize: '14px', color: 'var(--ink)' }}>
+              Audience Q&amp;A
+            </strong>
           </div>
-        )}
+
+          {isHostOrModerator && (
+            <div
+              style={{
+                display: 'flex',
+                gap: '4px',
+                background: 'var(--bg)',
+                padding: '2px',
+                borderRadius: '6px',
+              }}
+            >
+              {(['all', 'pending', 'approved', 'answered'] as const).map(
+                (t) => (
+                  <button
+                    key={t}
+                    type="button"
+                    onClick={() => setFilter(t)}
+                    style={{
+                      padding: '3px 8px',
+                      borderRadius: '4px',
+                      fontSize: '11px',
+                      fontWeight: 600,
+                      textTransform: 'capitalize',
+                      border: 'none',
+                      cursor: 'pointer',
+                      background:
+                        filter === t ? 'var(--surface)' : 'transparent',
+                      color: filter === t ? 'var(--ink)' : 'var(--muted)',
+                    }}
+                  >
+                    {t}
+                  </button>
+                ),
+              )}
+            </div>
+          )}
+        </div>
+        <p
+          style={{
+            margin: '4px 0 0',
+            fontSize: '11.5px',
+            color: 'var(--muted)',
+          }}
+        >
+          {isHostOrModerator
+            ? 'Moderate audience questions, approve for broadcast, and reply live.'
+            : 'Submit questions and upvote questions you want answered.'}
+        </p>
       </div>
 
       {/* Ask Input Bar */}
       <form
         onSubmit={handleAskSubmit}
-        className="p-3 bg-slate-850 border-b border-slate-800 flex gap-2"
+        style={{
+          display: 'flex',
+          gap: '8px',
+          padding: '10px 14px',
+          borderBottom: '1px solid var(--line)',
+          background: 'var(--bg)',
+        }}
       >
         <input
           type="text"
           value={newQuestion}
           onChange={(e) => setNewQuestion(e.target.value)}
           placeholder="Ask a question to speakers..."
-          className="flex-1 px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          className="panel-input"
+          style={{ flex: 1, padding: '7px 10px', fontSize: '12.5px' }}
         />
         <button
           type="submit"
-          className="px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs shadow-md shadow-indigo-600/20"
+          disabled={!newQuestion.trim()}
+          className="panel-btn-primary"
+          style={{ padding: '7px 12px', fontSize: '12.5px' }}
         >
-          Ask
+          <Send size={13} /> Ask
         </button>
       </form>
 
       {/* Questions Stream */}
-      <div className="flex-1 overflow-y-auto p-3 space-y-3">
+      <div
+        style={{
+          flex: 1,
+          overflowY: 'auto',
+          padding: '12px',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '10px',
+        }}
+      >
         {filteredQuestions.length === 0 ? (
-          <div className="text-center py-10 text-slate-500 text-xs">
-            No questions in this queue yet. Be the first to ask!
+          <div className="panel-empty-state">
+            <MessageSquare className="panel-empty-icon" />
+            <strong className="panel-empty-text">
+              No questions in this queue
+            </strong>
+            <span style={{ fontSize: '12px', color: 'var(--muted)' }}>
+              Be the first to submit a question!
+            </span>
           </div>
         ) : (
           filteredQuestions.map((q) => (
             <div
               key={q.id}
-              className="p-3.5 rounded-xl bg-slate-800/80 border border-slate-750 flex flex-col gap-2 transition-all"
+              className="panel-card"
+              style={{ gap: '8px', padding: '12px' }}
             >
-              <div className="flex items-start justify-between gap-2">
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'flex-start',
+                  justifyContent: 'space-between',
+                  gap: '8px',
+                }}
+              >
                 <div>
-                  <span className="text-xs font-semibold text-slate-300">
+                  <strong style={{ fontSize: '12.5px', color: 'var(--ink)' }}>
                     {q.authorName}
-                  </span>
-                  <span className="text-[10px] text-slate-500 ml-2">
+                  </strong>
+                  <span
+                    style={{
+                      fontSize: '10.5px',
+                      color: 'var(--muted)',
+                      marginLeft: '8px',
+                    }}
+                  >
                     {new Date(q.createdAt).toLocaleTimeString([], {
                       hour: '2-digit',
                       minute: '2-digit',
@@ -125,70 +217,119 @@ export const WebinarQaPanel: React.FC<WebinarQaPanelProps> = ({
                   </span>
                 </div>
 
-                <div className="flex items-center gap-1.5">
+                <div
+                  style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+                >
                   <span
-                    className={`text-[10px] px-2 py-0.5 rounded font-semibold uppercase tracking-wider ${
+                    className={`panel-badge ${
                       q.status === 'answered'
-                        ? 'bg-emerald-500/20 text-emerald-400'
+                        ? 'active'
                         : q.status === 'approved'
-                          ? 'bg-indigo-500/20 text-indigo-400'
-                          : q.status === 'pending'
-                            ? 'bg-amber-500/20 text-amber-400'
-                            : 'bg-slate-700 text-slate-400'
+                          ? 'active'
+                          : 'muted'
                     }`}
+                    style={{ fontSize: '10px' }}
                   >
                     {q.status}
                   </span>
 
                   <button
+                    type="button"
                     onClick={() => onUpvoteQuestion(q.id)}
-                    className="flex items-center gap-1 px-2 py-1 rounded-lg bg-slate-700/80 hover:bg-slate-700 text-slate-300 hover:text-white text-xs font-semibold"
+                    className="panel-btn-secondary"
+                    style={{ padding: '2px 6px', fontSize: '11px', gap: '3px' }}
                   >
-                    <span>▲</span>
+                    <ChevronUp size={12} />
                     <span>{q.upvotes.length}</span>
                   </button>
                 </div>
               </div>
 
-              <p className="text-xs text-slate-200 leading-relaxed font-normal">
+              <p
+                style={{
+                  margin: 0,
+                  fontSize: '13px',
+                  color: 'var(--ink)',
+                  lineHeight: 1.45,
+                }}
+              >
                 {q.question}
               </p>
 
               {/* Answer display */}
               {q.answer && (
-                <div className="mt-1 p-2.5 rounded-lg bg-indigo-950/40 border border-indigo-900/50 text-xs">
-                  <div className="font-semibold text-indigo-400 text-[11px] mb-0.5">
-                    Answered by {q.answeredBy || 'Speaker'}:
+                <div
+                  style={{
+                    marginTop: '4px',
+                    padding: '8px 10px',
+                    borderRadius: '8px',
+                    background: 'rgba(34, 197, 94, 0.08)',
+                    border: '1px solid rgba(34, 197, 94, 0.25)',
+                    fontSize: '12px',
+                  }}
+                >
+                  <div
+                    style={{
+                      fontWeight: 600,
+                      color: '#22c55e',
+                      fontSize: '11px',
+                      marginBottom: '2px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '4px',
+                    }}
+                  >
+                    <CheckCircle2 size={12} /> Answered by{' '}
+                    {q.answeredBy || 'Speaker'}:
                   </div>
-                  <div className="text-slate-300">{q.answer}</div>
+                  <div style={{ color: 'var(--ink)' }}>{q.answer}</div>
                 </div>
               )}
 
               {/* Moderator Action Buttons */}
               {isHostOrModerator && (
-                <div className="flex items-center gap-2 pt-2 border-t border-slate-750 mt-1">
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    paddingTop: '6px',
+                    borderTop: '1px solid var(--line)',
+                    marginTop: '4px',
+                  }}
+                >
                   {q.status === 'pending' && (
                     <button
+                      type="button"
                       onClick={() => onModerateQuestion(q.id, 'approved')}
-                      className="text-[11px] px-2.5 py-1 rounded bg-indigo-600/30 hover:bg-indigo-600/50 text-indigo-300 font-medium"
+                      className="panel-btn-secondary"
+                      style={{ padding: '3px 8px', fontSize: '11px' }}
                     >
-                      Approve
+                      <Check size={12} /> Approve
                     </button>
                   )}
                   {q.status !== 'answered' && (
                     <button
+                      type="button"
                       onClick={() =>
                         setReplyingId(replyingId === q.id ? null : q.id)
                       }
-                      className="text-[11px] px-2.5 py-1 rounded bg-emerald-600/30 hover:bg-emerald-600/50 text-emerald-300 font-medium"
+                      className="panel-btn-primary"
+                      style={{ padding: '3px 8px', fontSize: '11px' }}
                     >
-                      {replyingId === q.id ? 'Cancel Reply' : 'Answer Question'}
+                      {replyingId === q.id ? 'Cancel' : 'Answer'}
                     </button>
                   )}
                   {q.status !== 'dismissed' && (
                     <button
+                      type="button"
                       onClick={() => onModerateQuestion(q.id, 'dismissed')}
-                      className="text-[11px] px-2.5 py-1 rounded bg-rose-600/20 hover:bg-rose-600/40 text-rose-400 font-medium ml-auto"
+                      className="panel-btn-danger"
+                      style={{
+                        padding: '3px 8px',
+                        fontSize: '11px',
+                        marginLeft: 'auto',
+                      }}
                     >
                       Dismiss
                     </button>
@@ -198,17 +339,20 @@ export const WebinarQaPanel: React.FC<WebinarQaPanelProps> = ({
 
               {/* Reply Input Box */}
               {replyingId === q.id && (
-                <div className="mt-2 flex gap-2">
+                <div style={{ display: 'flex', gap: '6px', marginTop: '6px' }}>
                   <input
                     type="text"
                     value={replyText}
                     onChange={(e) => setReplyText(e.target.value)}
                     placeholder="Type official answer..."
-                    className="flex-1 px-2.5 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-xs text-slate-200 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                    className="panel-input"
+                    style={{ flex: 1, padding: '5px 8px', fontSize: '12px' }}
                   />
                   <button
+                    type="button"
                     onClick={() => handleAnswerSubmit(q.id)}
-                    className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold"
+                    className="panel-btn-primary"
+                    style={{ padding: '5px 10px', fontSize: '11.5px' }}
                   >
                     Post Answer
                   </button>

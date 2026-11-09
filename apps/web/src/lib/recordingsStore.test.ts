@@ -1,4 +1,10 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+
+vi.mock('./supabase', () => ({
+  supabase: null,
+  isSupabaseConfigured: false,
+}));
+
 import {
   loadLocalRecordings,
   saveLocalRecordings,

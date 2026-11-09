@@ -60,9 +60,14 @@ describe('Webinar Store & Utilities', () => {
         email: 'ada@example.com',
         role: 'viewer',
         registeredAt: Date.now(),
-        approved: true,
+        status: 'approved',
         joinToken: 'token_ada_abc',
-        paymentStatus: 'free',
+        paid: false,
+        ticketPriceCents: 0,
+        currency: 'USD',
+        paymentProvider: 'free',
+        customAnswers: {},
+        engagementScore: 0,
       };
 
       expect(getSavedWebinarPasses()).toEqual({});
@@ -132,6 +137,12 @@ describe('Webinar Store & Utilities', () => {
       maxViewers: 1000,
       viewerCount: 15,
       peakViewers: 22,
+      requireRegistration: false,
+      autoApproveRegistrations: true,
+      ticketPriceCents: 0,
+      currency: 'USD',
+      paymentProvider: 'free',
+      customFields: [],
     };
 
     it('registerForWebinarApi posts payload and returns registration', async () => {
@@ -142,9 +153,14 @@ describe('Webinar Store & Utilities', () => {
         email: 'grace@example.com',
         role: 'viewer',
         registeredAt: Date.now(),
-        approved: true,
+        status: 'approved',
         joinToken: 'token_grace_789',
-        paymentStatus: 'free',
+        paid: false,
+        ticketPriceCents: 0,
+        currency: 'USD',
+        paymentProvider: 'free',
+        customAnswers: {},
+        engagementScore: 0,
       };
 
       globalThis.fetch = vi.fn().mockResolvedValueOnce({

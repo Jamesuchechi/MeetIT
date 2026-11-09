@@ -1,5 +1,16 @@
 import React, { useState } from 'react';
 import type { PollItem } from '@meetit/protocol';
+import {
+  BarChart3,
+  Vote,
+  Plus,
+  X,
+  Download,
+  Check,
+  FileText,
+  Trash2,
+  Lock,
+} from 'lucide-react';
 
 interface PollsPanelProps {
   isOpen: boolean;
@@ -111,88 +122,124 @@ export function PollsPanel({
   };
 
   return (
-    <div
-      className="fixed inset-y-0 right-0 z-40 w-full sm:w-96 bg-neutral-900 border-l border-neutral-800 shadow-2xl flex flex-col text-neutral-100"
+    <aside
+      className="app-side-panel"
       role="region"
       aria-label="Polls and Quizzes Panel"
+      data-testid="polls-panel-container"
     >
-      <div className="flex items-center justify-between p-4 border-b border-neutral-800">
-        <div className="flex items-center gap-2">
-          <span className="text-lg">📊</span>
-          <h3 className="font-bold text-white">Polls & Quizzes</h3>
-          <span className="text-xs bg-neutral-800 px-2 py-0.5 rounded-full text-neutral-400 font-mono">
+      <div className="app-side-panel-header">
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <div
+            className="app-modal-icon"
+            style={{ width: '28px', height: '28px', borderRadius: '6px' }}
+          >
+            <BarChart3 size={16} />
+          </div>
+          <strong style={{ fontSize: '15px', color: 'var(--ink)' }}>
+            Polls &amp; Quizzes
+          </strong>
+          <span className="panel-badge muted" style={{ fontSize: '11px' }}>
             {polls.length}
           </span>
         </div>
-        <div className="flex items-center gap-2">
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
           {onOpenFormItSurvey && (
             <button
+              type="button"
               onClick={onOpenFormItSurvey}
-              className="text-xs px-2.5 py-1 bg-indigo-600/30 hover:bg-indigo-600/50 text-indigo-300 border border-indigo-500/30 rounded-lg transition"
+              className="panel-btn-secondary"
+              style={{ padding: '4px 8px', fontSize: '11.5px' }}
               title="Launch FormIT survey"
             >
+              <FileText size={12} />
               FormIT
             </button>
           )}
           <button
+            type="button"
             onClick={onClose}
-            className="text-neutral-400 hover:text-white p-1 rounded-lg hover:bg-neutral-800 transition"
+            className="app-modal-close"
             aria-label="Close panel"
           >
-            ✕
+            <X size={16} />
           </button>
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-4">
+      <div className="app-side-panel-body">
         {/* Creation form toggle for hosts */}
         {isHost && (
           <div>
             {!isCreating ? (
               <button
+                type="button"
                 onClick={() => setIsCreating(true)}
-                className="w-full py-2.5 px-4 bg-indigo-600 hover:bg-indigo-500 font-semibold text-sm rounded-xl text-white shadow-md transition flex items-center justify-center gap-2"
+                className="panel-btn-primary"
+                style={{ width: '100%' }}
+                data-testid="create-poll-btn"
               >
-                <span>➕</span> Create New Poll / Quiz
+                <Plus size={16} />
+                Create New Poll / Quiz
               </button>
             ) : (
               <form
                 onSubmit={handleCreateSubmit}
-                className="p-4 bg-neutral-800/80 border border-neutral-700 rounded-2xl flex flex-col gap-3"
+                className="panel-card"
+                style={{ gap: '12px' }}
               >
-                <div className="flex justify-between items-center">
-                  <span className="text-xs font-bold uppercase tracking-wider text-neutral-300">
+                <div
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                  }}
+                >
+                  <span
+                    style={{
+                      fontSize: '12px',
+                      fontWeight: 700,
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.04em',
+                      color: 'var(--muted)',
+                    }}
+                  >
                     New Poll
                   </span>
                   <button
                     type="button"
                     onClick={() => setIsCreating(false)}
-                    className="text-xs text-neutral-400 hover:text-white"
+                    className="app-modal-close"
+                    style={{ fontSize: '12px', padding: '2px 6px' }}
                   >
                     Cancel
                   </button>
                 </div>
 
-                <div>
-                  <label className="text-xs font-semibold text-neutral-400 mb-1 block">
-                    Question
-                  </label>
+                <div className="panel-form-group">
+                  <label htmlFor="poll-question-input">Question</label>
                   <input
+                    id="poll-question-input"
                     type="text"
                     required
                     placeholder="e.g. Which design approach do you prefer?"
                     value={question}
                     onChange={(e) => setQuestion(e.target.value)}
-                    className="w-full px-3 py-2 bg-neutral-900 border border-neutral-700 rounded-xl text-white text-sm focus:outline-none focus:border-indigo-500"
+                    className="panel-input"
                   />
                 </div>
 
-                <div className="flex flex-col gap-2">
-                  <label className="text-xs font-semibold text-neutral-400">
-                    Options
-                  </label>
+                <div className="panel-form-group">
+                  <label>Options</label>
                   {options.map((opt, idx) => (
-                    <div key={idx} className="flex items-center gap-2">
+                    <div
+                      key={idx}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                      }}
+                    >
                       {isQuiz && (
                         <input
                           type="radio"
@@ -200,7 +247,7 @@ export function PollsPanel({
                           checked={correctOption === idx}
                           onChange={() => setCorrectOption(idx)}
                           title="Mark as correct answer"
-                          className="accent-emerald-500 cursor-pointer"
+                          style={{ cursor: 'pointer' }}
                         />
                       )}
                       <input
@@ -211,15 +258,17 @@ export function PollsPanel({
                         onChange={(e) =>
                           handleOptionChange(idx, e.target.value)
                         }
-                        className="flex-1 px-3 py-1.5 bg-neutral-900 border border-neutral-700 rounded-lg text-white text-sm focus:outline-none focus:border-indigo-500"
+                        className="panel-input"
+                        style={{ flex: 1 }}
                       />
                       {options.length > 2 && (
                         <button
                           type="button"
                           onClick={() => handleRemoveOption(idx)}
-                          className="text-neutral-500 hover:text-rose-400 text-xs p-1"
+                          className="app-modal-close"
+                          title="Remove option"
                         >
-                          ✕
+                          <X size={14} />
                         </button>
                       )}
                     </div>
@@ -228,30 +277,63 @@ export function PollsPanel({
                     <button
                       type="button"
                       onClick={handleAddOption}
-                      className="text-xs text-indigo-400 hover:text-indigo-300 text-left py-1 font-medium"
+                      style={{
+                        background: 'transparent',
+                        border: 'none',
+                        color: 'var(--accent)',
+                        fontSize: '12.5px',
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                        padding: '4px 0',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '4px',
+                      }}
                     >
-                      + Add Option
+                      <Plus size={14} /> Add Option
                     </button>
                   )}
                 </div>
 
-                <div className="flex flex-col gap-2 pt-2 border-t border-neutral-700 text-xs">
-                  <label className="flex items-center gap-2 cursor-pointer text-neutral-300">
+                <div
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '8px',
+                    paddingTop: '8px',
+                    borderTop: '1px solid var(--line)',
+                  }}
+                >
+                  <label
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      fontSize: '12.5px',
+                      cursor: 'pointer',
+                    }}
+                  >
                     <input
                       type="checkbox"
                       checked={isQuiz}
                       onChange={(e) => setIsQuiz(e.target.checked)}
-                      className="accent-indigo-500 rounded"
                     />
                     <span>Make this a graded quiz (select correct answer)</span>
                   </label>
                   {!isQuiz && (
-                    <label className="flex items-center gap-2 cursor-pointer text-neutral-300">
+                    <label
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        fontSize: '12.5px',
+                        cursor: 'pointer',
+                      }}
+                    >
                       <input
                         type="checkbox"
                         checked={allowMultiple}
                         onChange={(e) => setAllowMultiple(e.target.checked)}
-                        className="accent-indigo-500 rounded"
                       />
                       <span>Allow multiple answers</span>
                     </label>
@@ -260,7 +342,8 @@ export function PollsPanel({
 
                 <button
                   type="submit"
-                  className="w-full py-2 bg-indigo-600 hover:bg-indigo-500 font-bold text-sm rounded-xl text-white shadow-md transition mt-1"
+                  className="panel-btn-primary"
+                  style={{ width: '100%', marginTop: '4px' }}
                 >
                   Publish Poll
                 </button>
@@ -271,12 +354,12 @@ export function PollsPanel({
 
         {/* List of active and past polls */}
         {polls.length === 0 ? (
-          <div className="flex-1 flex flex-col items-center justify-center p-8 text-center text-neutral-500">
-            <span className="text-4xl mb-2">🗳️</span>
-            <p className="text-sm font-medium">No polls launched yet</p>
-            <p className="text-xs mt-1">
+          <div className="panel-empty-state">
+            <Vote className="panel-empty-icon" />
+            <strong className="panel-empty-text">No polls launched yet</strong>
+            <span style={{ fontSize: '12px', color: 'var(--muted)' }}>
               Polls and quizzes will appear here live during the meeting.
-            </p>
+            </span>
           </div>
         ) : (
           polls.map((poll) => {
@@ -285,55 +368,85 @@ export function PollsPanel({
             const totalVoters = Object.keys(poll.votes || {}).length;
 
             return (
-              <div
-                key={poll.id}
-                className={`p-4 rounded-2xl border flex flex-col gap-3 transition ${
-                  poll.closed
-                    ? 'bg-neutral-900/90 border-neutral-800'
-                    : 'bg-neutral-800/60 border-neutral-700 shadow-md'
-                }`}
-              >
-                <div className="flex items-start justify-between gap-2">
+              <div key={poll.id} className="panel-card" style={{ gap: '10px' }}>
+                <div
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'flex-start',
+                    gap: '8px',
+                  }}
+                >
                   <div>
-                    <div className="flex items-center gap-2">
-                      <h4 className="font-bold text-white text-sm">
+                    <div
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        flexWrap: 'wrap',
+                      }}
+                    >
+                      <strong style={{ fontSize: '14px', color: 'var(--ink)' }}>
                         {poll.question}
-                      </h4>
+                      </strong>
                       {poll.isQuiz && (
-                        <span className="text-[10px] bg-amber-500/20 text-amber-300 border border-amber-500/30 px-1.5 py-0.5 rounded font-semibold">
+                        <span
+                          className="panel-badge muted"
+                          style={{ fontSize: '10px' }}
+                        >
                           Quiz
                         </span>
                       )}
                     </div>
-                    <span className="text-xs text-neutral-400">
-                      by {poll.creatorName} • {totalVoters}{' '}
+                    <span
+                      style={{
+                        fontSize: '11.5px',
+                        color: 'var(--muted)',
+                        display: 'block',
+                        marginTop: '2px',
+                      }}
+                    >
+                      by {poll.creatorName} · {totalVoters}{' '}
                       {totalVoters === 1 ? 'vote' : 'votes'}
-                      {poll.closed && ' • Closed'}
+                      {poll.closed && ' · Closed'}
                     </span>
                   </div>
 
                   {isHost && (
-                    <div className="flex items-center gap-1">
+                    <div
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '4px',
+                      }}
+                    >
                       <button
+                        type="button"
                         onClick={() => exportPollCsv(poll)}
-                        className="text-xs text-neutral-400 hover:text-white p-1"
+                        className="app-modal-close"
                         title="Export CSV"
                       >
-                        📥
+                        <Download size={14} />
                       </button>
                       {!poll.closed ? (
                         <button
+                          type="button"
                           onClick={() => onClosePoll(poll.id)}
-                          className="text-xs text-amber-400 hover:text-amber-300 px-2 py-0.5 rounded bg-amber-500/10"
+                          className="panel-btn-secondary"
+                          style={{ padding: '3px 8px', fontSize: '11px' }}
+                          title="Close poll"
                         >
-                          Close
+                          <Lock size={12} /> Close
                         </button>
                       ) : (
                         <button
+                          type="button"
                           onClick={() => onDeletePoll(poll.id)}
-                          className="text-xs text-rose-400 hover:text-rose-300 px-2 py-0.5 rounded bg-rose-500/10"
+                          className="panel-btn-danger"
+                          style={{ padding: '3px 8px', fontSize: '11px' }}
+                          title="Delete poll"
                         >
-                          Delete
+                          <Trash2 size={12} />
                         </button>
                       )}
                     </div>
@@ -341,7 +454,13 @@ export function PollsPanel({
                 </div>
 
                 {/* Options / Live Results */}
-                <div className="flex flex-col gap-2">
+                <div
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '6px',
+                  }}
+                >
                   {poll.options.map((opt, optIdx) => {
                     let voteCount = 0;
                     Object.values(poll.votes || {}).forEach((selected) => {
@@ -356,64 +475,119 @@ export function PollsPanel({
                       poll.isQuiz && poll.correctOptionIndex === optIdx;
 
                     return (
-                      <div key={optIdx} className="flex flex-col gap-1">
-                        <button
-                          type="button"
-                          disabled={poll.closed}
-                          onClick={() => {
-                            if (poll.allowMultiple) {
-                              const next = isUserChoice
-                                ? userVotes.filter((i) => i !== optIdx)
-                                : [...userVotes, optIdx];
-                              if (next.length > 0) onVotePoll(poll.id, next);
-                            } else {
-                              onVotePoll(poll.id, [optIdx]);
-                            }
-                          }}
-                          className={`relative w-full text-left p-2.5 rounded-xl border text-sm transition overflow-hidden ${
-                            isUserChoice
-                              ? 'border-indigo-500 bg-indigo-950/40 text-white font-medium'
-                              : 'border-neutral-700 bg-neutral-800/80 hover:border-neutral-600 text-neutral-200'
-                          } ${poll.closed ? 'cursor-default' : 'cursor-pointer'}`}
-                        >
-                          {/* Progress fill bar */}
-                          {(hasVoted || poll.closed) && (
-                            <div
-                              className={`absolute inset-y-0 left-0 transition-all duration-500 opacity-20 ${
+                      <button
+                        key={optIdx}
+                        type="button"
+                        disabled={poll.closed}
+                        onClick={() => {
+                          if (poll.allowMultiple) {
+                            const next = isUserChoice
+                              ? userVotes.filter((i) => i !== optIdx)
+                              : [...userVotes, optIdx];
+                            if (next.length > 0) onVotePoll(poll.id, next);
+                          } else {
+                            onVotePoll(poll.id, [optIdx]);
+                          }
+                        }}
+                        style={{
+                          position: 'relative',
+                          width: '100%',
+                          textAlign: 'left',
+                          padding: '10px 12px',
+                          borderRadius: '8px',
+                          border: `1px solid ${isUserChoice ? 'var(--accent)' : 'var(--line)'}`,
+                          background: isUserChoice
+                            ? 'var(--soft)'
+                            : 'var(--surface)',
+                          cursor: poll.closed ? 'default' : 'pointer',
+                          overflow: 'hidden',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          gap: '8px',
+                          fontFamily: 'inherit',
+                          fontSize: '13px',
+                          color: 'var(--ink)',
+                        }}
+                      >
+                        {/* Progress fill bar */}
+                        {(hasVoted || poll.closed) && (
+                          <div
+                            style={{
+                              position: 'absolute',
+                              top: 0,
+                              bottom: 0,
+                              left: 0,
+                              width: `${percentage}%`,
+                              background:
                                 isCorrectAnswer && poll.closed
-                                  ? 'bg-emerald-500'
-                                  : 'bg-indigo-500'
-                              }`}
-                              style={{ width: `${percentage}%` }}
-                            />
-                          )}
+                                  ? 'rgba(34, 197, 94, 0.2)'
+                                  : 'rgba(36, 87, 255, 0.15)',
+                              zIndex: 0,
+                              transition: 'width 0.4s ease',
+                            }}
+                          />
+                        )}
 
-                          <div className="relative z-10 flex items-center justify-between">
-                            <div className="flex items-center gap-2">
-                              <span
-                                className={`w-4 h-4 rounded-full border flex items-center justify-center text-[10px] ${
-                                  isUserChoice
-                                    ? 'bg-indigo-600 border-indigo-400 text-white'
-                                    : 'border-neutral-500'
-                                }`}
-                              >
-                                {isUserChoice ? '✓' : ''}
-                              </span>
-                              <span>{opt}</span>
-                              {poll.closed && isCorrectAnswer && (
-                                <span className="text-[10px] font-bold text-emerald-400 ml-1">
-                                  (Correct)
-                                </span>
-                              )}
-                            </div>
-                            {(hasVoted || poll.closed) && (
-                              <span className="text-xs font-mono text-neutral-400">
-                                {percentage}% ({voteCount})
-                              </span>
-                            )}
-                          </div>
-                        </button>
-                      </div>
+                        <div
+                          style={{
+                            position: 'relative',
+                            zIndex: 1,
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '8px',
+                          }}
+                        >
+                          <span
+                            style={{
+                              width: '16px',
+                              height: '16px',
+                              borderRadius: '50%',
+                              border: `1px solid ${isUserChoice ? 'var(--accent)' : 'var(--muted)'}`,
+                              background: isUserChoice
+                                ? 'var(--accent)'
+                                : 'transparent',
+                              color: 'var(--on-accent)',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              fontSize: '10px',
+                            }}
+                          >
+                            {isUserChoice ? <Check size={10} /> : null}
+                          </span>
+                          <span
+                            style={{ fontWeight: isUserChoice ? 600 : 400 }}
+                          >
+                            {opt}
+                          </span>
+                          {poll.closed && isCorrectAnswer && (
+                            <span
+                              style={{
+                                fontSize: '11px',
+                                fontWeight: 700,
+                                color: '#22c55e',
+                              }}
+                            >
+                              (Correct)
+                            </span>
+                          )}
+                        </div>
+
+                        {(hasVoted || poll.closed) && (
+                          <span
+                            style={{
+                              position: 'relative',
+                              zIndex: 1,
+                              fontSize: '12px',
+                              color: 'var(--muted)',
+                              fontFamily: 'monospace',
+                            }}
+                          >
+                            {percentage}% ({voteCount})
+                          </span>
+                        )}
+                      </button>
                     );
                   })}
                 </div>
@@ -422,6 +596,6 @@ export function PollsPanel({
           })
         )}
       </div>
-    </div>
+    </aside>
   );
 }

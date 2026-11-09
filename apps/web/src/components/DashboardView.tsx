@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import { Radio as RadioIcon } from 'lucide-react';
 import { Logo } from './Logo';
 import {
   HomeIcon,
@@ -869,6 +870,11 @@ export function DashboardView({
                       <button
                         type="button"
                         className="btn primary"
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                        }}
                         onClick={() => {
                           const webinarCode = generateRoomCode();
                           onToast(
@@ -879,7 +885,8 @@ export function DashboardView({
                         title="Start a webinar with 1,000+ viewers, registration, and practice mode"
                         data-testid="start-webinar-btn"
                       >
-                        🎙️ Host Webinar
+                        <RadioIcon size={15} />
+                        <span>Host Webinar</span>
                       </button>
                     </div>
                   </div>

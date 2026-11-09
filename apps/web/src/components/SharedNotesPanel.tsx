@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import type { NotesDoc } from '@meetit/protocol';
+import { FileText, X, Check, Bookmark } from 'lucide-react';
 
 interface SharedNotesPanelProps {
   isOpen: boolean;
@@ -45,57 +46,98 @@ export function SharedNotesPanel({
   };
 
   return (
-    <div
-      className="fixed inset-y-0 right-0 z-40 w-full sm:w-96 bg-neutral-900 border-l border-neutral-800 shadow-2xl flex flex-col text-neutral-100"
+    <aside
+      className="app-side-panel"
       role="region"
       aria-label="Shared Collaborative Notes Panel"
+      data-testid="shared-notes-panel-container"
     >
-      <div className="flex items-center justify-between p-4 border-b border-neutral-800">
-        <div className="flex items-center gap-2">
-          <span className="text-lg">📝</span>
-          <h3 className="font-bold text-white">Shared Notes</h3>
-          <span className="text-xs bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 px-2 py-0.5 rounded-full font-mono">
+      <div className="app-side-panel-header">
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <div
+            className="app-modal-icon"
+            style={{ width: '28px', height: '28px', borderRadius: '6px' }}
+          >
+            <FileText size={16} />
+          </div>
+          <strong style={{ fontSize: '15px', color: 'var(--ink)' }}>
+            Shared Notes
+          </strong>
+          <span className="panel-badge muted" style={{ fontSize: '11px' }}>
             v{notesDoc.version}
           </span>
         </div>
         <button
+          type="button"
           onClick={onClose}
-          className="text-neutral-400 hover:text-white p-1 rounded-lg hover:bg-neutral-800 transition"
+          className="app-modal-close"
           aria-label="Close panel"
         >
-          ✕
+          <X size={16} />
         </button>
       </div>
 
-      <div className="p-3 bg-neutral-950 border-b border-neutral-800 flex items-center justify-between text-xs text-neutral-400">
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          padding: '8px 16px',
+          background: 'var(--bg)',
+          borderBottom: '1px solid var(--line)',
+          fontSize: '12px',
+          color: 'var(--muted)',
+        }}
+      >
         <span>
           {notesDoc.lastUpdatedBy
             ? `Last edited by ${notesDoc.lastUpdatedBy}`
-            : 'Type to collaborate live'}
+            : 'Type to collaborate live with others'}
         </span>
         {onAttachToMeetingRecord && (
           <button
+            type="button"
             onClick={handleSaveToRecord}
-            className="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg font-medium transition"
+            className="panel-btn-secondary"
+            style={{ padding: '3px 8px', fontSize: '11.5px' }}
           >
-            {hasSavedLocally ? '✓ Saved' : 'Save to Record'}
+            {hasSavedLocally ? (
+              <>
+                <Check size={12} /> Saved
+              </>
+            ) : (
+              <>
+                <Bookmark size={12} /> Save to Record
+              </>
+            )}
           </button>
         )}
       </div>
 
-      <div className="flex-1 p-3 flex flex-col">
+      <div className="app-side-panel-body" style={{ padding: '12px' }}>
         <textarea
           value={localContent}
           onChange={handleChange}
           placeholder="Collaborate on notes, meeting agenda, decisions, and action items in real-time..."
-          className="w-full flex-1 p-3 bg-neutral-950/80 border border-neutral-800 rounded-2xl text-neutral-200 text-sm leading-relaxed resize-none focus:outline-none focus:border-indigo-500 font-sans"
+          className="panel-textarea"
+          style={{
+            flex: 1,
+            height: '100%',
+            minHeight: '380px',
+            fontSize: '13.5px',
+            lineHeight: 1.6,
+            resize: 'none',
+          }}
         />
       </div>
 
-      <div className="p-3 border-t border-neutral-800 text-[11px] text-neutral-500 text-center">
-        Changes sync instantaneously across all participants via signaling
+      <div
+        className="app-side-panel-footer"
+        style={{ textAlign: 'center', fontSize: '11px', color: 'var(--muted)' }}
+      >
+        Notes sync instantaneously across all participants via signaling
         channels.
       </div>
-    </div>
+    </aside>
   );
 }

@@ -1,5 +1,15 @@
 import React, { useState } from 'react';
 import type { QaItem } from '@meetit/protocol';
+import {
+  HelpCircle,
+  X,
+  ChevronUp,
+  Check,
+  Trash2,
+  RotateCcw,
+  Send,
+  MessageSquare,
+} from 'lucide-react';
 
 interface QAPanelProps {
   isOpen: boolean;
@@ -49,71 +59,116 @@ export function QAPanel({
     .sort((a, b) => (b.upvotes?.length || 0) - (a.upvotes?.length || 0));
 
   return (
-    <div
-      className="fixed inset-y-0 right-0 z-40 w-full sm:w-96 bg-neutral-900 border-l border-neutral-800 shadow-2xl flex flex-col text-neutral-100"
+    <aside
+      className="app-side-panel"
       role="region"
       aria-label="Q&A Panel"
+      data-testid="qa-panel-container"
     >
-      <div className="flex items-center justify-between p-4 border-b border-neutral-800">
-        <div className="flex items-center gap-2">
-          <span className="text-lg">💬</span>
-          <h3 className="font-bold text-white">Q&A</h3>
-          <span className="text-xs bg-neutral-800 px-2 py-0.5 rounded-full text-neutral-400 font-mono">
+      <div className="app-side-panel-header">
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <div
+            className="app-modal-icon"
+            style={{ width: '28px', height: '28px', borderRadius: '6px' }}
+          >
+            <HelpCircle size={16} />
+          </div>
+          <strong style={{ fontSize: '15px', color: 'var(--ink)' }}>
+            Q&amp;A
+          </strong>
+          <span className="panel-badge muted" style={{ fontSize: '11px' }}>
             {questions.length}
           </span>
         </div>
         <button
+          type="button"
           onClick={onClose}
-          className="text-neutral-400 hover:text-white p-1 rounded-lg hover:bg-neutral-800 transition"
+          className="app-modal-close"
           aria-label="Close panel"
         >
-          ✕
+          <X size={16} />
         </button>
       </div>
 
       {/* Filter Tabs */}
-      <div className="flex items-center gap-1 p-2 bg-neutral-950 border-b border-neutral-800 text-xs">
+      <div
+        style={{
+          display: 'flex',
+          gap: '6px',
+          padding: '8px 14px',
+          borderBottom: '1px solid var(--line)',
+          background: 'var(--bg)',
+        }}
+      >
         <button
+          type="button"
           onClick={() => setFilter('all')}
-          className={`flex-1 py-1.5 rounded-lg font-medium transition ${
-            filter === 'all'
-              ? 'bg-neutral-800 text-white'
-              : 'text-neutral-400 hover:text-neutral-200'
-          }`}
+          style={{
+            flex: 1,
+            padding: '5px 8px',
+            borderRadius: '6px',
+            fontSize: '12px',
+            fontWeight: 500,
+            border: 'none',
+            cursor: 'pointer',
+            background: filter === 'all' ? 'var(--surface)' : 'transparent',
+            color: filter === 'all' ? 'var(--ink)' : 'var(--muted)',
+            boxShadow: filter === 'all' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+          }}
         >
           All ({questions.length})
         </button>
         <button
+          type="button"
           onClick={() => setFilter('unanswered')}
-          className={`flex-1 py-1.5 rounded-lg font-medium transition ${
-            filter === 'unanswered'
-              ? 'bg-neutral-800 text-white'
-              : 'text-neutral-400 hover:text-neutral-200'
-          }`}
+          style={{
+            flex: 1,
+            padding: '5px 8px',
+            borderRadius: '6px',
+            fontSize: '12px',
+            fontWeight: 500,
+            border: 'none',
+            cursor: 'pointer',
+            background:
+              filter === 'unanswered' ? 'var(--surface)' : 'transparent',
+            color: filter === 'unanswered' ? 'var(--ink)' : 'var(--muted)',
+            boxShadow:
+              filter === 'unanswered' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+          }}
         >
           Open ({questions.filter((q) => !q.answered && !q.dismissed).length})
         </button>
         <button
+          type="button"
           onClick={() => setFilter('answered')}
-          className={`flex-1 py-1.5 rounded-lg font-medium transition ${
-            filter === 'answered'
-              ? 'bg-neutral-800 text-white'
-              : 'text-neutral-400 hover:text-neutral-200'
-          }`}
+          style={{
+            flex: 1,
+            padding: '5px 8px',
+            borderRadius: '6px',
+            fontSize: '12px',
+            fontWeight: 500,
+            border: 'none',
+            cursor: 'pointer',
+            background:
+              filter === 'answered' ? 'var(--surface)' : 'transparent',
+            color: filter === 'answered' ? 'var(--ink)' : 'var(--muted)',
+            boxShadow:
+              filter === 'answered' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+          }}
         >
           Answered ({questions.filter((q) => q.answered).length})
         </button>
       </div>
 
       {/* Questions list */}
-      <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-3">
+      <div className="app-side-panel-body">
         {filteredQuestions.length === 0 ? (
-          <div className="flex-1 flex flex-col items-center justify-center p-8 text-center text-neutral-500">
-            <span className="text-4xl mb-2">🙋</span>
-            <p className="text-sm font-medium">No questions yet</p>
-            <p className="text-xs mt-1">
-              Ask a question to start the conversation.
-            </p>
+          <div className="panel-empty-state">
+            <MessageSquare className="panel-empty-icon" />
+            <strong className="panel-empty-text">No questions yet</strong>
+            <span style={{ fontSize: '12px', color: 'var(--muted)' }}>
+              Ask a question below to start the audience Q&amp;A.
+            </span>
           </div>
         ) : (
           filteredQuestions.map((item) => {
@@ -121,22 +176,47 @@ export function QAPanel({
             return (
               <div
                 key={item.id}
-                className={`p-3.5 rounded-2xl border flex flex-col gap-2 transition ${
-                  item.answered
-                    ? 'bg-neutral-900/80 border-emerald-500/20'
-                    : item.dismissed
-                      ? 'bg-neutral-950/60 border-neutral-800 opacity-60'
-                      : 'bg-neutral-800/60 border-neutral-700 shadow-sm'
-                }`}
+                className="panel-card"
+                style={{
+                  gap: '8px',
+                  opacity: item.dismissed ? 0.6 : 1,
+                  background: item.answered
+                    ? 'rgba(34, 197, 94, 0.05)'
+                    : 'var(--surface)',
+                }}
               >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex-1">
-                    <p className="text-sm text-neutral-100 font-medium leading-snug">
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'flex-start',
+                    justifyContent: 'space-between',
+                    gap: '10px',
+                  }}
+                >
+                  <div style={{ flex: 1 }}>
+                    <p
+                      style={{
+                        margin: 0,
+                        fontSize: '13.5px',
+                        fontWeight: 500,
+                        color: 'var(--ink)',
+                        lineHeight: 1.4,
+                      }}
+                    >
                       {item.question}
                     </p>
-                    <div className="flex items-center gap-2 mt-1.5 text-xs text-neutral-400">
+                    <div
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        marginTop: '6px',
+                        fontSize: '11.5px',
+                        color: 'var(--muted)',
+                      }}
+                    >
                       <span>{item.displayName}</span>
-                      <span>•</span>
+                      <span>·</span>
                       <span>
                         {new Date(item.ts).toLocaleTimeString([], {
                           hour: '2-digit',
@@ -144,8 +224,11 @@ export function QAPanel({
                         })}
                       </span>
                       {item.answered && (
-                        <span className="text-emerald-400 font-semibold bg-emerald-500/10 px-1.5 py-0.2 rounded text-[10px]">
-                          ✓ Answered
+                        <span
+                          className="panel-badge active"
+                          style={{ fontSize: '10px', marginLeft: '4px' }}
+                        >
+                          <Check size={10} /> Answered
                         </span>
                       )}
                     </div>
@@ -153,16 +236,27 @@ export function QAPanel({
 
                   {/* Upvote button */}
                   <button
+                    type="button"
                     onClick={() => onUpvoteQuestion(item.id)}
-                    className={`flex flex-col items-center justify-center px-2 py-1.5 rounded-xl border transition ${
-                      hasUpvoted
-                        ? 'bg-indigo-600/30 border-indigo-500 text-indigo-300 font-bold'
-                        : 'bg-neutral-800 border-neutral-700 text-neutral-400 hover:text-white hover:border-neutral-600'
-                    }`}
+                    className="panel-btn-secondary"
+                    style={{
+                      flexDirection: 'column',
+                      padding: '4px 8px',
+                      gap: '2px',
+                      background: hasUpvoted ? 'var(--soft)' : 'var(--surface)',
+                      borderColor: hasUpvoted ? 'var(--accent)' : 'var(--line)',
+                      color: hasUpvoted ? 'var(--accent)' : 'var(--muted)',
+                    }}
                     title={hasUpvoted ? 'Remove upvote' : 'Upvote question'}
                   >
-                    <span className="text-xs">▲</span>
-                    <span className="text-xs font-mono">
+                    <ChevronUp size={14} />
+                    <span
+                      style={{
+                        fontSize: '11px',
+                        fontFamily: 'monospace',
+                        fontWeight: 600,
+                      }}
+                    >
                       {item.upvotes?.length || 0}
                     </span>
                   </button>
@@ -170,31 +264,44 @@ export function QAPanel({
 
                 {/* Host controls */}
                 {isHost && (
-                  <div className="flex items-center justify-end gap-2 pt-2 border-t border-neutral-700/60 text-xs">
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'flex-end',
+                      gap: '6px',
+                      paddingTop: '6px',
+                      borderTop: '1px solid var(--line)',
+                    }}
+                  >
                     <button
+                      type="button"
                       onClick={() => onAnswerQuestion(item.id, !item.answered)}
-                      className={`px-2 py-1 rounded transition ${
-                        item.answered
-                          ? 'text-neutral-400 hover:text-white'
-                          : 'bg-emerald-600/20 text-emerald-300 hover:bg-emerald-600/40'
-                      }`}
+                      className="panel-btn-secondary"
+                      style={{ padding: '3px 8px', fontSize: '11px' }}
                     >
-                      {item.answered ? 'Mark Unanswered' : 'Mark Answered'}
+                      <Check size={12} />
+                      {item.answered ? 'Mark Open' : 'Mark Answered'}
                     </button>
                     <button
+                      type="button"
                       onClick={() =>
                         onDismissQuestion(item.id, !item.dismissed)
                       }
-                      className="px-2 py-1 rounded text-neutral-400 hover:text-neutral-200"
+                      className="panel-btn-secondary"
+                      style={{ padding: '3px 8px', fontSize: '11px' }}
                     >
+                      <RotateCcw size={12} />
                       {item.dismissed ? 'Restore' : 'Dismiss'}
                     </button>
                     <button
+                      type="button"
                       onClick={() => onDeleteQuestion(item.id)}
-                      className="px-1.5 py-1 text-rose-400 hover:text-rose-300"
-                      title="Delete"
+                      className="panel-btn-danger"
+                      style={{ padding: '3px 6px' }}
+                      title="Delete question"
                     >
-                      🗑
+                      <Trash2 size={12} />
                     </button>
                   </div>
                 )}
@@ -207,23 +314,26 @@ export function QAPanel({
       {/* Ask Question Input */}
       <form
         onSubmit={handleSubmit}
-        className="p-3 border-t border-neutral-800 bg-neutral-950 flex gap-2"
+        className="app-side-panel-footer"
+        style={{ display: 'flex', gap: '8px' }}
       >
         <input
           type="text"
           placeholder="Ask a question..."
           value={questionDraft}
           onChange={(e) => setQuestionDraft(e.target.value)}
-          className="flex-1 px-3 py-2 bg-neutral-800 border border-neutral-700 rounded-xl text-white text-sm focus:outline-none focus:border-indigo-500"
+          className="panel-input"
+          style={{ flex: 1 }}
         />
         <button
           type="submit"
           disabled={!questionDraft.trim()}
-          className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 font-semibold text-sm rounded-xl text-white transition"
+          className="panel-btn-primary"
+          style={{ padding: '0 14px' }}
         >
-          Ask
+          <Send size={15} />
         </button>
       </form>
-    </div>
+    </aside>
   );
 }

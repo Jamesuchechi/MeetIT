@@ -1,5 +1,14 @@
 import React, { useState, useEffect, useRef } from 'react';
 import type { FormItSession } from '@meetit/protocol';
+import {
+  ClipboardList,
+  ExternalLink,
+  X,
+  Send,
+  Pin,
+  Check,
+  Info,
+} from 'lucide-react';
 
 interface FormItModalProps {
   isOpen: boolean;
@@ -58,7 +67,6 @@ export function FormItModal({
   // Listen for FormIT postMessage events: formit:resize and formit:submit
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
-      // Validate data structure from FormIT
       const data = event.data;
       if (!data || typeof data !== 'object') return;
 
@@ -88,192 +96,312 @@ export function FormItModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 overflow-y-auto"
+      className="app-modal-backdrop"
       role="dialog"
       aria-modal="true"
       aria-labelledby="formit-modal-title"
+      onClick={onClose}
     >
-      <div className="relative w-full max-w-3xl bg-neutral-900 border border-neutral-800 rounded-2xl shadow-2xl text-neutral-100 p-6 flex flex-col gap-5 max-h-[95vh] overflow-y-auto">
-        <div className="flex items-center justify-between border-b border-neutral-800 pb-4">
-          <div className="flex items-center gap-3">
-            <span className="p-2.5 rounded-xl bg-indigo-600/20 text-indigo-400 font-bold text-lg">
-              📝
-            </span>
+      <div
+        className="app-modal-dialog wide"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="app-modal-header">
+          <div className="app-modal-title-group">
+            <div className="app-modal-icon">
+              <ClipboardList size={20} />
+            </div>
             <div>
-              <div className="flex items-center gap-2">
-                <h2
-                  id="formit-modal-title"
-                  className="text-xl font-bold text-white"
-                >
+              <div
+                style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
+              >
+                <h2 id="formit-modal-title" className="app-modal-title">
                   FormIT Integration
                 </h2>
-                <span className="text-[10px] font-mono uppercase bg-indigo-500/10 text-indigo-400 px-2 py-0.5 rounded-full border border-indigo-500/20">
+                <span
+                  className="panel-badge muted"
+                  style={{ fontSize: '10px' }}
+                >
                   form-it-sandy.vercel.app
                 </span>
               </div>
-              <p className="text-xs text-neutral-400">
+              <p className="app-modal-subtitle">
                 Launch interactive surveys and questionnaires live during the
                 meeting
               </p>
             </div>
           </div>
           <button
+            type="button"
             onClick={onClose}
-            className="text-neutral-400 hover:text-white p-2 rounded-lg hover:bg-neutral-800 transition"
+            className="app-modal-close"
             aria-label="Close modal"
           >
-            ✕
+            <X size={18} />
           </button>
         </div>
 
-        {/* If no active FormIT session */}
-        {!activeSession || !activeSession.active ? (
-          isHost ? (
-            <form onSubmit={handleLaunch} className="flex flex-col gap-4">
-              <div className="p-4 bg-indigo-950/20 border border-indigo-500/30 rounded-xl text-xs text-neutral-300 leading-relaxed">
-                Connect your FormIT form to collect structured feedback, pulse
-                checks, or exit surveys. Attendees can complete the form
-                directly without leaving the video call.
-              </div>
+        <div className="app-modal-body">
+          {/* If no active FormIT session */}
+          {!activeSession || !activeSession.active ? (
+            isHost ? (
+              <form
+                onSubmit={handleLaunch}
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '16px',
+                }}
+              >
+                <div
+                  className="panel-card"
+                  style={{
+                    background: 'var(--soft)',
+                    borderColor: 'var(--accent)',
+                    display: 'flex',
+                    flexDirection: 'row',
+                    gap: '12px',
+                    alignItems: 'flex-start',
+                  }}
+                >
+                  <Info
+                    size={18}
+                    style={{
+                      color: 'var(--accent)',
+                      flexShrink: 0,
+                      marginTop: '2px',
+                    }}
+                  />
+                  <span
+                    style={{
+                      fontSize: '13px',
+                      lineHeight: 1.5,
+                      color: 'var(--ink)',
+                    }}
+                  >
+                    Connect your FormIT form to collect structured feedback,
+                    pulse checks, or exit surveys. Attendees can complete the
+                    form directly without leaving the video call.
+                  </span>
+                </div>
 
-              <div>
-                <label className="block text-xs font-semibold text-neutral-400 mb-1">
-                  FormIT Form URL or Slug
-                </label>
-                <div className="flex items-center gap-2">
+                <div className="panel-form-group">
+                  <label htmlFor="formit-url-input">
+                    FormIT Form URL or Slug
+                  </label>
                   <input
+                    id="formit-url-input"
                     type="text"
                     required
                     placeholder="https://form-it-sandy.vercel.app/f/my-survey or slug"
                     value={formUrlInput}
                     onChange={(e) => setFormUrlInput(e.target.value)}
-                    className="flex-1 px-3 py-2 bg-neutral-800 border border-neutral-700 rounded-xl text-white text-sm focus:outline-none focus:border-indigo-500"
+                    className="panel-input"
+                  />
+                  <span
+                    style={{
+                      fontSize: '11.5px',
+                      color: 'var(--muted)',
+                      marginTop: '2px',
+                    }}
+                  >
+                    Example:{' '}
+                    <code>https://form-it-sandy.vercel.app/f/feedback</code> or
+                    simply <code>feedback</code>
+                  </span>
+                </div>
+
+                <div className="panel-form-group">
+                  <label htmlFor="formit-title-input">
+                    Survey Title (Optional)
+                  </label>
+                  <input
+                    id="formit-title-input"
+                    type="text"
+                    placeholder="e.g. End of Meeting Feedback"
+                    value={formTitleInput}
+                    onChange={(e) => setFormTitleInput(e.target.value)}
+                    className="panel-input"
                   />
                 </div>
-                <span className="text-[11px] text-neutral-500 mt-1 block">
-                  Example:{' '}
-                  <code>https://form-it-sandy.vercel.app/f/feedback</code> or
-                  simply <code>feedback</code>
+
+                <div
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'flex-end',
+                    gap: '10px',
+                    paddingTop: '8px',
+                  }}
+                >
+                  <button
+                    type="button"
+                    onClick={onClose}
+                    className="panel-btn-secondary"
+                  >
+                    Cancel
+                  </button>
+                  <button type="submit" className="panel-btn-primary">
+                    <Send size={15} />
+                    Launch Survey to Call
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <div className="panel-empty-state">
+                <ClipboardList className="panel-empty-icon" />
+                <strong className="panel-empty-text">
+                  No FormIT survey active
+                </strong>
+                <span style={{ fontSize: '12.5px', color: 'var(--muted)' }}>
+                  The host has not launched a survey yet. It will appear here
+                  when launched.
                 </span>
               </div>
+            )
+          ) : (
+            /* Active FormIT session */
+            <div
+              style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}
+            >
+              <div
+                className="panel-card"
+                style={{
+                  display: 'flex',
+                  flexDirection: 'row',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  flexWrap: 'wrap',
+                  gap: '10px',
+                }}
+              >
+                <div
+                  style={{ display: 'flex', alignItems: 'center', gap: '10px' }}
+                >
+                  <span className="panel-badge active">Live</span>
+                  <div>
+                    <strong style={{ fontSize: '14px', color: 'var(--ink)' }}>
+                      {activeSession.title || 'FormIT Live Survey'}
+                    </strong>
+                    <a
+                      href={activeSession.formUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      style={{
+                        fontSize: '12px',
+                        color: 'var(--accent)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '4px',
+                        textDecoration: 'none',
+                        marginTop: '2px',
+                      }}
+                    >
+                      <span>Open in new tab</span>
+                      <ExternalLink size={12} />
+                    </a>
+                  </div>
+                </div>
 
-              <div>
-                <label className="block text-xs font-semibold text-neutral-400 mb-1">
-                  Survey Title (Optional)
-                </label>
-                <input
-                  type="text"
-                  placeholder="e.g. End of Meeting Feedback"
-                  value={formTitleInput}
-                  onChange={(e) => setFormTitleInput(e.target.value)}
-                  className="w-full px-3 py-2 bg-neutral-800 border border-neutral-700 rounded-xl text-white text-sm focus:outline-none focus:border-indigo-500"
+                <div
+                  style={{ display: 'flex', alignItems: 'center', gap: '12px' }}
+                >
+                  <div style={{ textAlign: 'right' }}>
+                    <strong
+                      style={{ fontSize: '14px', fontFamily: 'monospace' }}
+                    >
+                      {activeSession.submissionsCount}
+                    </strong>
+                    <span
+                      style={{
+                        fontSize: '11px',
+                        color: 'var(--muted)',
+                        display: 'block',
+                      }}
+                    >
+                      {activeSession.submissionsCount === 1
+                        ? 'response'
+                        : 'responses'}
+                    </span>
+                  </div>
+
+                  {isHost && (
+                    <div
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                      }}
+                    >
+                      {onAttachToSummary && (
+                        <button
+                          type="button"
+                          onClick={() => onAttachToSummary(activeSession)}
+                          className="panel-btn-secondary"
+                          style={{ padding: '6px 10px', fontSize: '12px' }}
+                          title="Embed survey results in meeting summary"
+                        >
+                          <Pin size={12} /> Attach to Notes
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => onCloseFormIt(activeSession.id)}
+                        className="panel-btn-danger"
+                      >
+                        End Survey
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {hasSubmittedLocally && (
+                <div
+                  className="panel-card"
+                  style={{
+                    background: 'rgba(34, 197, 94, 0.1)',
+                    borderColor: 'rgba(34, 197, 94, 0.3)',
+                    textAlign: 'center',
+                    fontSize: '13px',
+                    color: '#22c55e',
+                    display: 'flex',
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '8px',
+                  }}
+                >
+                  <Check size={16} />
+                  <span>Thank you! Your FormIT submission was recorded.</span>
+                </div>
+              )}
+
+              {/* Embedded FormIT Frame */}
+              <div
+                style={{
+                  width: '100%',
+                  minHeight: `${iframeHeight}px`,
+                  borderRadius: '12px',
+                  border: '1px solid var(--line)',
+                  overflow: 'hidden',
+                  background: 'var(--surface)',
+                }}
+              >
+                <iframe
+                  ref={iframeRef}
+                  src={getEmbedUrl(activeSession.formUrl)}
+                  title={activeSession.title || 'FormIT Survey'}
+                  style={{
+                    width: '100%',
+                    height: `${iframeHeight}px`,
+                    border: 'none',
+                  }}
+                  allow="camera; microphone; clipboard-write"
                 />
               </div>
-
-              <div className="flex gap-2 justify-end pt-2">
-                <button
-                  type="button"
-                  onClick={onClose}
-                  className="px-4 py-2 bg-neutral-800 hover:bg-neutral-700 font-semibold text-sm rounded-xl text-neutral-300 transition"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-5 py-2 bg-indigo-600 hover:bg-indigo-500 font-bold text-sm rounded-xl text-white shadow-lg transition"
-                >
-                  🚀 Launch Survey to Call
-                </button>
-              </div>
-            </form>
-          ) : (
-            <div className="py-12 flex flex-col items-center justify-center text-center text-neutral-500">
-              <span className="text-4xl mb-2">📋</span>
-              <p className="font-semibold text-neutral-300">
-                No FormIT survey active
-              </p>
-              <p className="text-xs text-neutral-400 mt-1">
-                The host hasn't launched a survey yet. It will appear here when
-                launched.
-              </p>
             </div>
-          )
-        ) : (
-          /* Active FormIT session */
-          <div className="flex flex-col gap-4">
-            <div className="flex items-center justify-between p-3 bg-neutral-800/80 rounded-xl border border-neutral-700">
-              <div className="flex items-center gap-3">
-                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
-                <div>
-                  <h3 className="font-bold text-white text-sm">
-                    {activeSession.title || 'FormIT Live Survey'}
-                  </h3>
-                  <a
-                    href={activeSession.formUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="text-xs text-indigo-400 hover:underline flex items-center gap-1"
-                  >
-                    <span>Open in new tab</span> ↗
-                  </a>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-3">
-                <div className="text-right">
-                  <span className="text-xs font-mono font-bold text-white">
-                    {activeSession.submissionsCount}
-                  </span>
-                  <span className="text-[10px] text-neutral-400 block">
-                    {activeSession.submissionsCount === 1
-                      ? 'response'
-                      : 'responses'}
-                  </span>
-                </div>
-
-                {isHost && (
-                  <div className="flex items-center gap-2">
-                    {onAttachToSummary && (
-                      <button
-                        onClick={() => onAttachToSummary(activeSession)}
-                        className="text-xs px-2.5 py-1.5 bg-neutral-700 hover:bg-neutral-600 text-neutral-200 rounded-lg transition"
-                        title="Embed survey results in meeting summary"
-                      >
-                        📌 Attach to Notes
-                      </button>
-                    )}
-                    <button
-                      onClick={() => onCloseFormIt(activeSession.id)}
-                      className="text-xs px-2.5 py-1.5 bg-rose-600/30 hover:bg-rose-600/50 text-rose-300 border border-rose-500/30 rounded-lg transition font-medium"
-                    >
-                      End Survey
-                    </button>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {hasSubmittedLocally && (
-              <div className="p-3 bg-emerald-950/40 border border-emerald-500/30 rounded-xl text-center text-xs text-emerald-300">
-                ✓ Thank you! Your FormIT submission was recorded.
-              </div>
-            )}
-
-            {/* Embedded FormIT Frame */}
-            <div
-              className="w-full bg-neutral-950 border border-neutral-800 rounded-xl overflow-hidden transition-all duration-300"
-              style={{ minHeight: `${iframeHeight}px` }}
-            >
-              <iframe
-                ref={iframeRef}
-                src={getEmbedUrl(activeSession.formUrl)}
-                title={activeSession.title || 'FormIT Survey'}
-                className="w-full h-full min-h-[500px] border-0"
-                allow="camera; microphone; clipboard-write"
-              />
-            </div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
     </div>
   );
