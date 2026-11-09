@@ -36,6 +36,16 @@ import {
   ClipboardList as ClipboardIcon,
   BarChart3 as BarChartIcon,
   FileText as FileTextIcon,
+  Sparkles as SparklesIcon,
+  Zap as ZapIcon,
+  MessageSquare as MessageSquareIcon,
+  Mail as MailIcon,
+  Pencil as PencilIcon,
+  Target as TargetIcon,
+  Bookmark as BookmarkIcon,
+  ArrowUpRight as ArrowUpRightIcon,
+  ArrowLeft as ArrowLeftIcon,
+  Download as DownloadIcon,
 } from 'lucide-react';
 
 interface NotesViewProps {
@@ -54,19 +64,19 @@ type NotesSubTab = 'notes' | 'tasks';
 type TaskStatusFilter = 'all' | 'open' | 'completed';
 
 export function formatAiEngineBadge(aiModel?: string): {
-  icon: string;
+  iconType: 'sparkles' | 'zap';
   label: string;
 } {
-  if (!aiModel) return { icon: '✨', label: 'AI Notes' };
+  if (!aiModel) return { iconType: 'sparkles', label: 'AI Notes' };
   const lower = aiModel.toLowerCase();
   if (lower.includes('heuristic')) {
-    return { icon: '⚡', label: 'Smart Heuristics' };
+    return { iconType: 'zap', label: 'Smart Heuristics' };
   }
   if (lower.includes('groq')) {
-    return { icon: '✨', label: 'Groq Llama 3.3' };
+    return { iconType: 'sparkles', label: 'Groq Llama 3.3' };
   }
   if (lower.includes('mistral')) {
-    return { icon: '✨', label: 'Mistral AI' };
+    return { iconType: 'sparkles', label: 'Mistral AI' };
   }
   if (aiModel.includes(':')) {
     const parts = aiModel.split(':');
@@ -74,9 +84,9 @@ export function formatAiEngineBadge(aiModel?: string): {
     const cleanModel = (model || '')
       .replace(/-/g, ' ')
       .replace(/\b\w/g, (c) => c.toUpperCase());
-    return { icon: '✨', label: cleanModel || 'AI Engine' };
+    return { iconType: 'sparkles', label: cleanModel || 'AI Engine' };
   }
-  return { icon: '✨', label: aiModel };
+  return { iconType: 'sparkles', label: aiModel };
 }
 
 export function NotesView({
@@ -918,7 +928,16 @@ export function NotesView({
                         onClick={() => setMobileView('list')}
                         title="Back to notes list"
                       >
-                        ← All Notes ({filteredNotes.length})
+                        <span
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 4,
+                          }}
+                        >
+                          <ArrowLeftIcon size={14} /> All Notes (
+                          {filteredNotes.length})
+                        </span>
                       </button>
 
                       <div className="note-detail-title-block">
@@ -949,7 +968,11 @@ export function NotesView({
                                     className="note-ai-engine-icon"
                                     aria-hidden="true"
                                   >
-                                    {badge.icon}
+                                    {badge.iconType === 'zap' ? (
+                                      <ZapIcon size={12} />
+                                    ) : (
+                                      <SparklesIcon size={12} />
+                                    )}
                                   </span>
                                   <span>{badge.label}</span>
                                 </span>
@@ -971,7 +994,7 @@ export function NotesView({
                             title="Generate or update executive summary, decisions, and action items using AI"
                           >
                             <span className="btn-icon" aria-hidden="true">
-                              ✨
+                              <SparklesIcon size={14} />
                             </span>
                             <span>
                               {isGeneratingAI
@@ -986,7 +1009,7 @@ export function NotesView({
                             title="Ask questions with timestamp citations"
                           >
                             <span className="btn-icon" aria-hidden="true">
-                              💬
+                              <MessageSquareIcon size={14} />
                             </span>
                             <span>Ask Meeting</span>
                           </button>
@@ -997,7 +1020,7 @@ export function NotesView({
                             title="Email summary and action items digest"
                           >
                             <span className="btn-icon" aria-hidden="true">
-                              📧
+                              <MailIcon size={14} />
                             </span>
                             <span>Email Digest</span>
                           </button>
@@ -1034,7 +1057,7 @@ export function NotesView({
                             title="Download note as .md file"
                           >
                             <span className="btn-icon" aria-hidden="true">
-                              ⬇
+                              <DownloadIcon size={14} />
                             </span>
                             <span>Download .md</span>
                           </button>
@@ -1047,7 +1070,7 @@ export function NotesView({
                             title="Edit note title, attendees, tags and summary"
                           >
                             <span className="btn-icon" aria-hidden="true">
-                              ✏️
+                              <PencilIcon size={14} />
                             </span>
                             <span>Edit</span>
                           </button>
@@ -1121,8 +1144,14 @@ export function NotesView({
                           }}
                         >
                           <div className="note-section-head">
-                            <h4>
-                              🎯 Key Decisions (
+                            <h4
+                              style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 6,
+                              }}
+                            >
+                              <TargetIcon size={16} /> Key Decisions (
                               {selectedNote.keyDecisions.length})
                             </h4>
                           </div>
@@ -1149,9 +1178,15 @@ export function NotesView({
                           }}
                         >
                           <div className="note-section-head">
-                            <h4>
-                              📑 Chapters &amp; Highlights (
-                              {selectedNote.chapters.length})
+                            <h4
+                              style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 6,
+                              }}
+                            >
+                              <BookmarkIcon size={16} /> Chapters &amp;
+                              Highlights ({selectedNote.chapters.length})
                             </h4>
                           </div>
                           <div
@@ -1383,7 +1418,15 @@ export function NotesView({
                               }
                               title="Export action items to Linear"
                             >
-                              → Linear
+                              <ArrowUpRightIcon
+                                size={12}
+                                style={{
+                                  display: 'inline',
+                                  verticalAlign: '-1px',
+                                  marginRight: 3,
+                                }}
+                              />
+                              Linear
                             </button>
                             <button
                               type="button"
@@ -1397,7 +1440,15 @@ export function NotesView({
                               }
                               title="Export action items to Notion"
                             >
-                              → Notion
+                              <ArrowUpRightIcon
+                                size={12}
+                                style={{
+                                  display: 'inline',
+                                  verticalAlign: '-1px',
+                                  marginRight: 3,
+                                }}
+                              />
+                              Notion
                             </button>
                             <button
                               type="button"
@@ -1411,7 +1462,15 @@ export function NotesView({
                               }
                               title="Export action items to Asana"
                             >
-                              → Asana
+                              <ArrowUpRightIcon
+                                size={12}
+                                style={{
+                                  display: 'inline',
+                                  verticalAlign: '-1px',
+                                  marginRight: 3,
+                                }}
+                              />
+                              Asana
                             </button>
                             <button
                               type="button"
@@ -1425,7 +1484,15 @@ export function NotesView({
                               }
                               title="Export action items to Google Docs"
                             >
-                              → Docs
+                              <ArrowUpRightIcon
+                                size={12}
+                                style={{
+                                  display: 'inline',
+                                  verticalAlign: '-1px',
+                                  marginRight: 3,
+                                }}
+                              />
+                              Docs
                             </button>
                           </div>
                         )}

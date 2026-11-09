@@ -7,6 +7,7 @@ import {
 } from '../lib/meetingsStore';
 import { copyToClipboard, type AuthUser } from '../types';
 import { LnkIcon, CheckIcon, VidIcon, PlusIcon } from './Icons';
+import { Lock as LockIcon } from 'lucide-react';
 
 interface MeetingsViewProps {
   user: AuthUser | null;
@@ -266,10 +267,26 @@ export function MeetingsView({
             </div>
           </div>
 
-          <p className="profile-card-sub">
-            {personalRoom.description ||
-              'Your permanent room link that never expires.'}
-            {personalRoom.passcode ? ' · 🔒 Passcode protected' : ''}
+          <p
+            className="profile-card-sub"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 4,
+              flexWrap: 'wrap',
+            }}
+          >
+            <span>
+              {personalRoom.description ||
+                'Your permanent room link that never expires.'}
+            </span>
+            {personalRoom.passcode ? (
+              <span
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}
+              >
+                · <LockIcon size={12} /> Passcode protected
+              </span>
+            ) : null}
           </p>
 
           {editingPersonal && (
@@ -354,9 +371,15 @@ export function MeetingsView({
                   {r.passcode && (
                     <span
                       className="chip"
-                      style={{ marginLeft: 8, fontSize: 11 }}
+                      style={{
+                        marginLeft: 8,
+                        fontSize: 11,
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 4,
+                      }}
                     >
-                      🔒 Passcode
+                      <LockIcon size={11} /> Passcode
                     </span>
                   )}
                   {r.description && <p className="sum">{r.description}</p>}

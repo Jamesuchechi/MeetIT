@@ -19,6 +19,16 @@ import { AskMeetingModal } from './AskMeetingModal';
 import { EmailDigestModal } from './EmailDigestModal';
 import { copyToClipboard, type AuthUser } from '../types';
 import { CloseIcon, CheckIcon, LnkIcon } from './Icons';
+import {
+  MessageSquare as MessageSquareIcon,
+  Mic as MicIcon,
+  Users as UsersIcon,
+  Clock as ClockIcon,
+  Mail as MailIcon,
+  Trash2 as Trash2Icon,
+  Volume2 as Volume2Icon,
+  Square as SquareIcon,
+} from 'lucide-react';
 
 interface TranscriptsViewProps {
   user: AuthUser | null;
@@ -309,7 +319,9 @@ export function TranscriptsView({
       {/* Global Transcripts Stats */}
       <div className="hub-stats-row">
         <div className="hub-stat-card">
-          <div className="hub-stat-icon">💬</div>
+          <div className="hub-stat-icon">
+            <MessageSquareIcon size={20} />
+          </div>
           <div className="hub-stat-content">
             <span className="hub-stat-value">{stats.totalCount}</span>
             <span className="hub-stat-label">Transcripts Recorded</span>
@@ -317,7 +329,9 @@ export function TranscriptsView({
         </div>
 
         <div className="hub-stat-card">
-          <div className="hub-stat-icon">🗣️</div>
+          <div className="hub-stat-icon">
+            <MicIcon size={20} />
+          </div>
           <div className="hub-stat-content">
             <span className="hub-stat-value">{stats.totalCues}</span>
             <span className="hub-stat-label">Dialogue Cues</span>
@@ -325,7 +339,9 @@ export function TranscriptsView({
         </div>
 
         <div className="hub-stat-card">
-          <div className="hub-stat-icon">👥</div>
+          <div className="hub-stat-icon">
+            <UsersIcon size={20} />
+          </div>
           <div className="hub-stat-content">
             <span className="hub-stat-value">{stats.uniqueSpeakers}</span>
             <span className="hub-stat-label">Unique Speakers</span>
@@ -333,7 +349,9 @@ export function TranscriptsView({
         </div>
 
         <div className="hub-stat-card">
-          <div className="hub-stat-icon">⏳</div>
+          <div className="hub-stat-icon">
+            <ClockIcon size={20} />
+          </div>
           <div className="hub-stat-content">
             <span className="hub-stat-value">{stats.durationLabel}</span>
             <span className="hub-stat-label">Total Spoken Time</span>
@@ -384,7 +402,9 @@ export function TranscriptsView({
         </div>
       ) : transcripts.length === 0 ? (
         <div className="recordings-empty" data-testid="transcripts-empty">
-          <div className="empty-icon-bubble">💬</div>
+          <div className="empty-icon-bubble">
+            <MessageSquareIcon size={28} />
+          </div>
           <h3>No transcripts recorded yet</h3>
           <p>
             Closed captions and meeting transcripts are automatically recorded
@@ -508,16 +528,26 @@ export function TranscriptsView({
                     className="btn primary btn-sm"
                     onClick={() => setShowAskMeeting(true)}
                     title="Ask AI questions about this dialogue"
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 6,
+                    }}
                   >
-                    💬 Ask AI
+                    <MessageSquareIcon size={14} /> Ask AI
                   </button>
                   <button
                     type="button"
                     className="btn btn-sm"
                     onClick={() => setShowEmailDigest(true)}
                     title="Generate Email Digest for attendees"
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 6,
+                    }}
                   >
-                    📧 Email Digest
+                    <MailIcon size={14} /> Email Digest
                   </button>
                   <button
                     type="button"
@@ -535,7 +565,7 @@ export function TranscriptsView({
                     title="Delete transcript"
                     aria-label="Delete transcript"
                   >
-                    🗑
+                    <Trash2Icon size={14} />
                   </button>
                 </div>
               </div>
@@ -684,9 +714,17 @@ export function TranscriptsView({
                                   : 'Read line aloud (TTS)'
                               }
                               aria-label="Read line aloud"
-                              style={{ fontSize: 13 }}
+                              style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                              }}
                             >
-                              {isSpeaking ? '⏹' : '🔊'}
+                              {isSpeaking ? (
+                                <SquareIcon size={12} fill="currentColor" />
+                              ) : (
+                                <Volume2Icon size={13} />
+                              )}
                             </button>
                             <button
                               type="button"

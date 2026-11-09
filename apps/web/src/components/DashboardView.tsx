@@ -1,5 +1,8 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
-import { Radio as RadioIcon } from 'lucide-react';
+import {
+  Radio as RadioIcon,
+  MessageSquare as MessageSquareIcon,
+} from 'lucide-react';
 import { Logo } from './Logo';
 import {
   HomeIcon,
@@ -375,7 +378,9 @@ export function DashboardView({
             }}
             data-testid="sidebar-transcripts-btn"
           >
-            <span>💬</span>
+            <span>
+              <MessageSquareIcon size={16} />
+            </span>
             <span>Transcripts</span>
           </button>
           <button

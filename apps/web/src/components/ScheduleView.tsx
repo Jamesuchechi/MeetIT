@@ -13,6 +13,7 @@ import {
   type AuthUser,
 } from '../types';
 import { CalIcon, CheckIcon, LnkIcon, PlusIcon, VidIcon } from './Icons';
+import { Repeat as RepeatIcon, Lock as LockIcon } from 'lucide-react';
 
 interface ScheduleViewProps {
   user: AuthUser | null;
@@ -323,12 +324,29 @@ export function ScheduleView({
 
                       <div className="scheduled-badges">
                         {item.rrule && (
-                          <span className="chip">
-                            🔁 {formatRecurrenceLabel(item.rrule)}
+                          <span
+                            className="chip"
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: 4,
+                            }}
+                          >
+                            <RepeatIcon size={12} />{' '}
+                            {formatRecurrenceLabel(item.rrule)}
                           </span>
                         )}
                         {item.passcode && (
-                          <span className="chip">🔒 Passcode</span>
+                          <span
+                            className="chip"
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: 4,
+                            }}
+                          >
+                            <LockIcon size={12} /> Passcode
+                          </span>
                         )}
                       </div>
                     </div>

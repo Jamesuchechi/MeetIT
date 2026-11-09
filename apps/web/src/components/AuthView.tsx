@@ -2,6 +2,12 @@ import React, { useState } from 'react';
 import { Logo } from './Logo';
 import { useAuth } from '../context/AuthContext';
 import { SunIcon, MoonIcon } from './Icons';
+import {
+  ShieldCheck as ShieldCheckIcon,
+  FileText as FileTextIcon,
+  Zap as ZapIcon,
+  Mail as MailIcon,
+} from 'lucide-react';
 
 interface AuthViewProps {
   initialMode?: 'signin' | 'signup';
@@ -152,7 +158,9 @@ export function AuthView({
 
             <div className="auth-showcase-features">
               <div className="auth-feature-row">
-                <div className="auth-feature-icon">🛡️</div>
+                <div className="auth-feature-icon">
+                  <ShieldCheckIcon size={20} />
+                </div>
                 <div>
                   <h4>Audio-First Resilience</h4>
                   <p>
@@ -163,7 +171,9 @@ export function AuthView({
               </div>
 
               <div className="auth-feature-row">
-                <div className="auth-feature-icon">📝</div>
+                <div className="auth-feature-icon">
+                  <FileTextIcon size={20} />
+                </div>
                 <div>
                   <h4>Meeting Notes & Action Items</h4>
                   <p>
@@ -174,7 +184,9 @@ export function AuthView({
               </div>
 
               <div className="auth-feature-row">
-                <div className="auth-feature-icon">⚡</div>
+                <div className="auth-feature-icon">
+                  <ZapIcon size={20} />
+                </div>
                 <div>
                   <h4>Zero-Friction Guest Access</h4>
                   <p>
@@ -227,7 +239,9 @@ export function AuthView({
 
             {magicLinkSent ? (
               <div className="auth-magic-confirmation">
-                <div className="auth-magic-icon">✉️</div>
+                <div className="auth-magic-icon">
+                  <MailIcon size={32} />
+                </div>
                 <h3>Check your inbox</h3>
                 <p>
                   We sent a secure login link to <b>{email}</b>. Click the link

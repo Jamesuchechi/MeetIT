@@ -65,6 +65,9 @@ import {
   Lock as LockIcon,
   Unlock as UnlockIcon,
   Square as SquareIcon,
+  MoreHorizontal as MoreHorizontalIcon,
+  X as XIcon,
+  Sliders as SlidersIcon,
 } from 'lucide-react';
 import { Logo } from './Logo';
 import { Avatar } from './Avatar';
@@ -642,6 +645,7 @@ export function MeetingRoomView({
   );
   const [showHostPanel, setShowHostPanel] = useState(false);
   const [showLeaveMenu, setShowLeaveMenu] = useState(false);
+  const [showMoreActivitiesSheet, setShowMoreActivitiesSheet] = useState(false);
   const [unmutePromptFrom, setUnmutePromptFrom] = useState<string | null>(null);
   const [displayName, setDisplayName] = useState<string>(() => {
     if (user?.displayName) return user.displayName;
@@ -2819,6 +2823,30 @@ export function MeetingRoomView({
   const isRemoteFloating = isPipActive && isPiPSwapped;
 
   const canModerate = selfRole === 'host' || selfRole === 'cohost';
+
+  const hasActiveActivity = useMemo(() => {
+    return Boolean(
+      breakoutState?.active ||
+      polls.some((p) => !p.closed) ||
+      formItSession ||
+      qaQuestions.some((q) => !q.answered && !q.dismissed) ||
+      waitingPeers.length > 0 ||
+      unreadChatCount > 0 ||
+      webinarQaQuestions.some(
+        (q) => q.status === 'pending' || q.status === 'approved',
+      ) ||
+      webinarState?.streamOut?.status === 'live',
+    );
+  }, [
+    breakoutState?.active,
+    polls,
+    formItSession,
+    qaQuestions,
+    waitingPeers.length,
+    unreadChatCount,
+    webinarQaQuestions,
+    webinarState?.streamOut?.status,
+  ]);
   const isHost = selfRole === 'host';
 
   const handleHostMutePeer = (targetPeerId: string) => {
@@ -4819,7 +4847,7 @@ export function MeetingRoomView({
 
           <button
             type="button"
-            className={`dock-btn icon-pill ${screenSharing ? 'active-share' : ''}`}
+            className={`dock-btn icon-pill hide-on-mobile ${screenSharing ? 'active-share' : ''}`}
             onClick={
               selfRole === 'viewer'
                 ? undefined
@@ -4850,7 +4878,7 @@ export function MeetingRoomView({
           </button>
 
           {/* Ephemeral Reactions popover (floating emoji bar above dock like Google Meet) */}
-          <div className="dock-popover-anchor">
+          <div className="dock-popover-anchor hide-on-mobile">
             <button
               type="button"
               className={`dock-btn icon-pill ${showReactionPopover ? 'active-panel' : ''}`}
@@ -4903,10 +4931,52 @@ export function MeetingRoomView({
             </span>
           </button>
 
+          {/* Mobile direct Chat trigger button */}
+          <button
+            type="button"
+            className={`dock-btn icon-pill show-on-mobile-only ${showChatPanel ? 'active-panel' : ''}`}
+            onClick={() => {
+              setShowChatPanel((v) => !v);
+              setShowHostPanel(false);
+            }}
+            aria-pressed={showChatPanel}
+            aria-label="Toggle in-call chat"
+            title="In-call chat"
+            data-testid="mobile-call-chat-btn"
+            style={{ position: 'relative' }}
+          >
+            <MessageSquareIcon size={18} />
+            <span className="dock-btn-label">Chat</span>
+            {unreadChatCount > 0 && (
+              <span
+                className="unread-chat-badge"
+                style={{ top: -2, right: -2 }}
+              >
+                {unreadChatCount}
+              </span>
+            )}
+          </button>
+
+          {/* Mobile "More" Activities & Controls sheet trigger */}
+          <button
+            type="button"
+            className={`dock-btn icon-pill show-on-mobile-only ${showMoreActivitiesSheet ? 'active-panel' : ''}`}
+            onClick={() => setShowMoreActivitiesSheet((v) => !v)}
+            aria-expanded={showMoreActivitiesSheet}
+            aria-label="Activities and Controls"
+            title="Activities & controls"
+            data-testid="call-more-activities-btn"
+            style={{ position: 'relative' }}
+          >
+            <MoreHorizontalIcon size={18} />
+            <span className="dock-btn-label">More</span>
+            {hasActiveActivity && <span className="dock-more-alert-dot" />}
+          </button>
+
           {canModerate && (
             <button
               type="button"
-              className={`dock-btn icon-pill ${isRecording ? 'recording-active-dock-btn' : ''}`}
+              className={`dock-btn icon-pill hide-on-mobile ${isRecording ? 'recording-active-dock-btn' : ''}`}
               onClick={handleToggleRecording}
               aria-pressed={isRecording}
               aria-label={isRecording ? 'Stop recording' : 'Record meeting'}
@@ -4930,7 +5000,7 @@ export function MeetingRoomView({
           {/* Closed Captions button */}
           <button
             type="button"
-            className={`dock-btn icon-pill ${captionsEnabled ? 'active-panel' : ''}`}
+            className={`dock-btn icon-pill hide-on-mobile ${captionsEnabled ? 'active-panel' : ''}`}
             onClick={handleToggleCaptions}
             aria-pressed={captionsEnabled}
             aria-label={
@@ -4964,7 +5034,7 @@ export function MeetingRoomView({
           </button>
 
           {/* Devices & Sound Settings popover */}
-          <div className="dock-popover-anchor">
+          <div className="dock-popover-anchor hide-on-mobile">
             <button
               type="button"
               className={`dock-btn icon-pill ${showDevicePopover ? 'active-panel' : ''}`}
@@ -5376,6 +5446,353 @@ export function MeetingRoomView({
           </button>
         </div>
       </footer>
+
+      {/* Mobile Activities & Controls Bottom Sheet */}
+      {showMoreActivitiesSheet && (
+        <div
+          className="mobile-activities-backdrop"
+          onClick={() => setShowMoreActivitiesSheet(false)}
+          data-testid="mobile-activities-backdrop"
+        >
+          <div
+            className="mobile-activities-sheet"
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-label="Activities and Controls"
+          >
+            <div className="mobile-activities-handle" />
+            <div className="mobile-activities-header">
+              <h3>Activities &amp; Controls</h3>
+              <button
+                type="button"
+                className="mobile-activities-close-btn"
+                onClick={() => setShowMoreActivitiesSheet(false)}
+                aria-label="Close menu"
+              >
+                <XIcon size={16} />
+              </button>
+            </div>
+
+            <div className="mobile-activities-body">
+              {/* Quick Reactions */}
+              <div className="mobile-reactions-bar">
+                <span className="mobile-section-label">Quick Reactions</span>
+                <div className="mobile-reactions-scroll">
+                  {REACTION_EMOJIS.map((emoji) => (
+                    <button
+                      key={emoji}
+                      type="button"
+                      className="reaction-choice-btn"
+                      onClick={() => {
+                        handleSendReaction(emoji);
+                        setShowMoreActivitiesSheet(false);
+                      }}
+                    >
+                      {emoji}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Tools & Features Grid */}
+              <div className="mobile-section-label">
+                Collaboration &amp; Tools
+              </div>
+              <div className="mobile-activities-grid">
+                {/* Breakout Rooms */}
+                <button
+                  type="button"
+                  className={`mobile-activity-card ${showBreakoutModal ? 'active' : ''}`}
+                  onClick={() => {
+                    setShowBreakoutModal(true);
+                    setShowMoreActivitiesSheet(false);
+                  }}
+                  data-testid="mobile-sheet-breakout-btn"
+                >
+                  <div className="mobile-activity-icon-wrap">
+                    <UsersIcon size={18} />
+                    {breakoutState?.active && (
+                      <span className="mobile-activity-badge live">On</span>
+                    )}
+                  </div>
+                  <span>Rooms</span>
+                </button>
+
+                {/* Polls & Quizzes */}
+                <button
+                  type="button"
+                  className={`mobile-activity-card ${showPollsPanel ? 'active' : ''}`}
+                  onClick={() => {
+                    setShowPollsPanel(true);
+                    setShowMoreActivitiesSheet(false);
+                  }}
+                  data-testid="mobile-sheet-polls-btn"
+                >
+                  <div className="mobile-activity-icon-wrap">
+                    <BarChartIcon size={18} />
+                    {polls.filter((p) => !p.closed).length > 0 && (
+                      <span className="mobile-activity-badge">
+                        {polls.filter((p) => !p.closed).length}
+                      </span>
+                    )}
+                  </div>
+                  <span>Polls</span>
+                </button>
+
+                {/* FormIT Survey */}
+                <button
+                  type="button"
+                  className={`mobile-activity-card ${showFormItModal ? 'active' : ''}`}
+                  onClick={() => {
+                    setShowFormItModal(true);
+                    setShowMoreActivitiesSheet(false);
+                  }}
+                  data-testid="mobile-sheet-formit-btn"
+                >
+                  <div className="mobile-activity-icon-wrap">
+                    <ClipboardIcon size={18} />
+                    {formItSession && (
+                      <span className="mobile-activity-badge live">Live</span>
+                    )}
+                  </div>
+                  <span>FormIT</span>
+                </button>
+
+                {/* Q&A */}
+                <button
+                  type="button"
+                  className={`mobile-activity-card ${showQAPanel ? 'active' : ''}`}
+                  onClick={() => {
+                    setShowQAPanel(true);
+                    setShowMoreActivitiesSheet(false);
+                  }}
+                  data-testid="mobile-sheet-qa-btn"
+                >
+                  <div className="mobile-activity-icon-wrap">
+                    <HelpIcon size={18} />
+                    {qaQuestions.filter((q) => !q.answered && !q.dismissed)
+                      .length > 0 && (
+                      <span className="mobile-activity-badge">
+                        {
+                          qaQuestions.filter((q) => !q.answered && !q.dismissed)
+                            .length
+                        }
+                      </span>
+                    )}
+                  </div>
+                  <span>Q&amp;A</span>
+                </button>
+
+                {/* Whiteboard */}
+                <button
+                  type="button"
+                  className={`mobile-activity-card ${showWhiteboardModal ? 'active' : ''}`}
+                  onClick={() => {
+                    setShowWhiteboardModal(true);
+                    setShowMoreActivitiesSheet(false);
+                  }}
+                  data-testid="mobile-sheet-whiteboard-btn"
+                >
+                  <div className="mobile-activity-icon-wrap">
+                    <PaintbrushIcon size={18} />
+                  </div>
+                  <span>Whiteboard</span>
+                </button>
+
+                {/* Collaborative Notes */}
+                <button
+                  type="button"
+                  className={`mobile-activity-card ${showSharedNotesPanel ? 'active' : ''}`}
+                  onClick={() => {
+                    setShowSharedNotesPanel(true);
+                    setShowMoreActivitiesSheet(false);
+                  }}
+                  data-testid="mobile-sheet-notes-btn"
+                >
+                  <div className="mobile-activity-icon-wrap">
+                    <FileTextIcon size={18} />
+                  </div>
+                  <span>Notes</span>
+                </button>
+
+                {/* People & Host Controls */}
+                <button
+                  type="button"
+                  className={`mobile-activity-card ${showHostPanel ? 'active' : ''}`}
+                  onClick={() => {
+                    setShowHostPanel(true);
+                    setShowChatPanel(false);
+                    setShowMoreActivitiesSheet(false);
+                  }}
+                  data-testid="mobile-sheet-host-btn"
+                >
+                  <div className="mobile-activity-icon-wrap">
+                    <UsrIcon />
+                    {waitingPeers.length > 0 && (
+                      <span className="mobile-activity-badge live">
+                        {waitingPeers.length}
+                      </span>
+                    )}
+                  </div>
+                  <span>{canModerate ? 'Host' : 'People'}</span>
+                </button>
+
+                {/* Closed Captions Toggle */}
+                <button
+                  type="button"
+                  className={`mobile-activity-card ${captionsEnabled ? 'active' : ''}`}
+                  onClick={() => {
+                    handleToggleCaptions();
+                    setShowMoreActivitiesSheet(false);
+                  }}
+                  data-testid="mobile-sheet-captions-btn"
+                >
+                  <div className="mobile-activity-icon-wrap">
+                    <span
+                      style={{
+                        fontWeight: 800,
+                        fontSize: 12,
+                        border: '1.5px solid currentColor',
+                        borderRadius: 3,
+                        padding: '0 2px',
+                      }}
+                    >
+                      CC
+                    </span>
+                  </div>
+                  <span>{captionsEnabled ? 'CC On' : 'CC Off'}</span>
+                </button>
+
+                {/* Audio & Video Options */}
+                <button
+                  type="button"
+                  className={`mobile-activity-card ${showDevicePopover ? 'active' : ''}`}
+                  onClick={() => {
+                    setShowDevicePopover(true);
+                    setShowMoreActivitiesSheet(false);
+                  }}
+                  data-testid="mobile-sheet-options-btn"
+                >
+                  <div className="mobile-activity-icon-wrap">
+                    <SlidersIcon size={18} />
+                  </div>
+                  <span>Options</span>
+                </button>
+
+                {/* Screen Share (if permitted) */}
+                {selfRole !== 'viewer' && (
+                  <button
+                    type="button"
+                    className={`mobile-activity-card ${screenSharing ? 'active' : ''}`}
+                    onClick={() => {
+                      void handleToggleScreenShare();
+                      setShowMoreActivitiesSheet(false);
+                    }}
+                    data-testid="mobile-sheet-screen-btn"
+                  >
+                    <div className="mobile-activity-icon-wrap">
+                      <ScrIcon />
+                    </div>
+                    <span>{screenSharing ? 'Stop Share' : 'Share'}</span>
+                  </button>
+                )}
+
+                {/* Record Meeting (Host / Moderator) */}
+                {canModerate && (
+                  <button
+                    type="button"
+                    className={`mobile-activity-card ${isRecording ? 'active' : ''}`}
+                    onClick={() => {
+                      handleToggleRecording();
+                      setShowMoreActivitiesSheet(false);
+                    }}
+                    data-testid="mobile-sheet-record-btn"
+                  >
+                    <div className="mobile-activity-icon-wrap">
+                      <CircleIcon
+                        size={18}
+                        fill={isRecording ? 'currentColor' : 'none'}
+                      />
+                    </div>
+                    <span>{isRecording ? 'Stop Rec' : 'Record'}</span>
+                  </button>
+                )}
+
+                {/* Webinar Audience Q&A */}
+                {webinarState?.enabled && (
+                  <button
+                    type="button"
+                    className={`mobile-activity-card ${showWebinarQaPanel ? 'active' : ''}`}
+                    onClick={() => {
+                      setShowWebinarQaPanel(true);
+                      setShowMoreActivitiesSheet(false);
+                    }}
+                    data-testid="mobile-sheet-webinar-qa-btn"
+                  >
+                    <div className="mobile-activity-icon-wrap">
+                      <MessageSquareIcon size={18} />
+                      {webinarQaQuestions.filter(
+                        (q) =>
+                          q.status === 'pending' || q.status === 'approved',
+                      ).length > 0 && (
+                        <span className="mobile-activity-badge">
+                          {
+                            webinarQaQuestions.filter(
+                              (q) =>
+                                q.status === 'pending' ||
+                                q.status === 'approved',
+                            ).length
+                          }
+                        </span>
+                      )}
+                    </div>
+                    <span>Webinar Q&amp;A</span>
+                  </button>
+                )}
+
+                {/* Webinar Stream Out */}
+                {webinarState?.enabled && canModerate && (
+                  <button
+                    type="button"
+                    className={`mobile-activity-card ${showWebinarStreamModal ? 'active' : ''}`}
+                    onClick={() => {
+                      setShowWebinarStreamModal(true);
+                      setShowMoreActivitiesSheet(false);
+                    }}
+                    data-testid="mobile-sheet-stream-btn"
+                  >
+                    <div className="mobile-activity-icon-wrap">
+                      <RadioIcon size={18} />
+                      {webinarState?.streamOut?.status === 'live' && (
+                        <span className="mobile-activity-badge live">Live</span>
+                      )}
+                    </div>
+                    <span>Stream</span>
+                  </button>
+                )}
+
+                {/* Webinar Analytics */}
+                {webinarState?.enabled && canModerate && (
+                  <button
+                    type="button"
+                    className={`mobile-activity-card ${showWebinarAnalyticsModal ? 'active' : ''}`}
+                    onClick={() => {
+                      setShowWebinarAnalyticsModal(true);
+                      setShowMoreActivitiesSheet(false);
+                    }}
+                    data-testid="mobile-sheet-analytics-btn"
+                  >
+                    <div className="mobile-activity-icon-wrap">
+                      <TrendingUpIcon size={18} />
+                    </div>
+                    <span>Analytics</span>
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Keyboard shortcuts help modal overlay */}
       {showShortcutsModal && (

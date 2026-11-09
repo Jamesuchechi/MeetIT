@@ -1,6 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { Avatar } from './Avatar';
 import { LnkIcon, CheckIcon, VidIcon } from './Icons';
+import {
+  Building as BuildingIcon,
+  MapPin as MapPinIcon,
+  Clock as ClockIcon,
+} from 'lucide-react';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import {
   copyToClipboard,
@@ -169,16 +174,39 @@ export function ProfileView({
 
               <div className="profile-meta-pills">
                 {profile.organization && (
-                  <span className="profile-meta-chip">
-                    🏢 {profile.organization}
+                  <span
+                    className="profile-meta-chip"
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 4,
+                    }}
+                  >
+                    <BuildingIcon size={12} /> {profile.organization}
                   </span>
                 )}
                 {profile.location && (
-                  <span className="profile-meta-chip">
-                    📍 {profile.location}
+                  <span
+                    className="profile-meta-chip"
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 4,
+                    }}
+                  >
+                    <MapPinIcon size={12} /> {profile.location}
                   </span>
                 )}
-                <span className="profile-meta-chip">🕒 {detectedTimezone}</span>
+                <span
+                  className="profile-meta-chip"
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 4,
+                  }}
+                >
+                  <ClockIcon size={12} /> {detectedTimezone}
+                </span>
                 <span className="profile-meta-chip">Joined {memberSince}</span>
               </div>
             </div>

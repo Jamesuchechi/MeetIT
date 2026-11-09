@@ -12,6 +12,20 @@ import {
 } from '../lib/recordingsStore';
 import { copyToClipboard, type AuthUser } from '../types';
 import { RecIcon, CloseIcon, CheckIcon, LnkIcon } from './Icons';
+import {
+  Video as VideoIcon,
+  Clock as ClockIcon,
+  HardDrive as HardDriveIcon,
+  Lock as LockIcon,
+  LayoutGrid as LayoutGridIcon,
+  List as ListIcon,
+  Play as PlayIcon,
+  Trash2 as Trash2Icon,
+  Download as DownloadIcon,
+  RotateCcw as RotateCcwIcon,
+  RotateCw as RotateCwIcon,
+  PictureInPicture2 as PictureInPicture2Icon,
+} from 'lucide-react';
 
 interface RecordingsViewProps {
   user: AuthUser | null;
@@ -210,7 +224,9 @@ export function RecordingsView({
       {/* Vault Overview Stats Cards */}
       <div className="hub-stats-row">
         <div className="hub-stat-card">
-          <div className="hub-stat-icon">📹</div>
+          <div className="hub-stat-icon">
+            <VideoIcon size={20} />
+          </div>
           <div className="hub-stat-content">
             <span className="hub-stat-value">{stats.count}</span>
             <span className="hub-stat-label">Total Recordings</span>
@@ -218,7 +234,9 @@ export function RecordingsView({
         </div>
 
         <div className="hub-stat-card">
-          <div className="hub-stat-icon">⏱️</div>
+          <div className="hub-stat-icon">
+            <ClockIcon size={20} />
+          </div>
           <div className="hub-stat-content">
             <span className="hub-stat-value">{stats.durationLabel}</span>
             <span className="hub-stat-label">Total Captured Time</span>
@@ -226,7 +244,9 @@ export function RecordingsView({
         </div>
 
         <div className="hub-stat-card">
-          <div className="hub-stat-icon">💾</div>
+          <div className="hub-stat-icon">
+            <HardDriveIcon size={20} />
+          </div>
           <div className="hub-stat-content">
             <span className="hub-stat-value">{stats.storageLabel}</span>
             <span className="hub-stat-label">Cloud Storage Used</span>
@@ -234,7 +254,9 @@ export function RecordingsView({
         </div>
 
         <div className="hub-stat-card">
-          <div className="hub-stat-icon">🔒</div>
+          <div className="hub-stat-icon">
+            <LockIcon size={20} />
+          </div>
           <div className="hub-stat-content">
             <span className="hub-stat-value">30-Day Policy</span>
             <span className="hub-stat-label">Auto-Purge Retention</span>
@@ -310,16 +332,18 @@ export function RecordingsView({
               className={`view-toggle-btn ${viewMode === 'grid' ? 'active' : ''}`}
               onClick={() => setViewMode('grid')}
               title="Grid card view"
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
             >
-              ▦ Grid
+              <LayoutGridIcon size={14} /> Grid
             </button>
             <button
               type="button"
               className={`view-toggle-btn ${viewMode === 'table' ? 'active' : ''}`}
               onClick={() => setViewMode('table')}
               title="Table list view"
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
             >
-              ☰ Table
+              <ListIcon size={14} /> Table
             </button>
           </div>
         </div>
@@ -383,7 +407,11 @@ export function RecordingsView({
               >
                 <div className="thumbnail-backdrop-pattern" />
                 <div className="play-overlay-button" aria-hidden="true">
-                  <span>▶</span>
+                  <PlayIcon
+                    size={22}
+                    fill="currentColor"
+                    style={{ marginLeft: 2 }}
+                  />
                 </div>
                 <div className="thumbnail-badges">
                   <span className="rec-badge duration-badge">
@@ -448,8 +476,16 @@ export function RecordingsView({
                           : 'Retention policy active'
                       }
                     >
-                      <span className="expiry-tag">
-                        ⏳ {formatExpiryCountdown(rec.expiresAt)}
+                      <span
+                        className="expiry-tag"
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: 4,
+                        }}
+                      >
+                        <ClockIcon size={12} />{' '}
+                        {formatExpiryCountdown(rec.expiresAt)}
                       </span>
                     </div>
                   ) : null}
@@ -462,8 +498,13 @@ export function RecordingsView({
                     className="btn btn-sm primary"
                     onClick={() => setPlayingRecording(rec)}
                     data-testid={`play-rec-${rec.id}`}
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 6,
+                    }}
                   >
-                    ▶ Play
+                    <PlayIcon size={13} fill="currentColor" /> Play
                   </button>
 
                   {rec.downloadUrl ? (
@@ -475,8 +516,13 @@ export function RecordingsView({
                       className="btn btn-sm"
                       title="Download MP4 file"
                       data-testid={`download-rec-${rec.id}`}
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 6,
+                      }}
                     >
-                      ⬇ Download
+                      <DownloadIcon size={13} /> Download
                     </a>
                   ) : null}
 
@@ -507,7 +553,7 @@ export function RecordingsView({
                     title="Delete recording"
                     data-testid={`delete-rec-${rec.id}`}
                   >
-                    🗑
+                    <Trash2Icon size={14} />
                   </button>
                 </div>
               </div>
@@ -558,8 +604,17 @@ export function RecordingsView({
                   <td>
                     <div>{formatRecordingDate(rec.startedAt)}</div>
                     {rec.expiresAt && (
-                      <small style={{ color: '#f59e0b', fontSize: 11 }}>
-                        ⏳ {formatExpiryCountdown(rec.expiresAt)}
+                      <small
+                        style={{
+                          color: '#f59e0b',
+                          fontSize: 11,
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: 4,
+                        }}
+                      >
+                        <ClockIcon size={11} />{' '}
+                        {formatExpiryCountdown(rec.expiresAt)}
                       </small>
                     )}
                   </td>
@@ -593,8 +648,13 @@ export function RecordingsView({
                         className="btn btn-sm primary"
                         onClick={() => setPlayingRecording(rec)}
                         title="Stream video"
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: 4,
+                        }}
                       >
-                        ▶ Play
+                        <PlayIcon size={13} fill="currentColor" /> Play
                       </button>
                       {rec.downloadUrl && (
                         <a
@@ -604,8 +664,12 @@ export function RecordingsView({
                           rel="noopener noreferrer"
                           className="btn btn-sm"
                           title="Download MP4"
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                          }}
                         >
-                          ⬇
+                          <DownloadIcon size={13} />
                         </a>
                       )}
                       <button
@@ -622,7 +686,7 @@ export function RecordingsView({
                         onClick={() => setDeletingRecording(rec)}
                         title="Delete"
                       >
-                        🗑
+                        <Trash2Icon size={14} />
                       </button>
                     </div>
                   </td>
@@ -721,24 +785,39 @@ export function RecordingsView({
                   className="btn btn-sm"
                   onClick={() => handleJumpTime(-10)}
                   title="Rewind 10 seconds"
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 4,
+                  }}
                 >
-                  ↺ 10s
+                  <RotateCcwIcon size={13} /> 10s
                 </button>
                 <button
                   type="button"
                   className="btn btn-sm"
                   onClick={() => handleJumpTime(10)}
                   title="Forward 10 seconds"
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 4,
+                  }}
                 >
-                  10s ↻
+                  10s <RotateCwIcon size={13} />
                 </button>
                 <button
                   type="button"
                   className="btn btn-sm"
                   onClick={() => void handlePictureInPicture()}
                   title="Picture in Picture Mode"
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 4,
+                  }}
                 >
-                  ⧉ PiP
+                  <PictureInPicture2Icon size={13} /> PiP
                 </button>
               </div>
             </div>
@@ -755,8 +834,16 @@ export function RecordingsView({
               <div style={{ fontSize: '0.875rem', color: 'var(--muted)' }}>
                 Size: {formatFileSize(playingRecording.fileSizeBytes)}
                 {playingRecording.expiresAt && (
-                  <span style={{ marginLeft: 12, color: '#f59e0b' }}>
-                    ⏳ Expires in{' '}
+                  <span
+                    style={{
+                      marginLeft: 12,
+                      color: '#f59e0b',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 4,
+                    }}
+                  >
+                    <ClockIcon size={12} /> Expires in{' '}
                     {formatExpiryCountdown(playingRecording.expiresAt)}
                   </span>
                 )}

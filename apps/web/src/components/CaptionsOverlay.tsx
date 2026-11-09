@@ -1,4 +1,5 @@
 import React from 'react';
+import { Settings as SettingsIcon } from 'lucide-react';
 
 export type CaptionFontSize = 'small' | 'medium' | 'large';
 export type CaptionPosition = 'bottom' | 'top';
@@ -113,19 +114,22 @@ export function CaptionsOverlay({
             <button
               type="button"
               onClick={onOpenSettings}
+              title="Caption settings (Language, Font, Position)"
+              aria-label="Caption settings"
               style={{
-                background: 'none',
+                background: 'rgba(0, 0, 0, 0.4)',
                 border: 'none',
-                color: '#94a3b8',
+                color: '#fff',
                 cursor: 'pointer',
                 fontSize: '12px',
                 padding: '2px 6px',
                 borderRadius: '4px',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 4,
               }}
-              title="Caption settings (Language, Font, Position)"
-              aria-label="Caption settings"
             >
-              ⚙ Settings
+              <SettingsIcon size={12} /> Settings
             </button>
           )}
         </div>

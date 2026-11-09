@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { CloseIcon, CheckIcon, LnkIcon } from './Icons';
+import { Mail as MailIcon } from 'lucide-react';
 import { copyToClipboard } from '../types';
 
 interface EmailDigestModalProps {
@@ -199,8 +200,9 @@ export function EmailDigestModal({
               target="_blank"
               rel="noopener noreferrer"
               data-testid="open-mail-client-btn"
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
             >
-              ✉ Open in Email App
+              <MailIcon size={14} /> Open in Email App
             </a>
           </div>
         </div>
