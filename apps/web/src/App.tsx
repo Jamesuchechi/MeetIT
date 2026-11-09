@@ -5,6 +5,7 @@ import { LandingView } from './components/LandingView';
 import { DashboardView } from './components/DashboardView';
 import { AuthView } from './components/AuthView';
 import { MeetingRoomView } from './components/MeetingRoomView';
+import { WebinarRegistrationView } from './components/WebinarRegistrationView';
 import { EndedView } from './components/EndedView';
 import { NotFoundView } from './components/NotFoundView';
 import { Toast } from './components/Toast';
@@ -123,6 +124,24 @@ function parseLocationRoute(
   }
   if (target === '404') {
     return { view: '404', roomCode: null };
+  }
+
+  // Support Webinar registration: /w/xxx/register, /webinar/xxx/register, /register/xxx
+  if (target.startsWith('w/') || target.startsWith('webinar/')) {
+    const parts = target.split('/');
+    if (parts.length >= 3 && parts[2] === 'register') {
+      const normalized = normalizeRoomCode(parts[1] ?? '');
+      if (normalized) {
+        return { view: 'webinar-register', roomCode: normalized };
+      }
+    }
+  }
+  if (target.startsWith('register/')) {
+    const rawCode = target.slice('register/'.length);
+    const normalized = normalizeRoomCode(rawCode);
+    if (normalized) {
+      return { view: 'webinar-register', roomCode: normalized };
+    }
   }
 
   // Support /m/xxx, /room/xxx, /join/xxx, /meet/xxx
@@ -442,6 +461,18 @@ function AppContent() {
           onLeaveCall={handleLeaveCall}
           onNavigateHome={() => navigateTo('home')}
           onToast={showToast}
+        />
+      )}
+
+      {route.view === 'webinar-register' && route.roomCode && (
+        <WebinarRegistrationView
+          roomCode={route.roomCode}
+          onRegistered={(_token) => {
+            showToast('Registration confirmed! Unique join link generated.');
+          }}
+          onJoinDirectly={(token) => {
+            window.location.href = `/m/${route.roomCode}?webinarToken=${encodeURIComponent(token)}`;
+          }}
         />
       )}
 

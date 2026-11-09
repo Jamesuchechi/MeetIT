@@ -242,16 +242,16 @@ Every phase has an **exit criteria** block. Do not start the next phase until ex
 
 ## Phase 7 - Webinar and broadcast (v1.3)
 
-- [ ] [P0] Webinar mode: panelists (publish) vs viewers (subscribe only), viewers capped at 1,000+
-- [ ] [P0] Registration page with custom fields, approval flow, unique join links
-- [ ] [P0] Practice session (panelists only) before going live
-- [ ] [P1] Live stream out: RTMP to YouTube/Facebook/custom, HLS for large audiences
-- [ ] [P1] Audience Q&A moderation queue
-- [ ] [P1] Attendee analytics: join time, duration, engagement, poll responses
-- [ ] [P1] Branded waiting screen, custom logo, colors, background
-- [ ] [P2] Paid webinars (Stripe, Paystack, Flutterwave)
-- [ ] [P2] On-demand replay with gated access
-- [ ] [P2] Simulive (pre-recorded played as live)
+- [x] [P0] Webinar mode: panelists (publish) vs viewers (subscribe only), viewers capped at 1,000+
+- [x] [P0] Registration page with custom fields, approval flow, unique join links
+- [x] [P0] Practice session (panelists only) before going live
+- [x] [P1] Live stream out: RTMP to YouTube/Facebook/custom, HLS for large audiences
+- [x] [P1] Audience Q&A moderation queue
+- [x] [P1] Attendee analytics: join time, duration, engagement, poll responses
+- [x] [P1] Branded waiting screen, custom logo, colors, background
+- [x] [P2] Paid webinars (Stripe, Paystack, Flutterwave)
+- [x] [P2] On-demand replay with gated access
+- [x] [P2] Simulive (pre-recorded played as live)
 
 **Exit criteria:** 1,000 viewers on HLS with under 10 s latency; registration to join conversion funnel visible.
 

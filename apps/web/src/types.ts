@@ -4,7 +4,14 @@ import {
 } from '@meetit/protocol';
 
 export type ViewMode =
-  'home' | 'dashboard' | 'signin' | 'signup' | 'room' | 'ended' | '404';
+  | 'home'
+  | 'dashboard'
+  | 'signin'
+  | 'signup'
+  | 'room'
+  | 'ended'
+  | '404'
+  | 'webinar-register';
 
 export type DashboardTab =
   | 'home'

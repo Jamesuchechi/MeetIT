@@ -18,6 +18,7 @@ import {
   MoonIcon,
 } from './Icons';
 import {
+  generateRoomCode,
   normalizeRoomCode,
   copyToClipboard,
   personalRoomCodeForUser,
@@ -864,6 +865,21 @@ export function DashboardView({
                         }
                       >
                         Start in my room
+                      </button>
+                      <button
+                        type="button"
+                        className="btn primary"
+                        onClick={() => {
+                          const webinarCode = generateRoomCode();
+                          onToast(
+                            'Creating webinar session with practice mode enabled...',
+                          );
+                          onEnterRoom(webinarCode);
+                        }}
+                        title="Start a webinar with 1,000+ viewers, registration, and practice mode"
+                        data-testid="start-webinar-btn"
+                      >
+                        🎙️ Host Webinar
                       </button>
                     </div>
                   </div>

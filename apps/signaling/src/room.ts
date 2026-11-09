@@ -20,6 +20,13 @@ import {
   type ServerMessage,
   type WaitingPeer,
   type WhiteboardAction,
+  type WebinarBranding,
+  type WebinarQaItem,
+  type WebinarRegistration,
+  type WebinarSimulive,
+  type WebinarSpeakerBio,
+  type WebinarState,
+  type WebinarStreamOut,
 } from '@meetit/protocol';
 
 const DEFAULT_PEER_STATE: PeerState = {
@@ -147,6 +154,37 @@ export class Room {
     agenda: [],
   };
 
+  // Phase 7 Webinar State
+  webinar: WebinarState = {
+    enabled: false,
+    practiceMode: true,
+    isLive: false,
+    maxViewers: 1000,
+    viewerCount: 0,
+    peakViewers: 0,
+    requireRegistration: false,
+    autoApproveRegistrations: true,
+    ticketPriceCents: 0,
+    currency: 'USD',
+    paymentProvider: 'free',
+    customFields: [],
+  };
+  readonly moderatedQa = new Map<string, WebinarQaItem>();
+  readonly registrations = new Map<string, WebinarRegistration>();
+  readonly attendeeAnalytics = new Map<
+    string,
+    {
+      joinTime: number;
+      leaveTime?: number;
+      durationMs: number;
+      pollVotesCount: number;
+      qaCount: number;
+      chatCount: number;
+      engagementScore: number;
+    }
+  >();
+  peakViewers = 0;
+
   private readonly peers = new Map<string, Peer>();
   private readonly waitingPeers = new Map<string, WaitingEntry>();
   private readonly blockedUserIds = new Set<string>();
@@ -167,6 +205,7 @@ export class Room {
       transport?: 'mesh' | 'sfu';
       maxParticipants?: number;
       reclaimSlotMs?: number;
+      webinar?: boolean | Partial<WebinarState>;
     } = {},
   ) {
     this.code = code;
@@ -195,6 +234,45 @@ export class Room {
     this.maxParticipants =
       options.maxParticipants ?? (this.transport === 'sfu' ? 100 : 4);
     this.reclaimSlotMs = options.reclaimSlotMs ?? 30_000;
+
+    if (options.webinar) {
+      const webinarOpts =
+        typeof options.webinar === 'object' ? options.webinar : {};
+      this.webinar = {
+        enabled: true,
+        practiceMode: webinarOpts.practiceMode ?? true,
+        isLive: webinarOpts.isLive ?? false,
+        maxViewers: webinarOpts.maxViewers ?? 1000,
+        viewerCount: 0,
+        peakViewers: 0,
+        requireRegistration: webinarOpts.requireRegistration ?? false,
+        autoApproveRegistrations: webinarOpts.autoApproveRegistrations ?? true,
+        ticketPriceCents: webinarOpts.ticketPriceCents ?? 0,
+        currency: webinarOpts.currency ?? 'USD',
+        paymentProvider: webinarOpts.paymentProvider ?? 'free',
+        customFields: webinarOpts.customFields ?? [],
+        ...(webinarOpts.branding !== undefined
+          ? { branding: webinarOpts.branding }
+          : {}),
+        ...(webinarOpts.streamOut !== undefined
+          ? { streamOut: webinarOpts.streamOut }
+          : {}),
+        ...(webinarOpts.simulive !== undefined
+          ? { simulive: webinarOpts.simulive }
+          : {}),
+        ...(webinarOpts.startedAt !== undefined
+          ? { startedAt: webinarOpts.startedAt }
+          : {}),
+        ...(webinarOpts.endedAt !== undefined
+          ? { endedAt: webinarOpts.endedAt }
+          : {}),
+      };
+      this.transport = 'sfu';
+      this.maxParticipants = Math.max(
+        this.maxParticipants,
+        this.webinar.maxViewers ?? 1000,
+      );
+    }
   }
 
   promoteToSfu(): boolean {
@@ -298,6 +376,10 @@ export class Room {
     if (this.chatHistory.length > 100) {
       this.chatHistory.shift();
     }
+    const stats = this.attendeeAnalytics.get(message.from);
+    if (stats) {
+      stats.chatCount += 1;
+    }
   }
 
   getChatBackfill(afterSeq = 0): ChatMessagePayload[] {
@@ -362,6 +444,8 @@ export class Room {
     initialState?: PeerState;
     isAuthenticatedUser?: boolean;
     passcode?: string;
+    requestedRole?: PeerRole;
+    webinarToken?: string;
   }): JoinResult {
     // 0. Check per-room blocklist first
     if (this.isBlocked(params.userId, params.tokenFingerprint)) {
@@ -441,14 +525,54 @@ export class Room {
     );
     const isFirstHost =
       isOwner || this.hostId === null || this.peers.size === 0;
-    const role: PeerRole = isFirstHost
+    let role: PeerRole = isFirstHost
       ? 'host'
       : params.isAuthenticatedUser
         ? 'attendee'
         : 'guest';
 
-    // 4. Waiting room gate (for non-hosts when waitingRoom is enabled)
-    if (this.permissions.waitingRoom && !isFirstHost) {
+    if (this.webinar.enabled) {
+      if (params.requestedRole === 'viewer') {
+        if (this.webinar.requireRegistration) {
+          const reg = params.webinarToken
+            ? this.getRegistrationByToken(params.webinarToken)
+            : undefined;
+          if (!reg || reg.status !== 'approved') {
+            return {
+              ok: false,
+              code: 'FORBIDDEN',
+              message: 'Approved registration required for this webinar.',
+            };
+          }
+        }
+        role = 'viewer';
+      } else if (isFirstHost) {
+        role = 'host';
+      } else if (
+        params.requestedRole === 'panelist' ||
+        (params.webinarToken &&
+          this.getRegistrationByToken(params.webinarToken)?.role === 'panelist')
+      ) {
+        role = 'panelist';
+      } else {
+        if (this.webinar.requireRegistration) {
+          const reg = params.webinarToken
+            ? this.getRegistrationByToken(params.webinarToken)
+            : undefined;
+          if (!reg || reg.status !== 'approved') {
+            return {
+              ok: false,
+              code: 'FORBIDDEN',
+              message: 'Approved registration required for this webinar.',
+            };
+          }
+        }
+        role = 'viewer';
+      }
+    }
+
+    // 4. Waiting room gate (for non-hosts when waitingRoom is enabled and not in webinar viewer mode)
+    if (this.permissions.waitingRoom && !isFirstHost && role !== 'viewer') {
       const waitingEntry: WaitingEntry = {
         id: peerId,
         ...(params.userId !== undefined ? { userId: params.userId } : {}),
@@ -469,6 +593,19 @@ export class Room {
       return { ok: true, status: 'waiting', waiting: waitingEntry };
     }
 
+    let initialPeerState: PeerState = params.initialState
+      ? { ...params.initialState }
+      : { ...DEFAULT_PEER_STATE };
+
+    if (role === 'viewer') {
+      initialPeerState = {
+        audio: false,
+        video: false,
+        screen: false,
+        handRaised: false,
+      };
+    }
+
     const peer = new Peer({
       id: peerId,
       ...(params.userId !== undefined ? { userId: params.userId } : {}),
@@ -478,7 +615,7 @@ export class Room {
       displayName: params.displayName,
       role,
       verified: Boolean(params.isAuthenticatedUser),
-      ...(params.initialState ? { state: params.initialState } : {}),
+      state: initialPeerState,
       socket: params.socket,
     });
 
@@ -494,15 +631,69 @@ export class Room {
       this.hostId = peerId;
     }
 
-    this.broadcast(
-      {
-        v: 1,
-        ts: Date.now(),
-        type: 'peer.joined',
-        payload: { peer: peer.toInfo() },
-      },
-      peerId,
-    );
+    if (role === 'viewer') {
+      this.attendeeAnalytics.set(peerId, {
+        joinTime: Date.now(),
+        durationMs: 0,
+        pollVotesCount: 0,
+        qaCount: 0,
+        chatCount: 0,
+        engagementScore: 100,
+      });
+      const viewerCount = Array.from(this.peers.values()).filter(
+        (p) => p.role === 'viewer' && p.socket !== null,
+      ).length;
+      if (viewerCount > this.peakViewers) {
+        this.peakViewers = viewerCount;
+      }
+      this.webinar.viewerCount = viewerCount;
+      this.webinar.peakViewers = this.peakViewers;
+      for (const p of this.peers.values()) {
+        if (
+          p.socket &&
+          (p.role === 'host' || p.role === 'cohost' || p.role === 'panelist')
+        ) {
+          p.send({
+            v: 1,
+            ts: Date.now(),
+            type: 'webinar.analytics_updated',
+            payload: {
+              viewerCount,
+              peakViewers: this.peakViewers,
+            },
+          });
+        }
+      }
+    }
+
+    if (role === 'viewer') {
+      // In high-scale webinars, avoid flooding 1,000+ viewers with O(N^2) peer.joined events.
+      // Broadcast peer.joined only to active hosts, cohosts, and panelists.
+      for (const p of this.peers.values()) {
+        if (
+          p.socket &&
+          p.id !== peerId &&
+          (p.role === 'host' || p.role === 'cohost' || p.role === 'panelist')
+        ) {
+          p.send({
+            v: 1,
+            ts: Date.now(),
+            type: 'peer.joined',
+            payload: { peer: peer.toInfo() },
+          });
+        }
+      }
+    } else {
+      this.broadcast(
+        {
+          v: 1,
+          ts: Date.now(),
+          type: 'peer.joined',
+          payload: { peer: peer.toInfo() },
+        },
+        peerId,
+      );
+    }
 
     return { ok: true, status: 'joined', peer, reclaimed: false };
   }
@@ -603,10 +794,7 @@ export class Room {
     }
   }
 
-  setPeerRole(
-    targetPeerId: string,
-    nextRole: 'host' | 'cohost' | 'attendee',
-  ): Peer | null {
+  setPeerRole(targetPeerId: string, nextRole: PeerRole): Peer | null {
     const target = this.peers.get(targetPeerId);
     if (!target) return null;
 
@@ -631,6 +819,24 @@ export class Room {
     }
 
     target.role = nextRole;
+    if (nextRole === 'viewer') {
+      target.state = {
+        audio: false,
+        video: false,
+        screen: false,
+        handRaised: false,
+      };
+      this.broadcast({
+        v: 1,
+        ts: Date.now(),
+        type: 'state.updated',
+        payload: {
+          peerId: target.id,
+          state: target.state,
+        },
+      });
+    }
+
     this.broadcast({
       v: 1,
       ts: Date.now(),
@@ -787,6 +993,35 @@ export class Room {
     this.handRaiseQueue = this.handRaiseQueue.filter(
       (h) => h.peerId !== peerId,
     );
+
+    if (peer.role === 'viewer') {
+      const stats = this.attendeeAnalytics.get(peerId);
+      if (stats) {
+        stats.leaveTime = Date.now();
+        stats.durationMs = stats.leaveTime - stats.joinTime;
+      }
+      const viewerCount = Array.from(this.peers.values()).filter(
+        (p) => p.role === 'viewer' && p.id !== peerId && p.socket !== null,
+      ).length;
+      this.webinar.viewerCount = viewerCount;
+      this.webinar.peakViewers = this.peakViewers;
+      for (const p of this.peers.values()) {
+        if (
+          p.socket &&
+          (p.role === 'host' || p.role === 'cohost' || p.role === 'panelist')
+        ) {
+          p.send({
+            v: 1,
+            ts: Date.now(),
+            type: 'webinar.analytics_updated',
+            payload: {
+              viewerCount,
+              peakViewers: this.peakViewers,
+            },
+          });
+        }
+      }
+    }
 
     // Reassign host if the host left (prefer cohost -> verified attendee -> any active peer)
     if (this.hostId === peerId) {
@@ -947,6 +1182,10 @@ export class Room {
       : firstOpt !== undefined
         ? [firstOpt]
         : [];
+    const stats = this.attendeeAnalytics.get(peerId);
+    if (stats) {
+      stats.pollVotesCount += 1;
+    }
     return poll;
   }
 
@@ -1201,6 +1440,354 @@ export class Room {
     }
     return msg.reactions;
   }
+
+  // Phase 7 Webinar Management Methods
+  enableWebinar(config?: Partial<WebinarState>): void {
+    this.webinar = {
+      ...this.webinar,
+      enabled: true,
+      practiceMode: config?.practiceMode ?? true,
+      isLive: config?.isLive ?? false,
+      maxViewers: config?.maxViewers ?? 1000,
+      requireRegistration: config?.requireRegistration ?? false,
+      autoApproveRegistrations: config?.autoApproveRegistrations ?? true,
+      ticketPriceCents: config?.ticketPriceCents ?? 0,
+      currency: config?.currency ?? 'USD',
+      paymentProvider: config?.paymentProvider ?? 'free',
+      customFields: config?.customFields ?? [],
+      ...(config?.branding !== undefined ? { branding: config.branding } : {}),
+      ...(config?.streamOut !== undefined
+        ? { streamOut: config.streamOut }
+        : {}),
+      ...(config?.simulive !== undefined ? { simulive: config.simulive } : {}),
+      ...(config?.startedAt !== undefined
+        ? { startedAt: config.startedAt }
+        : {}),
+      ...(config?.endedAt !== undefined ? { endedAt: config.endedAt } : {}),
+    };
+    this.transport = 'sfu';
+    this.maxParticipants = Math.max(
+      this.maxParticipants,
+      this.webinar.maxViewers ?? 1000,
+    );
+    this.broadcast({
+      v: 1,
+      ts: Date.now(),
+      type: 'webinar.state',
+      payload: this.webinar,
+    });
+  }
+
+  goLiveWebinar(hostPeerId: string): boolean {
+    if (!this.webinar.enabled || this.webinar.isLive) return false;
+    this.webinar.practiceMode = false;
+    this.webinar.isLive = true;
+    this.webinar.startedAt = Date.now();
+    this.broadcast({
+      v: 1,
+      ts: Date.now(),
+      type: 'webinar.state',
+      payload: this.webinar,
+    });
+    return true;
+  }
+
+  endLiveWebinar(hostPeerId: string): boolean {
+    if (!this.webinar.enabled || !this.webinar.isLive) return false;
+    this.webinar.isLive = false;
+    this.webinar.endedAt = Date.now();
+    this.broadcast({
+      v: 1,
+      ts: Date.now(),
+      type: 'webinar.state',
+      payload: this.webinar,
+    });
+    return true;
+  }
+
+  updateWebinarConfig(config: Record<string, unknown>): void {
+    const next = { ...this.webinar };
+    for (const [k, v] of Object.entries(config)) {
+      if (v !== undefined) {
+        (next as Record<string, unknown>)[k] = v;
+      }
+    }
+    this.webinar = next;
+    if (typeof config.maxViewers === 'number') {
+      this.maxParticipants = Math.max(this.maxParticipants, config.maxViewers);
+    }
+    this.broadcast({
+      v: 1,
+      ts: Date.now(),
+      type: 'webinar.state',
+      payload: this.webinar,
+    });
+  }
+
+  startWebinarStream(params?: {
+    rtmpUrl?: string;
+    streamKey?: string;
+    hlsUrl?: string;
+  }): WebinarStreamOut {
+    const streamOut: WebinarStreamOut = {
+      enabled: true,
+      status: 'live',
+      viewersCount: this.webinar.viewerCount,
+      ...(params?.rtmpUrl !== undefined ? { rtmpUrl: params.rtmpUrl } : {}),
+      ...(params?.streamKey !== undefined
+        ? { streamKey: params.streamKey }
+        : {}),
+      hlsUrl:
+        params?.hlsUrl ??
+        `https://live.meetit.live/hls/${this.code}/index.m3u8`,
+    };
+    this.webinar.streamOut = streamOut;
+    this.broadcast({
+      v: 1,
+      ts: Date.now(),
+      type: 'webinar.stream_updated',
+      payload: streamOut,
+    });
+    return streamOut;
+  }
+
+  stopWebinarStream(): WebinarStreamOut {
+    const streamOut: WebinarStreamOut = {
+      enabled: false,
+      status: 'idle',
+      viewersCount: 0,
+      ...(this.webinar.streamOut?.rtmpUrl !== undefined
+        ? { rtmpUrl: this.webinar.streamOut.rtmpUrl }
+        : {}),
+      ...(this.webinar.streamOut?.hlsUrl !== undefined
+        ? { hlsUrl: this.webinar.streamOut.hlsUrl }
+        : {}),
+    };
+    this.webinar.streamOut = streamOut;
+    this.broadcast({
+      v: 1,
+      ts: Date.now(),
+      type: 'webinar.stream_updated',
+      payload: streamOut,
+    });
+    return streamOut;
+  }
+
+  syncWebinarSimulive(simulive: {
+    positionSec: number;
+    playing: boolean;
+  }): void {
+    const current = this.webinar.simulive ?? {
+      enabled: true,
+      title: 'Simulive Broadcast',
+      durationSeconds: 3600,
+      currentPositionSec: 0,
+      playing: false,
+    };
+    this.webinar.simulive = {
+      ...current,
+      enabled: true,
+      currentPositionSec: simulive.positionSec,
+      playing: simulive.playing,
+    };
+    this.broadcast({
+      v: 1,
+      ts: Date.now(),
+      type: 'webinar.simulive_updated',
+      payload: this.webinar.simulive,
+    });
+  }
+
+  addWebinarQuestion(
+    peerId: string,
+    authorName: string,
+    question: string,
+  ): WebinarQaItem {
+    const item: WebinarQaItem = {
+      id: randomUUID(),
+      authorPeerId: peerId,
+      authorName,
+      question,
+      upvotes: [],
+      status: 'pending',
+      createdAt: Date.now(),
+    };
+    this.moderatedQa.set(item.id, item);
+
+    const stats = this.attendeeAnalytics.get(peerId);
+    if (stats) {
+      stats.qaCount += 1;
+    }
+
+    // Broadcast to host, cohosts, panelists and author
+    for (const peer of this.peers.values()) {
+      if (
+        peer.socket &&
+        (peer.role === 'host' ||
+          peer.role === 'cohost' ||
+          peer.role === 'panelist' ||
+          peer.id === peerId)
+      ) {
+        peer.send({
+          v: 1,
+          ts: Date.now(),
+          type: 'webinar.qa_updated',
+          payload: { question: item },
+        });
+      }
+    }
+    return item;
+  }
+
+  upvoteWebinarQuestion(
+    peerId: string,
+    questionId: string,
+  ): WebinarQaItem | null {
+    const item = this.moderatedQa.get(questionId);
+    if (!item) return null;
+    if (!item.upvotes.includes(peerId)) {
+      item.upvotes.push(peerId);
+    }
+    this.broadcast({
+      v: 1,
+      ts: Date.now(),
+      type: 'webinar.qa_updated',
+      payload: { question: item },
+    });
+    return item;
+  }
+
+  moderateWebinarQuestion(
+    questionId: string,
+    status: 'pending' | 'approved' | 'dismissed' | 'answered',
+    answer?: string,
+    answeredBy?: string,
+  ): WebinarQaItem | null {
+    const item = this.moderatedQa.get(questionId);
+    if (!item) return null;
+
+    if (status === 'dismissed') {
+      item.status = 'dismissed';
+      this.broadcast({
+        v: 1,
+        ts: Date.now(),
+        type: 'webinar.qa_deleted',
+        payload: { questionId },
+      });
+      return item;
+    }
+
+    item.status = status;
+    if (status === 'answered') {
+      if (answer !== undefined) item.answer = answer;
+      if (answeredBy !== undefined) item.answeredBy = answeredBy;
+      item.answeredAt = Date.now();
+    }
+
+    this.broadcast({
+      v: 1,
+      ts: Date.now(),
+      type: 'webinar.qa_updated',
+      payload: { question: item },
+    });
+    return item;
+  }
+
+  listWebinarQa(role?: PeerRole): WebinarQaItem[] {
+    const all = Array.from(this.moderatedQa.values());
+    if (role === 'host' || role === 'cohost' || role === 'panelist') {
+      return all;
+    }
+    return all.filter(
+      (q) => q.status === 'approved' || q.status === 'answered',
+    );
+  }
+
+  registerAttendee(
+    reg: Omit<WebinarRegistration, 'id' | 'registeredAt' | 'joinToken'>,
+  ): WebinarRegistration {
+    const id = randomUUID();
+    const joinToken = `wb_${randomUUID().replace(/-/g, '')}`;
+    const newReg: WebinarRegistration = {
+      ...reg,
+      id,
+      registeredAt: Date.now(),
+      joinToken,
+    };
+    this.registrations.set(id, newReg);
+    return newReg;
+  }
+
+  approveRegistration(registrationId: string): WebinarRegistration | null {
+    const reg = this.registrations.get(registrationId);
+    if (!reg) return null;
+    reg.status = 'approved';
+    return reg;
+  }
+
+  getRegistrationByToken(token: string): WebinarRegistration | undefined {
+    return Array.from(this.registrations.values()).find(
+      (r) => r.joinToken === token,
+    );
+  }
+
+  listRegistrations(): WebinarRegistration[] {
+    return Array.from(this.registrations.values());
+  }
+
+  getAttendeeAnalyticsReport(): Array<{
+    peerId: string;
+    displayName: string;
+    role: PeerRole;
+    joinTime: number;
+    leaveTime?: number;
+    durationSeconds: number;
+    chatCount: number;
+    pollVotesCount: number;
+    qaCount: number;
+    engagementScore: number;
+  }> {
+    const report: Array<{
+      peerId: string;
+      displayName: string;
+      role: PeerRole;
+      joinTime: number;
+      leaveTime?: number;
+      durationSeconds: number;
+      chatCount: number;
+      pollVotesCount: number;
+      qaCount: number;
+      engagementScore: number;
+    }> = [];
+
+    const now = Date.now();
+    for (const [peerId, stats] of this.attendeeAnalytics.entries()) {
+      const peer = this.peers.get(peerId);
+      const leave = stats.leaveTime ?? (peer?.socket ? undefined : now);
+      const durationSeconds = Math.round(
+        ((leave ?? now) - stats.joinTime) / 1000,
+      );
+      let score = 50;
+      if (durationSeconds > 60) score += 20;
+      score +=
+        stats.pollVotesCount * 10 + stats.qaCount * 10 + stats.chatCount * 2;
+      score = Math.min(100, Math.max(0, score));
+
+      report.push({
+        peerId,
+        displayName: peer?.displayName ?? 'Attendee',
+        role: peer?.role ?? 'viewer',
+        joinTime: stats.joinTime,
+        ...(leave !== undefined ? { leaveTime: leave } : {}),
+        durationSeconds,
+        chatCount: stats.chatCount,
+        pollVotesCount: stats.pollVotesCount,
+        qaCount: stats.qaCount,
+        engagementScore: score,
+      });
+    }
+    return report;
+  }
 }
 
 export class RoomManager {
@@ -1226,6 +1813,7 @@ export class RoomManager {
       permissions?: Partial<RoomPermissions>;
       transport?: 'mesh' | 'sfu';
       maxParticipants?: number;
+      webinar?: boolean | Partial<WebinarState>;
       randomFn?: () => number;
     } = {},
   ): Room {
@@ -1287,6 +1875,7 @@ export class RoomManager {
       ...(options.maxParticipants !== undefined
         ? { maxParticipants: options.maxParticipants }
         : {}),
+      ...(options.webinar !== undefined ? { webinar: options.webinar } : {}),
       reclaimSlotMs: this.reclaimSlotMs,
     });
     this.rooms.set(code, room);

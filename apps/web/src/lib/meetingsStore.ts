@@ -24,7 +24,14 @@ export interface SavedRoom {
 export interface MeetingAttendeeRecord {
   id: string;
   displayName: string;
-  role: 'host' | 'cohost' | 'attendee' | 'guest';
+  role:
+    | 'host'
+    | 'cohost'
+    | 'attendee'
+    | 'guest'
+    | 'panelist'
+    | 'viewer'
+    | 'speaker';
   verified?: boolean;
 }
 

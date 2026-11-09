@@ -15,6 +15,7 @@ import {
   type MeetingTimer,
   type NotesDoc,
   type PeerInfo,
+  type PeerRole,
   type PeerState,
   type PollItem,
   type QaItem,
@@ -25,6 +26,9 @@ import {
   type ServerMessage,
   type SignalingChannel,
   type SignalingEvents,
+  type WebinarSimulive,
+  type WebinarState,
+  type WebinarStreamOut,
   type WhiteboardAction,
 } from '@meetit/protocol';
 
@@ -210,6 +214,8 @@ export interface SignalingClientOptions {
   passcode?: string;
   initialState?: PeerState;
   preferredRegion?: string;
+  requestedRole?: PeerRole;
+  webinarToken?: string;
   onReconnecting?: (attempt: number) => void;
   onReconnected?: () => void;
 }
@@ -225,6 +231,8 @@ export class SignalingClient implements SignalingChannel {
   private readonly token: string;
   private readonly passcode: string | undefined;
   private preferredRegion: string | undefined;
+  private requestedRole: PeerRole | undefined;
+  private webinarToken: string | undefined;
   private currentState: PeerState;
   public selfId: string;
   private ws: WebSocket | null = null;
@@ -272,6 +280,12 @@ export class SignalingClient implements SignalingChannel {
     'notes.updated': new Set(),
     'timer.updated': new Set(),
     'presentation.cursor': new Set(),
+    'webinar.state': new Set(),
+    'webinar.qa_updated': new Set(),
+    'webinar.qa_deleted': new Set(),
+    'webinar.stream_updated': new Set(),
+    'webinar.simulive_updated': new Set(),
+    'webinar.analytics_updated': new Set(),
     error: new Set(),
     pong: new Set(),
   };
@@ -283,6 +297,8 @@ export class SignalingClient implements SignalingChannel {
     this.token = options.token ?? 'guest-token';
     this.passcode = options.passcode;
     this.preferredRegion = options.preferredRegion;
+    this.requestedRole = options.requestedRole;
+    this.webinarToken = options.webinarToken;
     this.currentState = options.initialState ?? {
       audio: true,
       video: true,
@@ -352,6 +368,12 @@ export class SignalingClient implements SignalingChannel {
             capabilities: ['mesh'],
             ...(this.preferredRegion
               ? { preferredRegion: this.preferredRegion }
+              : {}),
+            ...(this.requestedRole !== undefined
+              ? { requestedRole: this.requestedRole }
+              : {}),
+            ...(this.webinarToken !== undefined
+              ? { webinarToken: this.webinarToken }
               : {}),
           },
         });
@@ -774,6 +796,42 @@ export class SignalingClient implements SignalingChannel {
           msg.payload as SignalingEvents['presentation.cursor'],
         );
         break;
+      case 'webinar.state':
+        this.emit(
+          'webinar.state',
+          msg.payload as SignalingEvents['webinar.state'],
+        );
+        break;
+      case 'webinar.qa_updated':
+        this.emit(
+          'webinar.qa_updated',
+          msg.payload as SignalingEvents['webinar.qa_updated'],
+        );
+        break;
+      case 'webinar.qa_deleted':
+        this.emit(
+          'webinar.qa_deleted',
+          msg.payload as SignalingEvents['webinar.qa_deleted'],
+        );
+        break;
+      case 'webinar.stream_updated':
+        this.emit(
+          'webinar.stream_updated',
+          msg.payload as SignalingEvents['webinar.stream_updated'],
+        );
+        break;
+      case 'webinar.simulive_updated':
+        this.emit(
+          'webinar.simulive_updated',
+          msg.payload as SignalingEvents['webinar.simulive_updated'],
+        );
+        break;
+      case 'webinar.analytics_updated':
+        this.emit(
+          'webinar.analytics_updated',
+          msg.payload as SignalingEvents['webinar.analytics_updated'],
+        );
+        break;
       case 'pong':
         this.emit('pong', {});
         break;
@@ -1183,6 +1241,96 @@ export class SignalingClient implements SignalingChannel {
     this.sendHostAction({
       action: 'lower_hand',
       ...(targetPeerId ? { targetPeerId } : {}),
+    });
+  }
+
+  goLiveWebinar(): void {
+    this.sendHostAction({
+      action: 'webinar_go_live',
+    });
+  }
+
+  endLiveWebinar(): void {
+    this.sendHostAction({
+      action: 'webinar_end_live',
+    });
+  }
+
+  updateWebinarConfig(config: Partial<WebinarState>): void {
+    this.sendHostAction({
+      action: 'webinar_config_update',
+      config,
+    });
+  }
+
+  startWebinarStream(params: {
+    rtmpUrl?: string;
+    streamKey?: string;
+    hlsUrl?: string;
+  }): void {
+    this.sendHostAction({
+      action: 'webinar_stream_start',
+      ...(params.rtmpUrl ? { rtmpUrl: params.rtmpUrl } : {}),
+      ...(params.streamKey ? { streamKey: params.streamKey } : {}),
+      ...(params.hlsUrl ? { hlsUrl: params.hlsUrl } : {}),
+    });
+  }
+
+  stopWebinarStream(): void {
+    this.sendHostAction({
+      action: 'webinar_stream_stop',
+    });
+  }
+
+  syncWebinarSimulive(params: { positionSec: number; playing: boolean }): void {
+    this.sendHostAction({
+      action: 'webinar_simulive_sync',
+      positionSec: params.positionSec,
+      playing: params.playing,
+    });
+  }
+
+  askWebinarQuestion(question: string): void {
+    this.send({
+      v: 1,
+      type: 'webinar.qa_ask',
+      payload: {
+        question,
+      },
+    });
+  }
+
+  upvoteWebinarQuestion(questionId: string): void {
+    this.send({
+      v: 1,
+      type: 'webinar.qa_upvote',
+      payload: {
+        questionId,
+      },
+    });
+  }
+
+  moderateWebinarQuestion(
+    questionId: string,
+    status: 'pending' | 'approved' | 'dismissed' | 'answered',
+    answer?: string,
+  ): void {
+    this.sendHostAction({
+      action: 'webinar_qa_moderate',
+      questionId,
+      status,
+      ...(answer ? { answer } : {}),
+    });
+  }
+
+  changeWebinarRole(
+    peerId: string,
+    role: 'panelist' | 'viewer' | 'cohost' | 'host' | 'attendee',
+  ): void {
+    this.sendHostAction({
+      action: 'webinar_role_change',
+      peerId,
+      role,
     });
   }
 

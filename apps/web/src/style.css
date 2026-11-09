@@ -7272,4 +7272,73 @@ aside.context-bar {
   }
 }
 
+/* ================= PHASE 7: WEBINAR & BROADCAST ================= */
+
+.webinar-status-banner {
+  position: absolute;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(720px, calc(100% - 48px));
+  padding: 10px 18px;
+  border-radius: 12px;
+  backdrop-filter: blur(14px);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  z-index: 45;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.25);
+  font-family: inherit;
+}
+
+.webinar-status-banner.practice {
+  background: rgba(30, 41, 59, 0.92);
+  border: 1px solid #eab308;
+  color: #f8fafc;
+}
+
+.webinar-status-banner.live {
+  background: rgba(15, 23, 42, 0.92);
+  border: 1px solid #ef4444;
+  color: #f8fafc;
+}
+
+.webinar-status-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.webinar-status-badge {
+  font-weight: 700;
+  font-size: 13px;
+  letter-spacing: 0.04em;
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.webinar-status-banner.live .webinar-status-badge {
+  background: rgba(239, 68, 68, 0.2);
+  color: #fca5a5;
+}
+
+.webinar-status-banner.practice .webinar-status-badge {
+  background: rgba(234, 179, 8, 0.2);
+  color: #fef08a;
+}
+
+.webinar-status-desc {
+  font-size: 13px;
+  color: #cbd5e1;
+}
+
+.webinar-status-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 

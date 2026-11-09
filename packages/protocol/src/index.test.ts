@@ -140,4 +140,79 @@ describe('protocol schemas and utilities', () => {
       }).success,
     ).toBe(true);
   });
+
+  it('validates Phase 7 webinar and broadcast schemas', () => {
+    // Webinar Go Live & Stream Start
+    expect(
+      clientMessageSchema.safeParse({
+        v: 1,
+        type: 'host.action',
+        payload: {
+          action: 'webinar_go_live',
+        },
+      }).success,
+    ).toBe(true);
+
+    expect(
+      clientMessageSchema.safeParse({
+        v: 1,
+        type: 'host.action',
+        payload: {
+          action: 'webinar_stream_start',
+          rtmpUrl: 'rtmp://a.rtmp.youtube.com/live2',
+          streamKey: 'xxxx-xxxx-xxxx-xxxx',
+          hlsUrl: 'https://live.meetit.app/hls/test-room.m3u8',
+        },
+      }).success,
+    ).toBe(true);
+
+    // Webinar role change (promoting a viewer to panelist)
+    expect(
+      clientMessageSchema.safeParse({
+        v: 1,
+        type: 'host.action',
+        payload: {
+          action: 'webinar_role_change',
+          peerId: '550e8400-e29b-41d4-a716-446655440000',
+          role: 'panelist',
+        },
+      }).success,
+    ).toBe(true);
+
+    // Moderated Q&A ask & moderate
+    expect(
+      clientMessageSchema.safeParse({
+        v: 1,
+        type: 'webinar.qa_ask',
+        payload: {
+          question: 'What is the pricing model for global enterprise tiers?',
+        },
+      }).success,
+    ).toBe(true);
+
+    expect(
+      clientMessageSchema.safeParse({
+        v: 1,
+        type: 'host.action',
+        payload: {
+          action: 'webinar_qa_moderate',
+          questionId: 'qa-999',
+          status: 'approved',
+        },
+      }).success,
+    ).toBe(true);
+
+    // Simulive synchronization
+    expect(
+      clientMessageSchema.safeParse({
+        v: 1,
+        type: 'host.action',
+        payload: {
+          action: 'webinar_simulive_sync',
+          positionSec: 125.5,
+          playing: true,
+        },
+      }).success,
+    ).toBe(true);
+  });
 });

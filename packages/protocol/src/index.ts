@@ -46,7 +46,14 @@ export function computeBackoffMs(
   return Math.max(100, Math.round(exponential + jitterOffset));
 }
 
-export const peerRoleSchema = z.enum(['host', 'cohost', 'attendee', 'guest']);
+export const peerRoleSchema = z.enum([
+  'host',
+  'cohost',
+  'attendee',
+  'guest',
+  'panelist',
+  'viewer',
+]);
 export type PeerRole = z.infer<typeof peerRoleSchema>;
 
 export const reactionEmojiSchema = z.string().min(1).max(32);
@@ -226,6 +233,124 @@ export const meetingTimerSchema = z.object({
 });
 export type MeetingTimer = z.infer<typeof meetingTimerSchema>;
 
+// Phase 7: Webinar and Broadcast
+export const webinarSpeakerBioSchema = z.object({
+  id: z.string().optional(),
+  name: z.string().min(1).max(100),
+  role: z.string().min(1).max(100),
+  company: z.string().max(100).optional(),
+  avatarUrl: z.string().url().optional(),
+  bio: z.string().max(1000).optional(),
+});
+export type WebinarSpeakerBio = z.infer<typeof webinarSpeakerBioSchema>;
+
+export const webinarBrandingSchema = z.object({
+  logoUrl: z.string().url().optional(),
+  bannerUrl: z.string().url().optional(),
+  primaryColor: z.string().max(32).optional(),
+  backgroundColor: z.string().max(32).optional(),
+  headline: z.string().max(200).optional(),
+  description: z.string().max(2000).optional(),
+  speakerBios: z.array(webinarSpeakerBioSchema).default([]),
+});
+export type WebinarBranding = z.infer<typeof webinarBrandingSchema>;
+
+export const webinarStreamOutSchema = z.object({
+  enabled: z.boolean().default(false),
+  rtmpUrl: z.string().max(500).optional(),
+  streamKey: z.string().max(500).optional(),
+  hlsUrl: z.string().max(500).optional(),
+  status: z.enum(['idle', 'starting', 'live', 'error']).default('idle'),
+  error: z.string().optional(),
+  viewersCount: z.number().int().min(0).default(0),
+});
+export type WebinarStreamOut = z.infer<typeof webinarStreamOutSchema>;
+
+export const webinarSimuliveSchema = z.object({
+  enabled: z.boolean().default(false),
+  videoUrl: z.string().optional(),
+  title: z.string().max(200).optional(),
+  durationSeconds: z.number().min(0).default(0),
+  currentPositionSec: z.number().min(0).default(0),
+  playing: z.boolean().default(false),
+  startedAtMs: z.number().optional(),
+});
+export type WebinarSimulive = z.infer<typeof webinarSimuliveSchema>;
+
+export const webinarRegistrationFieldSchema = z.object({
+  id: z.string(),
+  label: z.string().min(1).max(100),
+  type: z.enum(['text', 'email', 'select', 'checkbox']),
+  required: z.boolean().default(false),
+  options: z.array(z.string()).optional(),
+});
+export type WebinarRegistrationField = z.infer<
+  typeof webinarRegistrationFieldSchema
+>;
+
+export const webinarRegistrationSchema = z.object({
+  id: z.string().min(1),
+  roomCode: z.string(),
+  name: z.string().min(1).max(100),
+  email: z.string().email(),
+  role: z.enum(['panelist', 'viewer']).default('viewer'),
+  customAnswers: z
+    .record(z.string(), z.union([z.string(), z.boolean()]))
+    .default({}),
+  status: z.enum(['pending', 'approved', 'rejected']).default('approved'),
+  joinToken: z.string().min(8),
+  paid: z.boolean().default(false),
+  ticketPriceCents: z.number().int().min(0).default(0),
+  currency: z.enum(['USD', 'NGN', 'EUR', 'GBP']).default('USD'),
+  paymentProvider: z
+    .enum(['free', 'stripe', 'paystack', 'flutterwave'])
+    .default('free'),
+  registeredAt: z.number(),
+  joinedAt: z.number().optional(),
+  leaveAt: z.number().optional(),
+  engagementScore: z.number().min(0).max(100).default(0),
+});
+export type WebinarRegistration = z.infer<typeof webinarRegistrationSchema>;
+
+export const webinarStateSchema = z.object({
+  enabled: z.boolean().default(false),
+  practiceMode: z.boolean().default(true),
+  isLive: z.boolean().default(false),
+  startedAt: z.number().optional(),
+  endedAt: z.number().optional(),
+  maxViewers: z.number().int().default(5000),
+  viewerCount: z.number().int().default(0),
+  peakViewers: z.number().int().default(0),
+  branding: webinarBrandingSchema.optional(),
+  streamOut: webinarStreamOutSchema.optional(),
+  simulive: webinarSimuliveSchema.optional(),
+  requireRegistration: z.boolean().default(false),
+  autoApproveRegistrations: z.boolean().default(true),
+  ticketPriceCents: z.number().int().default(0),
+  currency: z.enum(['USD', 'NGN', 'EUR', 'GBP']).default('USD'),
+  paymentProvider: z
+    .enum(['free', 'stripe', 'paystack', 'flutterwave'])
+    .default('free'),
+  customFields: z.array(webinarRegistrationFieldSchema).default([]),
+});
+export type WebinarState = z.infer<typeof webinarStateSchema>;
+
+export const webinarQaItemSchema = z.object({
+  id: z.string().min(1),
+  authorPeerId: z.string(),
+  authorName: z.string().min(1).max(80),
+  question: z.string().min(1).max(1000),
+  createdAt: z.number(),
+  upvotes: z.array(z.string()).default([]),
+  status: z
+    .enum(['pending', 'approved', 'dismissed', 'answered'])
+    .default('pending'),
+  answeredBy: z.string().optional(),
+  answer: z.string().optional(),
+  answeredAt: z.number().optional(),
+});
+export type WebinarQaItem = z.infer<typeof webinarQaItemSchema>;
+
 export const captionCueSchema = z.object({
   id: z.string().min(1),
   from: z.string().uuid(),
@@ -369,6 +494,41 @@ export const hostActionPayloadSchema = z.discriminatedUnion('action', [
     action: z.literal('lower_hand'),
     targetPeerId: z.string().uuid().optional(),
   }),
+  z.object({
+    action: z.literal('webinar_go_live'),
+  }),
+  z.object({
+    action: z.literal('webinar_end_live'),
+  }),
+  z.object({
+    action: z.literal('webinar_stream_start'),
+    rtmpUrl: z.string().optional(),
+    streamKey: z.string().optional(),
+    hlsUrl: z.string().optional(),
+  }),
+  z.object({
+    action: z.literal('webinar_stream_stop'),
+  }),
+  z.object({
+    action: z.literal('webinar_simulive_sync'),
+    positionSec: z.number().min(0),
+    playing: z.boolean(),
+  }),
+  z.object({
+    action: z.literal('webinar_qa_moderate'),
+    questionId: z.string(),
+    status: z.enum(['pending', 'approved', 'dismissed', 'answered']),
+    answer: z.string().optional(),
+  }),
+  z.object({
+    action: z.literal('webinar_role_change'),
+    peerId: z.string().uuid(),
+    role: z.enum(['panelist', 'viewer', 'cohost', 'host', 'attendee']),
+  }),
+  z.object({
+    action: z.literal('webinar_config_update'),
+    config: webinarStateSchema.partial(),
+  }),
 ]);
 export type HostActionPayload = z.infer<typeof hostActionPayloadSchema>;
 
@@ -388,6 +548,8 @@ export const clientMessageSchema = z.discriminatedUnion('type', [
       state: peerStateSchema.optional(),
       capabilities: z.array(z.string()).default([]),
       preferredRegion: z.string().optional(),
+      requestedRole: peerRoleSchema.optional(),
+      webinarToken: z.string().optional(),
     }),
   }),
   z.object({
@@ -633,6 +795,24 @@ export const clientMessageSchema = z.discriminatedUnion('type', [
     v: z.literal(1),
     id: z.string().uuid().optional(),
     ts: z.number().optional(),
+    type: z.literal('webinar.qa_ask'),
+    payload: z.object({
+      question: z.string().min(1).max(1000),
+    }),
+  }),
+  z.object({
+    v: z.literal(1),
+    id: z.string().uuid().optional(),
+    ts: z.number().optional(),
+    type: z.literal('webinar.qa_upvote'),
+    payload: z.object({
+      questionId: z.string().min(1),
+    }),
+  }),
+  z.object({
+    v: z.literal(1),
+    id: z.string().uuid().optional(),
+    ts: z.number().optional(),
     type: z.literal('caption.send'),
     payload: z.object({
       text: z.string().trim().min(1).max(2000),
@@ -698,6 +878,8 @@ export const serverJoinedPayloadSchema = z.object({
     whiteboardHistory: z.array(whiteboardActionSchema).optional(),
     notes: notesDocSchema.optional(),
     timer: meetingTimerSchema.optional(),
+    webinar: webinarStateSchema.optional(),
+    moderatedQa: z.array(webinarQaItemSchema).optional(),
   }),
 });
 
@@ -823,6 +1005,19 @@ export interface SignalingEvents {
     storagePath?: string;
   };
   'host.command': HostCommandEvent;
+  'webinar.state': WebinarState;
+  'webinar.qa_updated': {
+    question: WebinarQaItem;
+  };
+  'webinar.qa_deleted': {
+    questionId: string;
+  };
+  'webinar.stream_updated': WebinarStreamOut;
+  'webinar.simulive_updated': WebinarSimulive;
+  'webinar.analytics_updated': {
+    viewerCount: number;
+    peakViewers: number;
+  };
   error: { code: ErrorCode; message: string };
   pong: Record<string, never>;
 }

@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import Fastify, { type FastifyInstance } from 'fastify';
+import Fastify, { type FastifyInstance, type FastifyRequest } from 'fastify';
 import { WebSocketServer, type WebSocket } from 'ws';
 import {
   ROOM_CODE_REGEX,
@@ -370,6 +370,7 @@ export function buildSignalingApp(
         full: room.isFull,
         participantCount: room.participantCount,
         maxParticipants: room.maxParticipants,
+        ...(room.webinar.enabled ? { webinar: room.webinar } : {}),
       });
     },
   );
@@ -377,6 +378,161 @@ export function buildSignalingApp(
   app.get('/meetings/history', async () => ({
     meetings: persistence.listMeetingsHistory(50),
   }));
+
+  // Webinar Registration & Verification Endpoints
+  app.post(
+    '/api/webinars/:code/register',
+    async (
+      request: FastifyRequest<{
+        Params: { code: string };
+        Body: {
+          name?: string;
+          email?: string;
+          role?: 'panelist' | 'viewer';
+          paymentProvider?: 'free' | 'stripe' | 'paystack' | 'flutterwave';
+          paymentStatus?: 'free' | 'paid' | 'pending';
+          ticketPrice?: number;
+          currency?: 'USD' | 'NGN' | 'EUR' | 'GBP';
+          transactionRef?: string;
+          responses?: Record<string, string>;
+        };
+      }>,
+      reply,
+    ) => {
+      reply.header('Access-Control-Allow-Origin', '*');
+      const normalized = normalizeRoomCode(request.params.code);
+      if (!normalized) {
+        return reply.code(400).send({ error: 'Invalid room code' });
+      }
+      const room = autoCreateRoomOnJoin
+        ? roomManager.getOrCreateRoom(normalized)
+        : roomManager.getRoom(normalized);
+
+      if (!room) {
+        return reply.code(404).send({ error: 'Webinar not found' });
+      }
+
+      if (!room.webinar.enabled) {
+        room.enableWebinar();
+      }
+
+      const body = request.body || {};
+      const reg = room.registerAttendee({
+        roomCode: normalized,
+        name: body.name || 'Attendee',
+        email: body.email || 'attendee@example.com',
+        role: body.role ?? 'viewer',
+        customAnswers: body.responses ?? {},
+        status: 'approved',
+        paid: body.paymentStatus === 'paid',
+        ticketPriceCents: (body.ticketPrice ?? 0) * 100,
+        currency: body.currency ?? 'USD',
+        paymentProvider: body.paymentProvider ?? 'free',
+        engagementScore: 0,
+      });
+
+      return reply.code(200).send({
+        success: true,
+        registration: reg,
+        joinToken: reg.joinToken,
+        webinar: room.webinar,
+      });
+    },
+  );
+
+  app.get(
+    '/api/webinars/:code/registrations',
+    async (request: FastifyRequest<{ Params: { code: string } }>, reply) => {
+      reply.header('Access-Control-Allow-Origin', '*');
+      const normalized = normalizeRoomCode(request.params.code);
+      if (!normalized) {
+        return reply.code(400).send({ error: 'Invalid room code' });
+      }
+      const room = roomManager.getRoom(normalized);
+      if (!room) {
+        return reply.code(404).send({ error: 'Webinar not found' });
+      }
+      return reply.code(200).send({
+        registrations: room.listRegistrations(),
+      });
+    },
+  );
+
+  app.post(
+    '/api/webinars/:code/registrations/:id/approve',
+    async (
+      request: FastifyRequest<{ Params: { code: string; id: string } }>,
+      reply,
+    ) => {
+      reply.header('Access-Control-Allow-Origin', '*');
+      const normalized = normalizeRoomCode(request.params.code);
+      if (!normalized) {
+        return reply.code(400).send({ error: 'Invalid room code' });
+      }
+      const room = roomManager.getRoom(normalized);
+      if (!room) {
+        return reply.code(404).send({ error: 'Webinar not found' });
+      }
+      const reg = room.approveRegistration(request.params.id);
+      if (!reg) {
+        return reply.code(404).send({ error: 'Registration not found' });
+      }
+      return reply.code(200).send({ registration: reg });
+    },
+  );
+
+  app.get(
+    '/api/webinars/:code/verify',
+    async (
+      request: FastifyRequest<{
+        Params: { code: string };
+        Querystring: { token?: string };
+      }>,
+      reply,
+    ) => {
+      reply.header('Access-Control-Allow-Origin', '*');
+      const normalized = normalizeRoomCode(request.params.code);
+      if (!normalized) {
+        return reply.code(400).send({ error: 'Invalid room code' });
+      }
+      const room = roomManager.getRoom(normalized);
+      if (!room) {
+        return reply.code(404).send({ error: 'Webinar not found' });
+      }
+      const token = request.query.token;
+      if (!token) {
+        return reply.code(200).send({
+          valid: false,
+          webinar: room.webinar,
+        });
+      }
+      const reg = room.getRegistrationByToken(token);
+      return reply.code(200).send({
+        valid: Boolean(reg && reg.status === 'approved'),
+        registration: reg,
+        webinar: room.webinar,
+      });
+    },
+  );
+
+  app.get(
+    '/api/webinars/:code/analytics',
+    async (request: FastifyRequest<{ Params: { code: string } }>, reply) => {
+      reply.header('Access-Control-Allow-Origin', '*');
+      const normalized = normalizeRoomCode(request.params.code);
+      if (!normalized) {
+        return reply.code(400).send({ error: 'Invalid room code' });
+      }
+      const room = roomManager.getRoom(normalized);
+      if (!room) {
+        return reply.code(404).send({ error: 'Webinar not found' });
+      }
+      return reply.code(200).send({
+        report: room.getAttendeeAnalyticsReport(),
+        peakViewers: room.peakViewers,
+      });
+    },
+  );
 
   app.post('/webhooks/livekit', async (request, reply) => {
     reply.header('Access-Control-Allow-Origin', '*');
@@ -538,6 +694,10 @@ export function buildSignalingApp(
           whiteboardHistory: room.whiteboardHistory,
           notes: room.notesDoc,
           timer: room.meetingTimer,
+          ...(room.webinar.enabled ? { webinar: room.webinar } : {}),
+          ...(room.webinar.enabled
+            ? { moderatedQa: room.listWebinarQa(peer.role) }
+            : {}),
         },
       },
     });
@@ -757,6 +917,12 @@ export function buildSignalingApp(
           ...(state !== undefined ? { initialState: state } : {}),
           ...(passcode !== undefined ? { passcode } : {}),
           isAuthenticatedUser: verifiedCaller.verified,
+          ...(msg.payload.requestedRole !== undefined
+            ? { requestedRole: msg.payload.requestedRole }
+            : {}),
+          ...(msg.payload.webinarToken !== undefined
+            ? { webinarToken: msg.payload.webinarToken }
+            : {}),
         });
 
         if (!joinRes.ok) {
@@ -902,6 +1068,11 @@ export function buildSignalingApp(
 
         case 'state.update': {
           const nextState = { ...msg.payload };
+          if (peer.role === 'viewer') {
+            nextState.audio = false;
+            nextState.video = false;
+            nextState.screen = false;
+          }
           if (
             peer.role === 'guest' &&
             nextState.screen &&
@@ -1392,6 +1563,20 @@ export function buildSignalingApp(
           break;
         }
 
+        case 'webinar.qa_ask': {
+          room.addWebinarQuestion(
+            peer.id,
+            peer.displayName,
+            msg.payload.question,
+          );
+          break;
+        }
+
+        case 'webinar.qa_upvote': {
+          room.upvoteWebinarQuestion(peer.id, msg.payload.questionId);
+          break;
+        }
+
         case 'host.action': {
           const actionPayload = msg.payload;
           if (!room.canModerate(peer.id)) {
@@ -1817,6 +2002,64 @@ export function buildSignalingApp(
                   });
                 }
               }
+              break;
+            }
+
+            case 'webinar_go_live': {
+              room.goLiveWebinar(peer.id);
+              break;
+            }
+
+            case 'webinar_end_live': {
+              room.endLiveWebinar(peer.id);
+              break;
+            }
+
+            case 'webinar_config_update': {
+              room.updateWebinarConfig(actionPayload.config);
+              break;
+            }
+
+            case 'webinar_stream_start': {
+              room.startWebinarStream({
+                ...(actionPayload.rtmpUrl !== undefined
+                  ? { rtmpUrl: actionPayload.rtmpUrl }
+                  : {}),
+                ...(actionPayload.streamKey !== undefined
+                  ? { streamKey: actionPayload.streamKey }
+                  : {}),
+                ...(actionPayload.hlsUrl !== undefined
+                  ? { hlsUrl: actionPayload.hlsUrl }
+                  : {}),
+              });
+              break;
+            }
+
+            case 'webinar_stream_stop': {
+              room.stopWebinarStream();
+              break;
+            }
+
+            case 'webinar_simulive_sync': {
+              room.syncWebinarSimulive({
+                positionSec: actionPayload.positionSec,
+                playing: actionPayload.playing,
+              });
+              break;
+            }
+
+            case 'webinar_qa_moderate': {
+              room.moderateWebinarQuestion(
+                actionPayload.questionId,
+                actionPayload.status,
+                actionPayload.answer,
+                peer.displayName,
+              );
+              break;
+            }
+
+            case 'webinar_role_change': {
+              room.setPeerRole(actionPayload.peerId, actionPayload.role);
               break;
             }
           }

@@ -33,7 +33,14 @@ import type {
   RoomPermissions,
   WaitingPeer,
   WhiteboardAction,
+  WebinarState,
+  WebinarQaItem,
 } from '@meetit/protocol';
+import { WebinarWaitingScreen } from './WebinarWaitingScreen';
+import { WebinarStreamModal } from './WebinarStreamModal';
+import { WebinarAnalyticsModal } from './WebinarAnalyticsModal';
+import { WebinarSimulivePlayer } from './WebinarSimulivePlayer';
+import { WebinarQaPanel } from './WebinarQaPanel';
 import { BreakoutModal } from './BreakoutModal';
 import { PollsPanel } from './PollsPanel';
 import { FormItModal } from './FormItModal';
@@ -895,6 +902,25 @@ export function MeetingRoomView({
   });
   const [meetingTimer, setMeetingTimer] = useState<MeetingTimer | null>(null);
 
+  // Phase 7 Webinar State
+  const [webinarState, setWebinarState] = useState<WebinarState | null>(null);
+  const [webinarQaQuestions, setWebinarQaQuestions] = useState<WebinarQaItem[]>(
+    [],
+  );
+  const [showWebinarStreamModal, setShowWebinarStreamModal] = useState(false);
+  const [showWebinarAnalyticsModal, setShowWebinarAnalyticsModal] =
+    useState(false);
+  const [showWebinarQaPanel, setShowWebinarQaPanel] = useState(false);
+  const [showSimulivePlayer, setShowSimulivePlayer] = useState(false);
+
+  const webinarTokenParam = useMemo(() => {
+    if (typeof window === 'undefined') return undefined;
+    return (
+      new URLSearchParams(window.location.search).get('webinarToken') ||
+      undefined
+    );
+  }, []);
+
   // Enhanced chat: replies, file attachments
   const [replyingToMessage, setReplyingToMessage] = useState<ChatItem | null>(
     null,
@@ -1713,6 +1739,7 @@ export function MeetingRoomView({
       ...(enteredPasscode.trim() ? { passcode: enteredPasscode.trim() } : {}),
       initialState,
       ...(savedRegion ? { preferredRegion: savedRegion } : {}),
+      ...(webinarTokenParam ? { webinarToken: webinarTokenParam } : {}),
       onReconnecting: () => {
         setConnectionBanner({
           tone: 'warn',
@@ -1939,6 +1966,12 @@ export function MeetingRoomView({
       }
       if (payload.roomState.timer !== undefined) {
         setMeetingTimer(payload.roomState.timer);
+      }
+      if (payload.roomState.webinar) {
+        setWebinarState(payload.roomState.webinar);
+      }
+      if (payload.roomState.moderatedQa) {
+        setWebinarQaQuestions(payload.roomState.moderatedQa);
       }
 
       const isReconnect = hasConnectedTransportRef.current;
@@ -2352,6 +2385,43 @@ export function MeetingRoomView({
     signaling.on('timer.updated', (timer) => {
       setMeetingTimer(timer);
     });
+
+    signaling.on('webinar.state', (state) => {
+      setWebinarState(state);
+    });
+
+    signaling.on('webinar.qa_updated', ({ question }) => {
+      setWebinarQaQuestions((prev) => {
+        const idx = prev.findIndex((q) => q.id === question.id);
+        if (idx >= 0) {
+          const next = [...prev];
+          next[idx] = question;
+          return next;
+        }
+        return [question, ...prev];
+      });
+    });
+
+    signaling.on('webinar.qa_deleted', ({ questionId }) => {
+      setWebinarQaQuestions((prev) => prev.filter((q) => q.id !== questionId));
+    });
+
+    signaling.on('webinar.stream_updated', (streamOut) => {
+      setWebinarState((prev) => (prev ? { ...prev, streamOut } : prev));
+    });
+
+    signaling.on('webinar.simulive_updated', (simulive) => {
+      setWebinarState((prev) => (prev ? { ...prev, simulive } : prev));
+    });
+
+    signaling.on(
+      'webinar.analytics_updated',
+      ({ viewerCount, peakViewers }) => {
+        setWebinarState((prev) =>
+          prev ? { ...prev, viewerCount, peakViewers } : prev,
+        );
+      },
+    );
 
     signaling.on('error', (err) => {
       if (err.code === 'ROOM_FULL') {
@@ -3758,298 +3828,387 @@ export function MeetingRoomView({
             </div>
           )}
 
-          {/* Floating ephemeral reactions overlay */}
-          {floatingReactions.length > 0 && (
+          {/* Phase 7 Webinar Mode Banner */}
+          {webinarState?.enabled && (
             <div
-              className="floating-reactions-layer"
-              aria-hidden="true"
-              data-testid="floating-reactions"
+              className={`webinar-status-banner ${webinarState.isLive ? 'live' : 'practice'}`}
+              role="status"
+              data-testid="webinar-status-banner"
             >
-              {floatingReactions.map((rx) => (
-                <div key={rx.id} className="floating-reaction-pill">
-                  <span className="rx-emoji">{rx.emoji}</span>
-                  <span className="rx-name">{rx.displayName}</span>
-                </div>
-              ))}
+              <div className="webinar-status-info">
+                <span className="webinar-status-badge">
+                  {webinarState.isLive ? '🔴 LIVE' : '🟡 GREEN ROOM (PRACTICE)'}
+                </span>
+                <span className="webinar-status-desc">
+                  {webinarState.isLive
+                    ? `${webinarState.viewerCount ?? 0} attendees watching live`
+                    : 'Practice session in progress. Only hosts & panelists can see and hear each other.'}
+                </span>
+              </div>
+              <div className="webinar-status-actions">
+                {canModerate && webinarState.practiceMode && (
+                  <button
+                    type="button"
+                    className="btn primary btn-sm"
+                    onClick={() => signalingRef.current?.goLiveWebinar()}
+                    data-testid="webinar-go-live-btn"
+                  >
+                    Go Live to Audience
+                  </button>
+                )}
+                {canModerate && webinarState.isLive && (
+                  <button
+                    type="button"
+                    className="btn danger-outline-btn btn-sm"
+                    onClick={() => signalingRef.current?.endLiveWebinar()}
+                    data-testid="webinar-end-live-btn"
+                  >
+                    End Webinar
+                  </button>
+                )}
+              </div>
             </div>
           )}
 
-          {/* Compact floating "Your meeting's ready" card (never occupies a grid cell) */}
-          {remoteList.length === 0 &&
-            !activeScreenTile &&
-            !dismissedReadyCard && (
-              <div className="call-ready-float" data-testid="waiting-for-peer">
-                <div className="call-ready-float-head">
-                  <strong>Your meeting&apos;s ready</strong>
-                  <button
-                    type="button"
-                    className="call-ready-close"
-                    onClick={() => setDismissedReadyCard(true)}
-                    aria-label="Dismiss meeting info card"
-                    title="Dismiss"
-                  >
-                    <CloseIcon />
-                  </button>
-                </div>
-                <p>
-                  Share this meeting link with others you want in the call (up
-                  to {MESH_MAX_PARTICIPANTS} participants).
-                </p>
-                <div className="call-ready-link-box">
-                  <span>{inviteUrl.replace(/^https?:\/\//, '')}</span>
-                  <button
-                    type="button"
-                    className="call-ready-copy-btn"
-                    onClick={handleCopyInvite}
-                  >
-                    {copiedInvite ? <CheckIcon /> : <LnkIcon />}
-                    <span>{copiedInvite ? 'Copied' : 'Copy link'}</span>
-                  </button>
-                </div>
-              </div>
-            )}
-
-          {/* Active Screen Share Tile (when anyone is sharing their screen) */}
-          {activeScreenTile && (
-            <ScreenShareTile
-              stream={activeScreenTile.stream}
-              ownerName={activeScreenTile.ownerName}
-              isPinned={effectiveSpotlightId === activeScreenTile.id}
-              onTogglePin={() =>
-                setPinnedTargetId((curr) =>
-                  curr === activeScreenTile.id ? null : activeScreenTile.id,
-                )
-              }
-            />
-          )}
-
-          {/* Remote Participant Tiles */}
-          {visibleRemoteList.map((peer) => {
-            const isFloating = Boolean(isPipActive && isRemoteFloating);
-            const queueIdx = handRaiseQueue.findIndex(
-              (item) => item.peerId === peer.id,
-            );
-            const handRaiseOrder = queueIdx >= 0 ? queueIdx + 1 : null;
-            return (
-              <RemoteVideoTile
-                key={peer.id}
-                participant={peer}
-                stats={peerStatsMap[peer.id]}
-                audioOnlyMode={bandwidthMode === 'audio_only'}
-                isSpeaking={activeSpeakerId === peer.id}
-                isPinned={effectiveSpotlightId === peer.id}
-                canModerate={canModerate}
-                handRaiseOrder={handRaiseOrder}
-                onLowerHand={() => signalingRef.current?.lowerHand(peer.id)}
-                isFloating={isFloating}
-                pipCorner={isFloating ? pipCorner : undefined}
-                dragOffset={isFloating ? dragOffset : undefined}
-                onPipPointerDown={isFloating ? handlePipPointerDown : undefined}
-                onPipPointerMove={isFloating ? handlePipPointerMove : undefined}
-                onPipPointerUp={isFloating ? handlePipPointerUp : undefined}
-                onPipPointerCancel={
-                  isFloating ? handlePipPointerCancel : undefined
-                }
-                onPipSwap={() => setIsPiPSwapped((prev) => !prev)}
-                onTogglePin={() =>
-                  setPinnedTargetId((curr) =>
-                    curr === peer.id ? null : peer.id,
-                  )
-                }
-                onMutePeer={() => handleHostMutePeer(peer.id)}
-                onAskUnmutePeer={() =>
-                  handleHostAskUnmute(peer.id, peer.displayName)
-                }
-                onRemovePeer={() =>
-                  handleHostRemovePeer(peer.id, peer.displayName, false)
-                }
-                onAudioAutoplayBlocked={() => setSafariAudioBlocked(true)}
-                onToast={onToast}
+          {/* Phase 7 Webinar Practice Mode Waiting Screen for Viewers */}
+          {webinarState?.enabled &&
+          webinarState?.practiceMode &&
+          selfRole === 'viewer' ? (
+            <div
+              style={{ gridColumn: '1 / -1', width: '100%', height: '100%' }}
+            >
+              <WebinarWaitingScreen
+                webinar={webinarState}
+                roomTitle={roomTitle}
               />
-            );
-          })}
+            </div>
+          ) : (
+            <>
+              {/* Simulive broadcast player if active */}
+              {webinarState?.enabled && webinarState?.simulive?.enabled && (
+                <div
+                  style={{
+                    gridColumn: '1 / -1',
+                    width: '100%',
+                    marginBottom: 12,
+                  }}
+                >
+                  <WebinarSimulivePlayer
+                    simulive={webinarState.simulive}
+                    isHostOrModerator={canModerate}
+                    onSyncState={(params) =>
+                      signalingRef.current?.syncWebinarSimulive(params)
+                    }
+                  />
+                </div>
+              )}
 
-          {/* Local Participant Tile */}
-          {(() => {
-            const selfQueueIdx = handRaiseQueue.findIndex(
-              (item) => item.peerId === signalingRef.current?.selfId,
-            );
-            return (
-              <div
-                className={`call-tile local-tile ${activeSpeakerId === 'local' ? 'active-speaker-ring' : ''} ${effectiveSpotlightId === 'local' ? 'pinned-tile' : ''} ${!hasLocalVideoTrack ? 'camera-off-studio' : ''} ${
-                  isLocalFloating
-                    ? `pip-floating-tile corner-${pipCorner} ${dragOffset ? 'dragging' : ''}`
-                    : ''
-                }`}
-                style={
-                  isLocalFloating && dragOffset
-                    ? {
-                        transform: `translate3d(${dragOffset.x}px, ${dragOffset.y}px, 0)`,
-                      }
-                    : undefined
-                }
-                onPointerDown={
-                  isLocalFloating ? handlePipPointerDown : undefined
-                }
-                onPointerMove={
-                  isLocalFloating ? handlePipPointerMove : undefined
-                }
-                onPointerUp={isLocalFloating ? handlePipPointerUp : undefined}
-                onPointerCancel={
-                  isLocalFloating ? handlePipPointerCancel : undefined
-                }
-                data-testid="local-tile"
-              >
-                <video
-                  ref={callLocalVideoRef}
-                  muted
-                  autoPlay
-                  playsInline
-                  className={`tile-video ${hasLocalVideoTrack ? 'visible' : 'hidden'} ${!mirrorSelfView ? 'unmirrored' : ''}`}
-                />
-                {!hasLocalVideoTrack && (
-                  <div className="tile-avatar-fallback">
-                    <div
-                      className={`tile-avatar-ring ${!audioMuted && micLevel > 12 ? 'speaking' : ''}`}
-                    >
-                      <Avatar
-                        name={displayName || user?.displayName || 'You'}
-                        src={user?.avatarUrl}
-                        className="tile-avatar-circle"
-                      />
+              {/* Floating ephemeral reactions overlay */}
+              {floatingReactions.length > 0 && (
+                <div
+                  className="floating-reactions-layer"
+                  aria-hidden="true"
+                  data-testid="floating-reactions"
+                >
+                  {floatingReactions.map((rx) => (
+                    <div key={rx.id} className="floating-reaction-pill">
+                      <span className="rx-emoji">{rx.emoji}</span>
+                      <span className="rx-name">{rx.displayName}</span>
                     </div>
-                    {bandwidthMode === 'audio_only' && !isLocalFloating && (
-                      <small className="audio-only-tile-note">
-                        Audio-Only mode active
-                      </small>
-                    )}
+                  ))}
+                </div>
+              )}
+
+              {/* Compact floating "Your meeting's ready" card (never occupies a grid cell) */}
+              {remoteList.length === 0 &&
+                !activeScreenTile &&
+                !dismissedReadyCard && (
+                  <div
+                    className="call-ready-float"
+                    data-testid="waiting-for-peer"
+                  >
+                    <div className="call-ready-float-head">
+                      <strong>Your meeting&apos;s ready</strong>
+                      <button
+                        type="button"
+                        className="call-ready-close"
+                        onClick={() => setDismissedReadyCard(true)}
+                        aria-label="Dismiss meeting info card"
+                        title="Dismiss"
+                      >
+                        <CloseIcon />
+                      </button>
+                    </div>
+                    <p>
+                      Share this meeting link with others you want in the call
+                      (up to {MESH_MAX_PARTICIPANTS} participants).
+                    </p>
+                    <div className="call-ready-link-box">
+                      <span>{inviteUrl.replace(/^https?:\/\//, '')}</span>
+                      <button
+                        type="button"
+                        className="call-ready-copy-btn"
+                        onClick={handleCopyInvite}
+                      >
+                        {copiedInvite ? <CheckIcon /> : <LnkIcon />}
+                        <span>{copiedInvite ? 'Copied' : 'Copy link'}</span>
+                      </button>
+                    </div>
                   </div>
                 )}
 
-                {isLocalFloating && (
+              {/* Active Screen Share Tile (when anyone is sharing their screen) */}
+              {activeScreenTile && (
+                <ScreenShareTile
+                  stream={activeScreenTile.stream}
+                  ownerName={activeScreenTile.ownerName}
+                  isPinned={effectiveSpotlightId === activeScreenTile.id}
+                  onTogglePin={() =>
+                    setPinnedTargetId((curr) =>
+                      curr === activeScreenTile.id ? null : activeScreenTile.id,
+                    )
+                  }
+                />
+              )}
+
+              {/* Remote Participant Tiles */}
+              {visibleRemoteList.map((peer) => {
+                const isFloating = Boolean(isPipActive && isRemoteFloating);
+                const queueIdx = handRaiseQueue.findIndex(
+                  (item) => item.peerId === peer.id,
+                );
+                const handRaiseOrder = queueIdx >= 0 ? queueIdx + 1 : null;
+                return (
+                  <RemoteVideoTile
+                    key={peer.id}
+                    participant={peer}
+                    stats={peerStatsMap[peer.id]}
+                    audioOnlyMode={bandwidthMode === 'audio_only'}
+                    isSpeaking={activeSpeakerId === peer.id}
+                    isPinned={effectiveSpotlightId === peer.id}
+                    canModerate={canModerate}
+                    handRaiseOrder={handRaiseOrder}
+                    onLowerHand={() => signalingRef.current?.lowerHand(peer.id)}
+                    isFloating={isFloating}
+                    pipCorner={isFloating ? pipCorner : undefined}
+                    dragOffset={isFloating ? dragOffset : undefined}
+                    onPipPointerDown={
+                      isFloating ? handlePipPointerDown : undefined
+                    }
+                    onPipPointerMove={
+                      isFloating ? handlePipPointerMove : undefined
+                    }
+                    onPipPointerUp={isFloating ? handlePipPointerUp : undefined}
+                    onPipPointerCancel={
+                      isFloating ? handlePipPointerCancel : undefined
+                    }
+                    onPipSwap={() => setIsPiPSwapped((prev) => !prev)}
+                    onTogglePin={() =>
+                      setPinnedTargetId((curr) =>
+                        curr === peer.id ? null : peer.id,
+                      )
+                    }
+                    onMutePeer={() => handleHostMutePeer(peer.id)}
+                    onAskUnmutePeer={() =>
+                      handleHostAskUnmute(peer.id, peer.displayName)
+                    }
+                    onRemovePeer={() =>
+                      handleHostRemovePeer(peer.id, peer.displayName, false)
+                    }
+                    onAudioAutoplayBlocked={() => setSafariAudioBlocked(true)}
+                    onToast={onToast}
+                  />
+                );
+              })}
+
+              {/* Local Participant Tile */}
+              {(() => {
+                const selfQueueIdx = handRaiseQueue.findIndex(
+                  (item) => item.peerId === signalingRef.current?.selfId,
+                );
+                return (
+                  <div
+                    className={`call-tile local-tile ${activeSpeakerId === 'local' ? 'active-speaker-ring' : ''} ${effectiveSpotlightId === 'local' ? 'pinned-tile' : ''} ${!hasLocalVideoTrack ? 'camera-off-studio' : ''} ${
+                      isLocalFloating
+                        ? `pip-floating-tile corner-${pipCorner} ${dragOffset ? 'dragging' : ''}`
+                        : ''
+                    }`}
+                    style={
+                      isLocalFloating && dragOffset
+                        ? {
+                            transform: `translate3d(${dragOffset.x}px, ${dragOffset.y}px, 0)`,
+                          }
+                        : undefined
+                    }
+                    onPointerDown={
+                      isLocalFloating ? handlePipPointerDown : undefined
+                    }
+                    onPointerMove={
+                      isLocalFloating ? handlePipPointerMove : undefined
+                    }
+                    onPointerUp={
+                      isLocalFloating ? handlePipPointerUp : undefined
+                    }
+                    onPointerCancel={
+                      isLocalFloating ? handlePipPointerCancel : undefined
+                    }
+                    data-testid="local-tile"
+                  >
+                    <video
+                      ref={callLocalVideoRef}
+                      muted
+                      autoPlay
+                      playsInline
+                      className={`tile-video ${hasLocalVideoTrack ? 'visible' : 'hidden'} ${!mirrorSelfView ? 'unmirrored' : ''}`}
+                    />
+                    {!hasLocalVideoTrack && (
+                      <div className="tile-avatar-fallback">
+                        <div
+                          className={`tile-avatar-ring ${!audioMuted && micLevel > 12 ? 'speaking' : ''}`}
+                        >
+                          <Avatar
+                            name={displayName || user?.displayName || 'You'}
+                            src={user?.avatarUrl}
+                            className="tile-avatar-circle"
+                          />
+                        </div>
+                        {bandwidthMode === 'audio_only' && !isLocalFloating && (
+                          <small className="audio-only-tile-note">
+                            Audio-Only mode active
+                          </small>
+                        )}
+                      </div>
+                    )}
+
+                    {isLocalFloating && (
+                      <button
+                        type="button"
+                        className="pip-swap-btn"
+                        onPointerDown={(e) => e.stopPropagation()}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setIsPiPSwapped((prev) => !prev);
+                        }}
+                        aria-label="Swap video views"
+                        title="Swap video views"
+                      >
+                        <SwapIcon />
+                      </button>
+                    )}
+
+                    <div className="tile-top-bar">
+                      <div className="tile-badges-left">
+                        {handRaised && (
+                          <span className="hand-raised-pill">
+                            ✋{' '}
+                            {selfQueueIdx >= 0 ? `#${selfQueueIdx + 1} ` : ''}
+                            Hand raised
+                          </span>
+                        )}
+                        {screenSharing && (
+                          <span className="screen-pill">Sharing screen</span>
+                        )}
+                      </div>
+
+                      <div className="tile-hover-actions">
+                        <button
+                          type="button"
+                          className="tile-icon-btn"
+                          onClick={handleToggleMirror}
+                          title="Flip self-view mirror (L)"
+                        >
+                          {mirrorSelfView ? 'Unmirror' : 'Mirror'}
+                        </button>
+                        <button
+                          type="button"
+                          className={`tile-icon-btn ${effectiveSpotlightId === 'local' ? 'active' : ''}`}
+                          onClick={() =>
+                            setPinnedTargetId((curr) =>
+                              curr === 'local' ? null : 'local',
+                            )
+                          }
+                        >
+                          {effectiveSpotlightId === 'local' ? 'Unpin' : 'Pin'}
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="tile-meta-bar">
+                      <div className="tile-name-badge">
+                        <span>{displayName || 'You'}</span>
+                        {selfRole === 'host' && (
+                          <span className="role-pill">Host</span>
+                        )}
+                        {selfRole === 'cohost' && (
+                          <span className="role-pill">Cohost</span>
+                        )}
+                        {user ? (
+                          <span
+                            className="role-pill verified-tile-pill"
+                            title="Verified account"
+                          >
+                            ✓
+                          </span>
+                        ) : (
+                          <span
+                            className="role-pill guest-tile-pill"
+                            title="Guest attendee"
+                          >
+                            Guest
+                          </span>
+                        )}
+                      </div>
+                      <div className="tile-status-icons">
+                        <NetworkBarsBadge
+                          bars={localNetworkSummary.bars}
+                          level={localNetworkSummary.level}
+                          rttMs={localNetworkSummary.rttMs}
+                          packetLossPct={localNetworkSummary.packetLossPct}
+                          bitrateKbps={localNetworkSummary.bitrateKbps}
+                        />
+                        {audioMuted && (
+                          <span className="muted-badge">Muted</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* Gallery pagination bar */}
+              {layout.totalPages > 1 && (
+                <div
+                  className="gallery-pagination-bar"
+                  role="navigation"
+                  aria-label="Gallery pagination"
+                >
                   <button
                     type="button"
-                    className="pip-swap-btn"
-                    onPointerDown={(e) => e.stopPropagation()}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setIsPiPSwapped((prev) => !prev);
-                    }}
-                    aria-label="Swap video views"
-                    title="Swap video views"
+                    className="btn-gallery-page"
+                    disabled={layout.page <= 1}
+                    onClick={() => setGalleryPage((p) => Math.max(1, p - 1))}
+                    aria-label="Previous page"
                   >
-                    <SwapIcon />
+                    ‹ Prev
                   </button>
-                )}
-
-                <div className="tile-top-bar">
-                  <div className="tile-badges-left">
-                    {handRaised && (
-                      <span className="hand-raised-pill">
-                        ✋ {selfQueueIdx >= 0 ? `#${selfQueueIdx + 1} ` : ''}
-                        Hand raised
-                      </span>
-                    )}
-                    {screenSharing && (
-                      <span className="screen-pill">Sharing screen</span>
-                    )}
-                  </div>
-
-                  <div className="tile-hover-actions">
-                    <button
-                      type="button"
-                      className="tile-icon-btn"
-                      onClick={handleToggleMirror}
-                      title="Flip self-view mirror (L)"
-                    >
-                      {mirrorSelfView ? 'Unmirror' : 'Mirror'}
-                    </button>
-                    <button
-                      type="button"
-                      className={`tile-icon-btn ${effectiveSpotlightId === 'local' ? 'active' : ''}`}
-                      onClick={() =>
-                        setPinnedTargetId((curr) =>
-                          curr === 'local' ? null : 'local',
-                        )
-                      }
-                    >
-                      {effectiveSpotlightId === 'local' ? 'Unpin' : 'Pin'}
-                    </button>
-                  </div>
+                  <span className="gallery-page-indicator">
+                    Page {layout.page} of {layout.totalPages} (
+                    {totalParticipantCount} in call)
+                  </span>
+                  <button
+                    type="button"
+                    className="btn-gallery-page"
+                    disabled={layout.page >= layout.totalPages}
+                    onClick={() =>
+                      setGalleryPage((p) => Math.min(layout.totalPages, p + 1))
+                    }
+                    aria-label="Next page"
+                  >
+                    Next ›
+                  </button>
                 </div>
-
-                <div className="tile-meta-bar">
-                  <div className="tile-name-badge">
-                    <span>{displayName || 'You'}</span>
-                    {selfRole === 'host' && (
-                      <span className="role-pill">Host</span>
-                    )}
-                    {selfRole === 'cohost' && (
-                      <span className="role-pill">Cohost</span>
-                    )}
-                    {user ? (
-                      <span
-                        className="role-pill verified-tile-pill"
-                        title="Verified account"
-                      >
-                        ✓
-                      </span>
-                    ) : (
-                      <span
-                        className="role-pill guest-tile-pill"
-                        title="Guest attendee"
-                      >
-                        Guest
-                      </span>
-                    )}
-                  </div>
-                  <div className="tile-status-icons">
-                    <NetworkBarsBadge
-                      bars={localNetworkSummary.bars}
-                      level={localNetworkSummary.level}
-                      rttMs={localNetworkSummary.rttMs}
-                      packetLossPct={localNetworkSummary.packetLossPct}
-                      bitrateKbps={localNetworkSummary.bitrateKbps}
-                    />
-                    {audioMuted && <span className="muted-badge">Muted</span>}
-                  </div>
-                </div>
-              </div>
-            );
-          })()}
-
-          {/* Gallery pagination bar */}
-          {layout.totalPages > 1 && (
-            <div
-              className="gallery-pagination-bar"
-              role="navigation"
-              aria-label="Gallery pagination"
-            >
-              <button
-                type="button"
-                className="btn-gallery-page"
-                disabled={layout.page <= 1}
-                onClick={() => setGalleryPage((p) => Math.max(1, p - 1))}
-                aria-label="Previous page"
-              >
-                ‹ Prev
-              </button>
-              <span className="gallery-page-indicator">
-                Page {layout.page} of {layout.totalPages} (
-                {totalParticipantCount} in call)
-              </span>
-              <button
-                type="button"
-                className="btn-gallery-page"
-                disabled={layout.page >= layout.totalPages}
-                onClick={() =>
-                  setGalleryPage((p) => Math.min(layout.totalPages, p + 1))
-                }
-                aria-label="Next page"
-              >
-                Next ›
-              </button>
-            </div>
+              )}
+            </>
           )}
         </main>
 
@@ -4540,12 +4699,23 @@ export function MeetingRoomView({
           <button
             type="button"
             className={`dock-btn icon-pill ${audioMuted ? 'off' : ''}`}
-            onClick={handleToggleMic}
+            onClick={selfRole === 'viewer' ? undefined : handleToggleMic}
+            disabled={selfRole === 'viewer'}
             aria-pressed={!audioMuted}
             aria-label={
-              audioMuted ? 'Unmute microphone (M)' : 'Mute microphone (M)'
+              selfRole === 'viewer'
+                ? 'Microphone disabled for viewers'
+                : audioMuted
+                  ? 'Unmute microphone (M)'
+                  : 'Mute microphone (M)'
             }
-            title={audioMuted ? 'Unmute microphone (M)' : 'Mute microphone (M)'}
+            title={
+              selfRole === 'viewer'
+                ? 'Viewers are in listen-only mode'
+                : audioMuted
+                  ? 'Unmute microphone (M)'
+                  : 'Mute microphone (M)'
+            }
             data-testid="call-mic-btn"
           >
             <MicIcon />
@@ -4557,10 +4727,25 @@ export function MeetingRoomView({
           <button
             type="button"
             className={`dock-btn icon-pill ${!videoEnabled ? 'off' : ''}`}
-            onClick={() => void handleToggleVideo()}
+            onClick={
+              selfRole === 'viewer' ? undefined : () => void handleToggleVideo()
+            }
+            disabled={selfRole === 'viewer'}
             aria-pressed={videoEnabled}
-            aria-label={videoEnabled ? 'Stop camera (V)' : 'Start camera (V)'}
-            title={videoEnabled ? 'Stop camera (V)' : 'Start camera (V)'}
+            aria-label={
+              selfRole === 'viewer'
+                ? 'Camera disabled for viewers'
+                : videoEnabled
+                  ? 'Stop camera (V)'
+                  : 'Start camera (V)'
+            }
+            title={
+              selfRole === 'viewer'
+                ? 'Viewers cannot share camera'
+                : videoEnabled
+                  ? 'Stop camera (V)'
+                  : 'Start camera (V)'
+            }
             data-testid="call-cam-btn"
           >
             <VidIcon />
@@ -4572,13 +4757,26 @@ export function MeetingRoomView({
           <button
             type="button"
             className={`dock-btn icon-pill ${screenSharing ? 'active-share' : ''}`}
-            onClick={() => void handleToggleScreenShare()}
+            onClick={
+              selfRole === 'viewer'
+                ? undefined
+                : () => void handleToggleScreenShare()
+            }
+            disabled={selfRole === 'viewer'}
             aria-pressed={screenSharing}
             aria-label={
-              screenSharing ? 'Stop screen sharing (S)' : 'Share screen (S)'
+              selfRole === 'viewer'
+                ? 'Screen sharing disabled for viewers'
+                : screenSharing
+                  ? 'Stop screen sharing (S)'
+                  : 'Share screen (S)'
             }
             title={
-              screenSharing ? 'Stop screen sharing (S)' : 'Share screen (S)'
+              selfRole === 'viewer'
+                ? 'Viewers cannot share screen'
+                : screenSharing
+                  ? 'Stop screen sharing (S)'
+                  : 'Share screen (S)'
             }
             data-testid="call-screen-btn"
           >
@@ -4965,6 +5163,73 @@ export function MeetingRoomView({
               </span>
             )}
           </button>
+
+          {/* Phase 7 Webinar Audience Q&A */}
+          {webinarState?.enabled && (
+            <button
+              type="button"
+              className={`call-side-btn ${showWebinarQaPanel ? 'active-panel' : ''}`}
+              onClick={() => setShowWebinarQaPanel((v) => !v)}
+              aria-pressed={showWebinarQaPanel}
+              aria-label="Webinar Q&A"
+              title="Webinar Audience Q&A"
+              data-testid="call-webinar-qa-btn"
+            >
+              <span style={{ fontSize: 16 }}>💬</span>
+              <span>Webinar Q&amp;A</span>
+              {webinarQaQuestions.filter(
+                (q) => q.status === 'pending' || q.status === 'approved',
+              ).length > 0 && (
+                <span className="unread-chat-badge">
+                  {
+                    webinarQaQuestions.filter(
+                      (q) => q.status === 'pending' || q.status === 'approved',
+                    ).length
+                  }
+                </span>
+              )}
+            </button>
+          )}
+
+          {/* Phase 7 Live Stream Out (RTMP / HLS) */}
+          {webinarState?.enabled && canModerate && (
+            <button
+              type="button"
+              className={`call-side-btn ${showWebinarStreamModal ? 'active-panel' : ''}`}
+              onClick={() => setShowWebinarStreamModal(true)}
+              aria-pressed={showWebinarStreamModal}
+              aria-label="Live Stream Out"
+              title="Broadcast to YouTube / RTMP / HLS"
+              data-testid="call-webinar-stream-btn"
+            >
+              <span style={{ fontSize: 16 }}>📡</span>
+              <span>Stream</span>
+              {webinarState?.streamOut?.status === 'live' && (
+                <span
+                  className="unread-chat-badge"
+                  style={{ background: '#ef4444' }}
+                >
+                  Live
+                </span>
+              )}
+            </button>
+          )}
+
+          {/* Phase 7 Webinar Attendee Analytics */}
+          {webinarState?.enabled && canModerate && (
+            <button
+              type="button"
+              className={`call-side-btn ${showWebinarAnalyticsModal ? 'active-panel' : ''}`}
+              onClick={() => setShowWebinarAnalyticsModal(true)}
+              aria-pressed={showWebinarAnalyticsModal}
+              aria-label="Attendee Analytics"
+              title="Webinar Analytics & Attendance"
+              data-testid="call-webinar-analytics-btn"
+            >
+              <span style={{ fontSize: 16 }}>📈</span>
+              <span>Analytics</span>
+            </button>
+          )}
 
           {/* Whiteboard */}
           <button
@@ -5377,6 +5642,77 @@ export function MeetingRoomView({
           onToast('Collaborative notes synced to meeting summary.');
         }}
       />
+
+      {/* Phase 7 Webinar Modals & Panels */}
+      <WebinarStreamModal
+        isOpen={showWebinarStreamModal}
+        onClose={() => setShowWebinarStreamModal(false)}
+        streamOut={webinarState?.streamOut}
+        roomCode={roomCode}
+        onStartStream={(params) =>
+          signalingRef.current?.startWebinarStream(params)
+        }
+        onStopStream={() => signalingRef.current?.stopWebinarStream()}
+      />
+
+      <WebinarAnalyticsModal
+        isOpen={showWebinarAnalyticsModal}
+        onClose={() => setShowWebinarAnalyticsModal(false)}
+        roomCode={roomCode}
+      />
+
+      {showWebinarQaPanel && (
+        <aside
+          className="call-side-panel webinar-qa-panel-container"
+          style={{
+            position: 'fixed',
+            right: 16,
+            bottom: 84,
+            width: 360,
+            maxHeight: 520,
+            zIndex: 100,
+            boxShadow: '0 8px 30px rgba(0,0,0,0.3)',
+            borderRadius: 12,
+            overflow: 'hidden',
+          }}
+          data-testid="webinar-qa-floating-container"
+        >
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'flex-end',
+              padding: '6px 8px',
+              background: 'var(--color-bg-subtle, #1e293b)',
+            }}
+          >
+            <button
+              type="button"
+              className="btn-icon-subtle"
+              onClick={() => setShowWebinarQaPanel(false)}
+              aria-label="Close Webinar Q&A"
+            >
+              <CloseIcon />
+            </button>
+          </div>
+          <WebinarQaPanel
+            questions={webinarQaQuestions}
+            isHostOrModerator={canModerate}
+            onAskQuestion={(question) =>
+              signalingRef.current?.askWebinarQuestion(question)
+            }
+            onUpvoteQuestion={(questionId) =>
+              signalingRef.current?.upvoteWebinarQuestion(questionId)
+            }
+            onModerateQuestion={(questionId, status, answer) =>
+              signalingRef.current?.moderateWebinarQuestion(
+                questionId,
+                status,
+                answer,
+              )
+            }
+          />
+        </aside>
+      )}
     </div>
   );
 }
