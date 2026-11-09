@@ -530,6 +530,14 @@ export function buildSignalingApp(
           ...(room.recordingStartedAt
             ? { recordingStartedAt: room.recordingStartedAt }
             : {}),
+          breakout: room.breakout,
+          polls: room.listPolls(),
+          qa: room.listQa(),
+          formit: room.formit,
+          handRaiseQueue: room.handRaiseQueue,
+          whiteboardHistory: room.whiteboardHistory,
+          notes: room.notesDoc,
+          timer: room.meetingTimer,
         },
       },
     });
@@ -907,7 +915,22 @@ export function buildSignalingApp(
             );
           }
 
+          const handChanged = peer.state.handRaised !== nextState.handRaised;
           peer.state = nextState;
+          if (handChanged) {
+            room.updateHandRaise(
+              peer.id,
+              peer.displayName,
+              nextState.handRaised,
+            );
+            room.broadcast({
+              v: 1,
+              ts: Date.now(),
+              type: 'handraise.updated',
+              payload: { queue: room.handRaiseQueue },
+            });
+          }
+
           room.broadcast(
             {
               v: 1,
@@ -945,6 +968,13 @@ export function buildSignalingApp(
               displayName: peer.displayName,
               text: msg.payload.text,
               ts: meta.ts,
+              ...(msg.payload.replyToId
+                ? { replyToId: msg.payload.replyToId }
+                : {}),
+              ...(msg.payload.mentions
+                ? { mentions: msg.payload.mentions }
+                : {}),
+              ...(msg.payload.file ? { file: msg.payload.file } : {}),
             },
           };
           if (msg.payload.to) {
@@ -1009,6 +1039,355 @@ export function buildSignalingApp(
             ts: now,
             type: 'caption.cue',
             payload: cuePayload,
+          });
+          break;
+        }
+
+        case 'chat.reaction': {
+          const rx = room.addChatReaction(
+            msg.payload.messageId,
+            msg.payload.emoji,
+            peer.id,
+          );
+          if (rx) {
+            room.broadcast({
+              v: 1,
+              ts: Date.now(),
+              type: 'chat.reaction.updated',
+              payload: {
+                messageId: msg.payload.messageId,
+                reactions: rx,
+              },
+            });
+          }
+          break;
+        }
+
+        case 'poll.create': {
+          if (!room.canModerate(peer.id)) {
+            sendError(
+              ws,
+              'FORBIDDEN',
+              'Only hosts and cohosts can create polls.',
+            );
+            break;
+          }
+          const poll = room.createPoll({
+            ...msg.payload,
+            createdBy: peer.id,
+            creatorName: peer.displayName,
+          });
+          room.broadcast({
+            v: 1,
+            ts: Date.now(),
+            type: 'poll.updated',
+            payload: { poll },
+          });
+          break;
+        }
+
+        case 'poll.vote': {
+          const poll = room.votePoll(
+            msg.payload.pollId,
+            peer.id,
+            msg.payload.optionIndices,
+          );
+          if (poll) {
+            room.broadcast({
+              v: 1,
+              ts: Date.now(),
+              type: 'poll.updated',
+              payload: { poll },
+            });
+          }
+          break;
+        }
+
+        case 'poll.close': {
+          if (!room.canModerate(peer.id)) {
+            sendError(
+              ws,
+              'FORBIDDEN',
+              'Only hosts and cohosts can close polls.',
+            );
+            break;
+          }
+          const poll = room.closePoll(msg.payload.pollId);
+          if (poll) {
+            room.broadcast({
+              v: 1,
+              ts: Date.now(),
+              type: 'poll.updated',
+              payload: { poll },
+            });
+          }
+          break;
+        }
+
+        case 'poll.delete': {
+          if (!room.canModerate(peer.id)) {
+            sendError(
+              ws,
+              'FORBIDDEN',
+              'Only hosts and cohosts can delete polls.',
+            );
+            break;
+          }
+          const deleted = room.deletePoll(msg.payload.pollId);
+          if (deleted) {
+            room.broadcast({
+              v: 1,
+              ts: Date.now(),
+              type: 'poll.deleted',
+              payload: { pollId: msg.payload.pollId },
+            });
+          }
+          break;
+        }
+
+        case 'formit.launch': {
+          if (!room.canModerate(peer.id)) {
+            sendError(
+              ws,
+              'FORBIDDEN',
+              'Only hosts and cohosts can launch FormIT surveys.',
+            );
+            break;
+          }
+          const session = room.launchFormIt(
+            msg.payload.formUrl,
+            msg.payload.title,
+          );
+          room.broadcast({
+            v: 1,
+            ts: Date.now(),
+            type: 'formit.updated',
+            payload: session,
+          });
+          break;
+        }
+
+        case 'formit.submit': {
+          const session = room.recordFormItSubmission(
+            peer.id,
+            peer.displayName,
+            msg.payload.editKey,
+          );
+          if (session) {
+            room.broadcast({
+              v: 1,
+              ts: Date.now(),
+              type: 'formit.updated',
+              payload: session,
+            });
+          }
+          break;
+        }
+
+        case 'formit.close': {
+          if (!room.canModerate(peer.id)) {
+            sendError(
+              ws,
+              'FORBIDDEN',
+              'Only hosts and cohosts can close FormIT surveys.',
+            );
+            break;
+          }
+          const session = room.closeFormIt();
+          room.broadcast({
+            v: 1,
+            ts: Date.now(),
+            type: 'formit.updated',
+            payload: session,
+          });
+          break;
+        }
+
+        case 'qa.ask': {
+          const question = room.askQuestion(
+            peer.id,
+            peer.displayName,
+            msg.payload.question,
+          );
+          room.broadcast({
+            v: 1,
+            ts: Date.now(),
+            type: 'qa.updated',
+            payload: { question },
+          });
+          break;
+        }
+
+        case 'qa.upvote': {
+          const question = room.upvoteQuestion(msg.payload.questionId, peer.id);
+          if (question) {
+            room.broadcast({
+              v: 1,
+              ts: Date.now(),
+              type: 'qa.updated',
+              payload: { question },
+            });
+          }
+          break;
+        }
+
+        case 'qa.answer': {
+          if (!room.canModerate(peer.id)) {
+            sendError(
+              ws,
+              'FORBIDDEN',
+              'Only hosts and cohosts can answer questions.',
+            );
+            break;
+          }
+          const question = room.answerQuestion(
+            msg.payload.questionId,
+            msg.payload.answered,
+          );
+          if (question) {
+            room.broadcast({
+              v: 1,
+              ts: Date.now(),
+              type: 'qa.updated',
+              payload: { question },
+            });
+          }
+          break;
+        }
+
+        case 'qa.dismiss': {
+          if (!room.canModerate(peer.id)) {
+            sendError(
+              ws,
+              'FORBIDDEN',
+              'Only hosts and cohosts can dismiss questions.',
+            );
+            break;
+          }
+          const question = room.dismissQuestion(
+            msg.payload.questionId,
+            msg.payload.dismissed,
+          );
+          if (question) {
+            room.broadcast({
+              v: 1,
+              ts: Date.now(),
+              type: 'qa.updated',
+              payload: { question },
+            });
+          }
+          break;
+        }
+
+        case 'qa.delete': {
+          if (!room.canModerate(peer.id)) {
+            sendError(
+              ws,
+              'FORBIDDEN',
+              'Only hosts and cohosts can delete questions.',
+            );
+            break;
+          }
+          const deleted = room.deleteQuestion(msg.payload.questionId);
+          if (deleted) {
+            room.broadcast({
+              v: 1,
+              ts: Date.now(),
+              type: 'qa.deleted',
+              payload: { questionId: msg.payload.questionId },
+            });
+          }
+          break;
+        }
+
+        case 'whiteboard.action': {
+          room.recordWhiteboardAction(msg.payload);
+          room.broadcast(
+            {
+              v: 1,
+              ts: Date.now(),
+              type: 'whiteboard.action',
+              payload: msg.payload,
+            },
+            peer.id,
+          );
+          break;
+        }
+
+        case 'notes.update': {
+          const doc = room.updateNotes(
+            msg.payload.content,
+            msg.payload.version,
+            peer.displayName,
+          );
+          room.broadcast(
+            {
+              v: 1,
+              ts: Date.now(),
+              type: 'notes.updated',
+              payload: doc,
+            },
+            peer.id,
+          );
+          break;
+        }
+
+        case 'timer.action': {
+          if (!room.canModerate(peer.id)) {
+            sendError(
+              ws,
+              'FORBIDDEN',
+              'Only hosts and cohosts can control meeting timers.',
+            );
+            break;
+          }
+          const t = room.updateMeetingTimer(msg.payload);
+          room.broadcast({
+            v: 1,
+            ts: Date.now(),
+            type: 'timer.updated',
+            payload: t,
+          });
+          break;
+        }
+
+        case 'presentation.cursor': {
+          room.broadcast(
+            {
+              v: 1,
+              ts: Date.now(),
+              type: 'presentation.cursor',
+              payload: {
+                peerId: peer.id,
+                displayName: peer.displayName,
+                x: msg.payload.x,
+                y: msg.payload.y,
+                active: msg.payload.active,
+              },
+            },
+            peer.id,
+          );
+          break;
+        }
+
+        case 'breakout.join': {
+          room.assignBreakoutPeer(msg.payload.roomId, peer.id);
+          room.broadcast({
+            v: 1,
+            ts: Date.now(),
+            type: 'breakout.updated',
+            payload: room.breakout,
+          });
+          break;
+        }
+
+        case 'breakout.leave': {
+          room.assignBreakoutPeer('', peer.id);
+          room.broadcast({
+            v: 1,
+            ts: Date.now(),
+            type: 'breakout.updated',
+            payload: room.breakout,
           });
           break;
         }
@@ -1331,6 +1710,112 @@ export function buildSignalingApp(
                       : {}),
                   },
                 });
+              }
+              break;
+            }
+
+            case 'breakout_create': {
+              const state = room.createBreakoutRooms(
+                actionPayload.rooms,
+                actionPayload.durationMinutes,
+              );
+              room.broadcast({
+                v: 1,
+                ts: Date.now(),
+                type: 'breakout.updated',
+                payload: state,
+              });
+              break;
+            }
+
+            case 'breakout_assign': {
+              const state = room.assignBreakoutPeer(
+                actionPayload.roomId,
+                actionPayload.peerId,
+              );
+              room.broadcast({
+                v: 1,
+                ts: Date.now(),
+                type: 'breakout.updated',
+                payload: state,
+              });
+              break;
+            }
+
+            case 'breakout_start': {
+              const state = room.startBreakout();
+              room.broadcast({
+                v: 1,
+                ts: Date.now(),
+                type: 'breakout.updated',
+                payload: state,
+              });
+              break;
+            }
+
+            case 'breakout_broadcast': {
+              room.broadcast({
+                v: 1,
+                ts: Date.now(),
+                type: 'breakout.broadcast',
+                payload: {
+                  message: actionPayload.message,
+                  from: peer.displayName,
+                  ts: Date.now(),
+                },
+              });
+              break;
+            }
+
+            case 'breakout_recall': {
+              const state = room.recallBreakout(actionPayload.noticeSeconds);
+              room.broadcast({
+                v: 1,
+                ts: Date.now(),
+                type: 'breakout.updated',
+                payload: state,
+              });
+              break;
+            }
+
+            case 'breakout_end': {
+              const state = room.endBreakout();
+              room.broadcast({
+                v: 1,
+                ts: Date.now(),
+                type: 'breakout.updated',
+                payload: state,
+              });
+              break;
+            }
+
+            case 'lower_hand': {
+              const queue = room.lowerHand(actionPayload.targetPeerId);
+              room.broadcast({
+                v: 1,
+                ts: Date.now(),
+                type: 'handraise.updated',
+                payload: { queue },
+              });
+              if (actionPayload.targetPeerId) {
+                const target = room.getPeer(actionPayload.targetPeerId);
+                if (target) {
+                  room.broadcast({
+                    v: 1,
+                    ts: Date.now(),
+                    type: 'state.updated',
+                    payload: { peerId: target.id, state: target.state },
+                  });
+                }
+              } else {
+                for (const p of room.listActivePeers()) {
+                  room.broadcast({
+                    v: 1,
+                    ts: Date.now(),
+                    type: 'state.updated',
+                    payload: { peerId: p.id, state: p.state },
+                  });
+                }
               }
               break;
             }

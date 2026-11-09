@@ -1200,6 +1200,124 @@ export function NotesView({
                         </section>
                       )}
 
+                    {/* FormIT In-Call Survey / Poll */}
+                    {selectedNote.formItSurvey && (
+                      <section
+                        className="note-summary-box"
+                        style={{
+                          borderLeft: '3px solid #10b981',
+                        }}
+                      >
+                        <div className="note-section-head">
+                          <h4>📋 FormIT Survey / Feedback</h4>
+                          <a
+                            href={selectedNote.formItSurvey.formUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="btn btn-sm"
+                            style={{ fontSize: 12, padding: '2px 8px' }}
+                          >
+                            Open FormIT ↗
+                          </a>
+                        </div>
+                        <p style={{ margin: '4px 0' }}>
+                          <strong>
+                            {selectedNote.formItSurvey.title ||
+                              selectedNote.formItSurvey.slug}
+                          </strong>{' '}
+                          — {selectedNote.formItSurvey.submissionsCount}{' '}
+                          submission
+                          {selectedNote.formItSurvey.submissionsCount === 1
+                            ? ''
+                            : 's'}{' '}
+                          recorded during this meeting.
+                        </p>
+                      </section>
+                    )}
+
+                    {/* In-Call Poll Results */}
+                    {selectedNote.pollResults &&
+                      selectedNote.pollResults.length > 0 && (
+                        <section
+                          className="note-summary-box"
+                          style={{
+                            borderLeft: '3px solid #f59e0b',
+                          }}
+                        >
+                          <div className="note-section-head">
+                            <h4>
+                              📊 In-Call Poll Results (
+                              {selectedNote.pollResults.length})
+                            </h4>
+                          </div>
+                          <div
+                            style={{
+                              display: 'flex',
+                              flexDirection: 'column',
+                              gap: 12,
+                              marginTop: 8,
+                            }}
+                          >
+                            {selectedNote.pollResults.map((poll, idx) => (
+                              <div
+                                key={idx}
+                                style={{
+                                  background:
+                                    'var(--panel-bg, rgba(0,0,0,0.02))',
+                                  padding: '10px 12px',
+                                  borderRadius: 6,
+                                }}
+                              >
+                                <strong>{poll.question}</strong>
+                                <ul
+                                  style={{
+                                    margin: '6px 0 0',
+                                    paddingLeft: 16,
+                                  }}
+                                >
+                                  {poll.options.map((opt) => (
+                                    <li
+                                      key={opt}
+                                      style={{ fontSize: 13, margin: '2px 0' }}
+                                    >
+                                      {opt}:{' '}
+                                      <strong>
+                                        {poll.results[opt] ?? 0} votes
+                                      </strong>
+                                    </li>
+                                  ))}
+                                </ul>
+                              </div>
+                            ))}
+                          </div>
+                        </section>
+                      )}
+
+                    {/* Shared Collaborative Notes */}
+                    {selectedNote.collaborativeNotes && (
+                      <section
+                        className="note-summary-box"
+                        style={{
+                          borderLeft: '3px solid #8b5cf6',
+                        }}
+                      >
+                        <div className="note-section-head">
+                          <h4>📝 Collaborative In-Call Notes</h4>
+                        </div>
+                        <pre
+                          style={{
+                            whiteSpace: 'pre-wrap',
+                            fontFamily: 'inherit',
+                            fontSize: 14,
+                            lineHeight: 1.5,
+                            margin: '6px 0 0',
+                          }}
+                        >
+                          {selectedNote.collaborativeNotes}
+                        </pre>
+                      </section>
+                    )}
+
                     {/* Detailed Notes Body */}
                     <section className="note-body-section">
                       <h4>Discussion &amp; Detailed Notes</h4>

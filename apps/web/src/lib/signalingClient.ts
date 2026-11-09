@@ -3,12 +3,21 @@ import {
   computeBackoffMs,
   generateRoomCode,
   serverMessageSchema,
+  type AgendaItem,
+  type BreakoutState,
+  type ChatAttachment,
   type ClientMessage,
+  type FormItSession,
+  type HandRaiseItem,
   type HostActionPayload,
   type IceCandidatePayload,
   type IceServerConfig,
+  type MeetingTimer,
+  type NotesDoc,
   type PeerInfo,
   type PeerState,
+  type PollItem,
+  type QaItem,
   type ReactionEmoji,
   type RoomPermissions,
   type SdpPayload,
@@ -16,6 +25,7 @@ import {
   type ServerMessage,
   type SignalingChannel,
   type SignalingEvents,
+  type WhiteboardAction,
 } from '@meetit/protocol';
 
 const DEFAULT_SIGNALING_WS_URL =
@@ -216,7 +226,7 @@ export class SignalingClient implements SignalingChannel {
   private readonly passcode: string | undefined;
   private preferredRegion: string | undefined;
   private currentState: PeerState;
-  private selfId: string;
+  public selfId: string;
   private ws: WebSocket | null = null;
   private broadcast: BroadcastChannel | null = null;
   private closed = false;
@@ -249,6 +259,19 @@ export class SignalingClient implements SignalingChannel {
     'recording.stopped': new Set(),
     'host.command': new Set(),
     'transport.promoted': new Set(),
+    'chat.reaction.updated': new Set(),
+    'breakout.updated': new Set(),
+    'breakout.broadcast': new Set(),
+    'poll.updated': new Set(),
+    'poll.deleted': new Set(),
+    'formit.updated': new Set(),
+    'qa.updated': new Set(),
+    'qa.deleted': new Set(),
+    'handraise.updated': new Set(),
+    'whiteboard.action': new Set(),
+    'notes.updated': new Set(),
+    'timer.updated': new Set(),
+    'presentation.cursor': new Set(),
     error: new Set(),
     pong: new Set(),
   };
@@ -679,6 +702,78 @@ export class SignalingClient implements SignalingChannel {
           msg.payload as SignalingEvents['host.command'],
         );
         break;
+      case 'chat.reaction.updated':
+        this.emit(
+          'chat.reaction.updated',
+          msg.payload as SignalingEvents['chat.reaction.updated'],
+        );
+        break;
+      case 'breakout.updated':
+        this.emit(
+          'breakout.updated',
+          msg.payload as SignalingEvents['breakout.updated'],
+        );
+        break;
+      case 'breakout.broadcast':
+        this.emit(
+          'breakout.broadcast',
+          msg.payload as SignalingEvents['breakout.broadcast'],
+        );
+        break;
+      case 'poll.updated':
+        this.emit(
+          'poll.updated',
+          msg.payload as SignalingEvents['poll.updated'],
+        );
+        break;
+      case 'poll.deleted':
+        this.emit(
+          'poll.deleted',
+          msg.payload as SignalingEvents['poll.deleted'],
+        );
+        break;
+      case 'formit.updated':
+        this.emit(
+          'formit.updated',
+          msg.payload as SignalingEvents['formit.updated'],
+        );
+        break;
+      case 'qa.updated':
+        this.emit('qa.updated', msg.payload as SignalingEvents['qa.updated']);
+        break;
+      case 'qa.deleted':
+        this.emit('qa.deleted', msg.payload as SignalingEvents['qa.deleted']);
+        break;
+      case 'handraise.updated':
+        this.emit(
+          'handraise.updated',
+          msg.payload as SignalingEvents['handraise.updated'],
+        );
+        break;
+      case 'whiteboard.action':
+        this.emit(
+          'whiteboard.action',
+          msg.payload as SignalingEvents['whiteboard.action'],
+        );
+        break;
+      case 'notes.updated':
+        this.emit(
+          'notes.updated',
+          msg.payload as SignalingEvents['notes.updated'],
+        );
+        break;
+      case 'timer.updated':
+        this.emit(
+          'timer.updated',
+          msg.payload as SignalingEvents['timer.updated'],
+        );
+        break;
+      case 'presentation.cursor':
+        this.emit(
+          'presentation.cursor',
+          msg.payload as SignalingEvents['presentation.cursor'],
+        );
+        break;
       case 'pong':
         this.emit('pong', {});
         break;
@@ -854,6 +949,241 @@ export class SignalingClient implements SignalingChannel {
 
   stopRecording(): void {
     this.sendHostAction({ action: 'stop_recording' });
+  }
+
+  // --- Collaboration (Phase 6) methods ---
+
+  sendChatMessage(params: {
+    text: string;
+    to?: string;
+    replyToId?: string;
+    mentions?: string[];
+    file?: ChatAttachment;
+  }): void {
+    this.send({
+      v: 1,
+      type: 'chat.send',
+      payload: {
+        text: params.text,
+        ...(params.to ? { to: params.to } : {}),
+        ...(params.replyToId ? { replyToId: params.replyToId } : {}),
+        ...(params.mentions ? { mentions: params.mentions } : {}),
+        ...(params.file ? { file: params.file } : {}),
+      },
+    });
+  }
+
+  sendChatReaction(messageId: string, emoji: string): void {
+    this.send({
+      v: 1,
+      type: 'chat.reaction',
+      payload: { messageId, emoji },
+    });
+  }
+
+  createPoll(params: {
+    question: string;
+    options: string[];
+    isQuiz?: boolean;
+    correctOptionIndex?: number;
+    allowMultiple?: boolean;
+  }): void {
+    this.send({
+      v: 1,
+      type: 'poll.create',
+      payload: params,
+    });
+  }
+
+  votePoll(pollId: string, optionIndices: number[]): void {
+    this.send({
+      v: 1,
+      type: 'poll.vote',
+      payload: { pollId, optionIndices },
+    });
+  }
+
+  closePoll(pollId: string): void {
+    this.send({
+      v: 1,
+      type: 'poll.close',
+      payload: { pollId },
+    });
+  }
+
+  deletePoll(pollId: string): void {
+    this.send({
+      v: 1,
+      type: 'poll.delete',
+      payload: { pollId },
+    });
+  }
+
+  launchFormIt(formUrl: string, title?: string): void {
+    this.send({
+      v: 1,
+      type: 'formit.launch',
+      payload: { formUrl, title },
+    });
+  }
+
+  submitFormIt(id: string, editKey?: string | null): void {
+    this.send({
+      v: 1,
+      type: 'formit.submit',
+      payload: { id, editKey },
+    });
+  }
+
+  closeFormIt(id: string): void {
+    this.send({
+      v: 1,
+      type: 'formit.close',
+      payload: { id },
+    });
+  }
+
+  askQuestion(question: string): void {
+    this.send({
+      v: 1,
+      type: 'qa.ask',
+      payload: { question },
+    });
+  }
+
+  upvoteQuestion(questionId: string): void {
+    this.send({
+      v: 1,
+      type: 'qa.upvote',
+      payload: { questionId },
+    });
+  }
+
+  answerQuestion(questionId: string, answered: boolean): void {
+    this.send({
+      v: 1,
+      type: 'qa.answer',
+      payload: { questionId, answered },
+    });
+  }
+
+  dismissQuestion(questionId: string, dismissed: boolean): void {
+    this.send({
+      v: 1,
+      type: 'qa.dismiss',
+      payload: { questionId, dismissed },
+    });
+  }
+
+  deleteQuestion(questionId: string): void {
+    this.send({
+      v: 1,
+      type: 'qa.delete',
+      payload: { questionId },
+    });
+  }
+
+  sendWhiteboardAction(action: WhiteboardAction): void {
+    this.send({
+      v: 1,
+      type: 'whiteboard.action',
+      payload: action,
+    });
+  }
+
+  updateSharedNotes(content: string, version: number): void {
+    this.send({
+      v: 1,
+      type: 'notes.update',
+      payload: { content, version },
+    });
+  }
+
+  sendTimerAction(params: {
+    action:
+      | 'start'
+      | 'pause'
+      | 'reset'
+      | 'set_countdown'
+      | 'next_agenda'
+      | 'set_agenda';
+    durationSeconds?: number;
+    agenda?: AgendaItem[];
+  }): void {
+    this.send({
+      v: 1,
+      type: 'timer.action',
+      payload: params,
+    });
+  }
+
+  sendPresentationCursor(x: number, y: number, active: boolean): void {
+    this.send({
+      v: 1,
+      type: 'presentation.cursor',
+      payload: { x, y, active },
+    });
+  }
+
+  createBreakoutRooms(
+    rooms: Array<{ name: string; peerIds?: string[] }>,
+    durationMinutes?: number,
+  ): void {
+    this.sendHostAction({
+      action: 'breakout_create',
+      rooms: rooms.map((r) => ({
+        name: r.name,
+        peerIds: r.peerIds ?? [],
+      })),
+      ...(durationMinutes !== undefined ? { durationMinutes } : {}),
+    });
+  }
+
+  assignBreakoutPeer(roomId: string, peerId: string): void {
+    this.sendHostAction({
+      action: 'breakout_assign',
+      roomId,
+      peerId,
+    });
+  }
+
+  startBreakout(): void {
+    this.sendHostAction({ action: 'breakout_start' });
+  }
+
+  broadcastBreakout(message: string): void {
+    this.sendHostAction({ action: 'breakout_broadcast', message });
+  }
+
+  recallBreakout(noticeSeconds = 30): void {
+    this.sendHostAction({ action: 'breakout_recall', noticeSeconds });
+  }
+
+  endBreakout(): void {
+    this.sendHostAction({ action: 'breakout_end' });
+  }
+
+  joinBreakoutRoom(roomId: string): void {
+    this.send({
+      v: 1,
+      type: 'breakout.join',
+      payload: { roomId },
+    });
+  }
+
+  leaveBreakoutRoom(): void {
+    this.send({
+      v: 1,
+      type: 'breakout.leave',
+      payload: {},
+    });
+  }
+
+  lowerHand(targetPeerId?: string): void {
+    this.sendHostAction({
+      action: 'lower_hand',
+      ...(targetPeerId ? { targetPeerId } : {}),
+    });
   }
 
   setPreferredRegion(region: string | undefined): void {

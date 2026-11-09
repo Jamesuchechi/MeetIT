@@ -222,19 +222,19 @@ Every phase has an **exit criteria** block. Do not start the next phase until ex
 
 ## Phase 6 - Collaboration features (v1.2)
 
-- [ ] [P0] Breakout rooms: host creates N rooms, manual and auto assignment, timer, broadcast message to all, recall
-- [ ] [P0] Polls and quizzes in-call, results live, export
-- [ ] [P1] **FormIT integration:** launch a FormIT form as a poll or post-meeting survey, embed responses in the meeting summary
-- [ ] [P0] Q&A panel with upvotes, answered state
-- [ ] [P1] Shared whiteboard (tldraw or custom canvas over data channel/Yjs), save as PNG/PDF
-- [ ] [P1] Shared notes (collaborative doc via Yjs), attached to meeting record
-- [ ] [P1] Hand-raise queue with ordering
-- [ ] [P1] Emoji reactions with animation, custom reaction packs
-- [ ] [P1] File sharing in chat (Supabase Storage, virus scan, size limits)
-- [ ] [P1] Threaded chat, mentions, message reactions
-- [ ] [P2] Co-browsing / shared remote cursor for presentations
-- [ ] [P2] Presenter notes and slide control (Google Slides / PowerPoint link)
-- [ ] [P2] Timer, stopwatch, and agenda tracker for hosts
+- [x] [P0] Breakout rooms: host creates N rooms, manual and auto assignment, timer, broadcast message to all, recall
+- [x] [P0] Polls and quizzes in-call, results live, export
+- [x] [P1] **FormIT integration:** launch a FormIT form as a poll or post-meeting survey, embed responses in the meeting summary
+- [x] [P0] Q&A panel with upvotes, answered state
+- [x] [P1] Shared whiteboard (tldraw or custom canvas over data channel/Yjs), save as PNG/PDF
+- [x] [P1] Shared notes (collaborative doc via Yjs), attached to meeting record
+- [x] [P1] Hand-raise queue with ordering
+- [x] [P1] Emoji reactions with animation, custom reaction packs
+- [x] [P1] File sharing in chat (Supabase Storage, virus scan, size limits)
+- [x] [P1] Threaded chat, mentions, message reactions
+- [x] [P2] Co-browsing / shared remote cursor for presentations
+- [x] [P2] Presenter notes and slide control (Google Slides / PowerPoint link)
+- [x] [P2] Timer, stopwatch, and agenda tracker for hosts
 
 **Exit criteria:** 100-person class with 10 breakout rooms runs end-to-end; poll results match the server tally exactly.
 

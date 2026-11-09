@@ -16,13 +16,31 @@ import {
   type PeerNetworkStats,
 } from '@meetit/media';
 import type {
+  AgendaItem,
+  BreakoutRoom,
+  BreakoutState,
+  ChatAttachment,
+  FormItSession,
+  HandRaiseItem,
+  MeetingTimer,
+  NotesDoc,
   PeerInfo,
   PeerRole,
   PeerState,
+  PollItem,
+  QaItem,
   ReactionEmoji,
   RoomPermissions,
   WaitingPeer,
+  WhiteboardAction,
 } from '@meetit/protocol';
+import { BreakoutModal } from './BreakoutModal';
+import { PollsPanel } from './PollsPanel';
+import { FormItModal } from './FormItModal';
+import { QAPanel } from './QAPanel';
+import { WhiteboardModal } from './WhiteboardModal';
+import { SharedNotesPanel } from './SharedNotesPanel';
+import { TimerAgendaWidget } from './TimerAgendaWidget';
 import { Logo } from './Logo';
 import { Avatar } from './Avatar';
 import {
@@ -123,24 +141,49 @@ interface RemoteParticipant extends PeerInfo {
 
 interface ChatItem {
   id: string;
-  seq?: number;
+  seq?: number | undefined;
   from: string;
   displayName: string;
   text: string;
   ts: number;
+  replyToId?: string | undefined;
+  mentions?: string[] | undefined;
+  file?:
+    | {
+        name: string;
+        size: number;
+        url: string;
+        mime: string;
+      }
+    | undefined;
+  reactions?: Record<string, string[]> | undefined;
 }
 
 interface FloatingReaction {
   id: string;
   displayName: string;
-  emoji: ReactionEmoji;
+  emoji: string;
+  offsetX?: number;
 }
 
 const DISPLAY_NAME_STORAGE_KEY = 'meetit_guest_display_name';
 const MIRROR_SELF_STORAGE_KEY = 'meetit_mirror_self_view';
 const CALL_SOUNDS_STORAGE_KEY = 'meetit_call_sounds_enabled';
 const BANDWIDTH_MODE_STORAGE_KEY = 'meetit_bandwidth_mode';
-const REACTION_EMOJIS: ReactionEmoji[] = ['👍', '👏', '❤️', '🎉', '😂', '😮'];
+const REACTION_EMOJIS: string[] = [
+  '👍',
+  '👏',
+  '❤️',
+  '🎉',
+  '😂',
+  '😮',
+  '🚀',
+  '🔥',
+  '💡',
+  '💯',
+  '🤝',
+  '🙌',
+];
 
 function NetworkBarsBadge({
   bars,
@@ -200,6 +243,8 @@ function RemoteVideoTile({
   isSpeaking,
   isPinned,
   canModerate,
+  handRaiseOrder,
+  onLowerHand,
   isFloating = false,
   pipCorner = 'bottom-right',
   dragOffset = null,
@@ -221,6 +266,8 @@ function RemoteVideoTile({
   isSpeaking: boolean;
   isPinned: boolean;
   canModerate: boolean;
+  handRaiseOrder?: number | null | undefined;
+  onLowerHand?: (() => void) | undefined;
   isFloating?: boolean | undefined;
   pipCorner?:
     'bottom-right' | 'bottom-left' | 'top-right' | 'top-left' | undefined;
@@ -351,9 +398,30 @@ function RemoteVideoTile({
           {participant.state.handRaised && (
             <span
               className="hand-raised-pill"
-              title={`${participant.displayName} raised their hand`}
+              title={`${participant.displayName} raised their hand${handRaiseOrder ? ` (#${handRaiseOrder})` : ''}`}
             >
-              ✋ Hand raised
+              ✋ {handRaiseOrder ? `#${handRaiseOrder} ` : ''}Hand raised
+              {canModerate && onLowerHand && (
+                <button
+                  type="button"
+                  className="tile-action-btn lower-hand-btn"
+                  title="Lower hand"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onLowerHand();
+                  }}
+                  style={{
+                    marginLeft: 6,
+                    background: 'none',
+                    border: 'none',
+                    cursor: 'pointer',
+                    color: 'inherit',
+                    fontWeight: 'bold',
+                  }}
+                >
+                  ✕
+                </button>
+              )}
             </span>
           )}
           {participant.state.screen && (
@@ -798,6 +866,43 @@ export function MeetingRoomView({
     FloatingReaction[]
   >([]);
   const [ariaAnnouncement, setAriaAnnouncement] = useState('');
+
+  // Collaboration (Phase 6) state
+  const [showBreakoutModal, setShowBreakoutModal] = useState(false);
+  const [showPollsPanel, setShowPollsPanel] = useState(false);
+  const [showFormItModal, setShowFormItModal] = useState(false);
+  const [showQAPanel, setShowQAPanel] = useState(false);
+  const [showWhiteboardModal, setShowWhiteboardModal] = useState(false);
+  const [showSharedNotesPanel, setShowSharedNotesPanel] = useState(false);
+
+  const [breakoutState, setBreakoutState] = useState<BreakoutState>({
+    active: false,
+    rooms: [],
+  });
+  const [polls, setPolls] = useState<PollItem[]>([]);
+  const [formItSession, setFormItSession] = useState<FormItSession | null>(
+    null,
+  );
+  const [qaQuestions, setQaQuestions] = useState<QaItem[]>([]);
+  const [handRaiseQueue, setHandRaiseQueue] = useState<HandRaiseItem[]>([]);
+  const [whiteboardHistory, setWhiteboardHistory] = useState<
+    WhiteboardAction[]
+  >([]);
+  const [notesDoc, setNotesDoc] = useState<NotesDoc>({
+    content: '',
+    version: 1,
+    lastUpdatedAt: Date.now(),
+  });
+  const [meetingTimer, setMeetingTimer] = useState<MeetingTimer | null>(null);
+
+  // Enhanced chat: replies, file attachments
+  const [replyingToMessage, setReplyingToMessage] = useState<ChatItem | null>(
+    null,
+  );
+  const [chatAttachment, setChatAttachment] = useState<ChatAttachment | null>(
+    null,
+  );
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [remotePeers, setRemotePeers] = useState<
     Record<string, RemoteParticipant>
@@ -1354,12 +1459,48 @@ export function MeetingRoomView({
     (e?: React.FormEvent) => {
       e?.preventDefault();
       const trimmed = chatDraft.trim();
-      if (!trimmed) return;
-      signalingRef.current?.sendChat(trimmed);
+      if (!trimmed && !chatAttachment) return;
+      const mentions = trimmed.match(/@(\w+)/g)?.map((m) => m.slice(1));
+      signalingRef.current?.sendChatMessage({
+        text: trimmed || (chatAttachment ? chatAttachment.name : ''),
+        ...(replyingToMessage?.id ? { replyToId: replyingToMessage.id } : {}),
+        ...(mentions && mentions.length > 0 ? { mentions } : {}),
+        ...(chatAttachment ? { file: chatAttachment } : {}),
+      });
       setChatDraft('');
+      setReplyingToMessage(null);
+      setChatAttachment(null);
     },
-    [chatDraft],
+    [chatDraft, chatAttachment, replyingToMessage],
   );
+
+  const handleFileUpload = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      if (file.size > 25 * 1024 * 1024) {
+        onToast('File too large (maximum 25MB allowed).');
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = () => {
+        if (typeof reader.result === 'string') {
+          setChatAttachment({
+            name: file.name,
+            size: file.size,
+            mime: file.type || 'application/octet-stream',
+            url: reader.result,
+          });
+        }
+      };
+      reader.readAsDataURL(file);
+    },
+    [onToast],
+  );
+
+  const handleChatReaction = useCallback((messageId: string, emoji: string) => {
+    signalingRef.current?.sendChatReaction(messageId, emoji);
+  }, []);
 
   // Keyboard shortcuts during active call (`m`, `v`, `s`, `h`, `c`, `l`, `?`)
   useEffect(() => {
@@ -1775,6 +1916,30 @@ export function MeetingRoomView({
         setRecordingStartedAt(null);
         setShowRecordingConsentNotice(false);
       }
+      if (payload.roomState.breakout) {
+        setBreakoutState(payload.roomState.breakout);
+      }
+      if (payload.roomState.polls) {
+        setPolls(payload.roomState.polls);
+      }
+      if (payload.roomState.formit !== undefined) {
+        setFormItSession(payload.roomState.formit);
+      }
+      if (payload.roomState.qa) {
+        setQaQuestions(payload.roomState.qa);
+      }
+      if (payload.roomState.handRaiseQueue) {
+        setHandRaiseQueue(payload.roomState.handRaiseQueue);
+      }
+      if (payload.roomState.whiteboardHistory) {
+        setWhiteboardHistory(payload.roomState.whiteboardHistory);
+      }
+      if (payload.roomState.notes) {
+        setNotesDoc(payload.roomState.notes);
+      }
+      if (payload.roomState.timer !== undefined) {
+        setMeetingTimer(payload.roomState.timer);
+      }
 
       const isReconnect = hasConnectedTransportRef.current;
 
@@ -2082,7 +2247,21 @@ export function MeetingRoomView({
     signaling.on('chat.message', (chatMsg) => {
       setChatMessages((prev) => {
         if (prev.some((m) => m.id === chatMsg.id)) return prev;
-        const next = [...prev, chatMsg];
+        const next: ChatItem[] = [
+          ...prev,
+          {
+            id: chatMsg.id,
+            ...(chatMsg.seq !== undefined ? { seq: chatMsg.seq } : {}),
+            from: chatMsg.from,
+            displayName: chatMsg.displayName,
+            text: chatMsg.text,
+            ts: chatMsg.ts,
+            ...(chatMsg.replyToId ? { replyToId: chatMsg.replyToId } : {}),
+            ...(chatMsg.mentions ? { mentions: chatMsg.mentions } : {}),
+            ...(chatMsg.file ? { file: chatMsg.file } : {}),
+            ...(chatMsg.reactions ? { reactions: chatMsg.reactions } : {}),
+          },
+        ];
         next.sort((a, b) => {
           if (a.seq !== undefined && b.seq !== undefined && a.seq !== b.seq) {
             return a.seq - b.seq;
@@ -2104,6 +2283,74 @@ export function MeetingRoomView({
         emoji: rx.emoji,
       });
       announce(`${rx.displayName} reacted with ${rx.emoji}`);
+    });
+
+    signaling.on('chat.reaction.updated', ({ messageId, reactions }) => {
+      setChatMessages((prev) =>
+        prev.map((msg) => (msg.id === messageId ? { ...msg, reactions } : msg)),
+      );
+    });
+
+    signaling.on('breakout.updated', (state) => {
+      setBreakoutState(state);
+      if (state.active) {
+        onToast('🚪 Breakout rooms started.');
+        announce('Breakout rooms started');
+      } else {
+        onToast('🚪 Breakout rooms ended.');
+        announce('Breakout rooms ended');
+      }
+    });
+
+    signaling.on('breakout.broadcast', ({ message, from }) => {
+      onToast(`📢 Broadcast from ${from}: ${message}`);
+      announce(`Broadcast from ${from}: ${message}`);
+    });
+
+    signaling.on('poll.updated', ({ poll }) => {
+      setPolls((prev) => [poll, ...prev.filter((p) => p.id !== poll.id)]);
+      onToast(`📊 Poll update: ${poll.question}`);
+      announce(`Poll update: ${poll.question}`);
+    });
+
+    signaling.on('poll.deleted', ({ pollId }) => {
+      setPolls((prev) => prev.filter((p) => p.id !== pollId));
+    });
+
+    signaling.on('formit.updated', (session) => {
+      setFormItSession(session);
+      if (session) {
+        setShowFormItModal(true);
+        onToast(`📋 FormIT survey launched: ${session.title || session.slug}`);
+      }
+    });
+
+    signaling.on('qa.updated', ({ question }) => {
+      setQaQuestions((prev) => [
+        question,
+        ...prev.filter((q) => q.id !== question.id),
+      ]);
+      onToast(`❓ Q&A: ${question.question.slice(0, 40)}`);
+    });
+
+    signaling.on('qa.deleted', ({ questionId }) => {
+      setQaQuestions((prev) => prev.filter((q) => q.id !== questionId));
+    });
+
+    signaling.on('handraise.updated', ({ queue }) => {
+      setHandRaiseQueue(queue);
+    });
+
+    signaling.on('whiteboard.action', (action) => {
+      setWhiteboardHistory((prev) => [...prev, action]);
+    });
+
+    signaling.on('notes.updated', (doc) => {
+      setNotesDoc(doc);
+    });
+
+    signaling.on('timer.updated', (timer) => {
+      setMeetingTimer(timer);
     });
 
     signaling.on('error', (err) => {
@@ -2156,6 +2403,31 @@ export function MeetingRoomView({
         ownerId: user?.id ?? '',
         historyItem,
         chatTranscript: chatMessages,
+        formItSurvey: formItSession
+          ? {
+              formUrl: formItSession.formUrl,
+              slug: formItSession.slug,
+              ...(formItSession.title ? { title: formItSession.title } : {}),
+              submissionsCount: formItSession.submissionsCount,
+            }
+          : undefined,
+        pollResults:
+          polls.length > 0
+            ? polls.map((p) => {
+                const results: Record<string, number> = {};
+                p.options.forEach((opt, idx) => {
+                  results[opt] = Object.values(p.votes).filter((v) =>
+                    v.includes(idx),
+                  ).length;
+                });
+                return {
+                  question: p.question,
+                  options: p.options,
+                  results,
+                };
+              })
+            : undefined,
+        collaborativeNotes: notesDoc?.content,
       });
 
       if (transcriptCuesRef.current.length > 0) {
@@ -3179,6 +3451,23 @@ export function MeetingRoomView({
           </div>
         )}
 
+        <div className="call-topbar-center">
+          <TimerAgendaWidget
+            timer={
+              meetingTimer || {
+                type: 'countdown',
+                durationSeconds: 900,
+                running: false,
+                agenda: [],
+              }
+            }
+            isHost={canModerate}
+            onSendTimerAction={(params) =>
+              signalingRef.current?.sendTimerAction(params)
+            }
+          />
+        </div>
+
         <div className="call-topbar-right">
           <BackendStatusIndicator compact />
           <div
@@ -3269,6 +3558,31 @@ export function MeetingRoomView({
           </button>
         </div>
       </header>
+
+      {breakoutState?.active && (
+        <div className="active-breakout-banner" data-testid="breakout-banner">
+          <span>
+            🚪 <strong>Breakout Session Active</strong>
+            {breakoutState.rooms.find((r) =>
+              r.peerIds.includes(signalingRef.current?.selfId ?? ''),
+            )
+              ? ` — You are in ${
+                  breakoutState.rooms.find((r) =>
+                    r.peerIds.includes(signalingRef.current?.selfId ?? ''),
+                  )?.name
+                }`
+              : ' — Main Room'}
+          </span>
+          <button
+            type="button"
+            className="btn secondary sm"
+            onClick={() => setShowBreakoutModal(true)}
+            style={{ marginLeft: 8 }}
+          >
+            Manage / View
+          </button>
+        </div>
+      )}
 
       {/* Center workspace: full-stage video canvas + optional side chat or host panel */}
       <div
@@ -3512,6 +3826,10 @@ export function MeetingRoomView({
           {/* Remote Participant Tiles */}
           {visibleRemoteList.map((peer) => {
             const isFloating = Boolean(isPipActive && isRemoteFloating);
+            const queueIdx = handRaiseQueue.findIndex(
+              (item) => item.peerId === peer.id,
+            );
+            const handRaiseOrder = queueIdx >= 0 ? queueIdx + 1 : null;
             return (
               <RemoteVideoTile
                 key={peer.id}
@@ -3521,6 +3839,8 @@ export function MeetingRoomView({
                 isSpeaking={activeSpeakerId === peer.id}
                 isPinned={effectiveSpotlightId === peer.id}
                 canModerate={canModerate}
+                handRaiseOrder={handRaiseOrder}
+                onLowerHand={() => signalingRef.current?.lowerHand(peer.id)}
                 isFloating={isFloating}
                 pipCorner={isFloating ? pipCorner : undefined}
                 dragOffset={isFloating ? dragOffset : undefined}
@@ -3550,137 +3870,153 @@ export function MeetingRoomView({
           })}
 
           {/* Local Participant Tile */}
-          <div
-            className={`call-tile local-tile ${activeSpeakerId === 'local' ? 'active-speaker-ring' : ''} ${effectiveSpotlightId === 'local' ? 'pinned-tile' : ''} ${!hasLocalVideoTrack ? 'camera-off-studio' : ''} ${
-              isLocalFloating
-                ? `pip-floating-tile corner-${pipCorner} ${dragOffset ? 'dragging' : ''}`
-                : ''
-            }`}
-            style={
-              isLocalFloating && dragOffset
-                ? {
-                    transform: `translate3d(${dragOffset.x}px, ${dragOffset.y}px, 0)`,
-                  }
-                : undefined
-            }
-            onPointerDown={isLocalFloating ? handlePipPointerDown : undefined}
-            onPointerMove={isLocalFloating ? handlePipPointerMove : undefined}
-            onPointerUp={isLocalFloating ? handlePipPointerUp : undefined}
-            onPointerCancel={
-              isLocalFloating ? handlePipPointerCancel : undefined
-            }
-            data-testid="local-tile"
-          >
-            <video
-              ref={callLocalVideoRef}
-              muted
-              autoPlay
-              playsInline
-              className={`tile-video ${hasLocalVideoTrack ? 'visible' : 'hidden'} ${!mirrorSelfView ? 'unmirrored' : ''}`}
-            />
-            {!hasLocalVideoTrack && (
-              <div className="tile-avatar-fallback">
-                <div
-                  className={`tile-avatar-ring ${!audioMuted && micLevel > 12 ? 'speaking' : ''}`}
-                >
-                  <Avatar
-                    name={displayName || user?.displayName || 'You'}
-                    src={user?.avatarUrl}
-                    className="tile-avatar-circle"
-                  />
-                </div>
-                {bandwidthMode === 'audio_only' && !isLocalFloating && (
-                  <small className="audio-only-tile-note">
-                    Audio-Only mode active
-                  </small>
-                )}
-              </div>
-            )}
-
-            {isLocalFloating && (
-              <button
-                type="button"
-                className="pip-swap-btn"
-                onPointerDown={(e) => e.stopPropagation()}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setIsPiPSwapped((prev) => !prev);
-                }}
-                aria-label="Swap video views"
-                title="Swap video views"
+          {(() => {
+            const selfQueueIdx = handRaiseQueue.findIndex(
+              (item) => item.peerId === signalingRef.current?.selfId,
+            );
+            return (
+              <div
+                className={`call-tile local-tile ${activeSpeakerId === 'local' ? 'active-speaker-ring' : ''} ${effectiveSpotlightId === 'local' ? 'pinned-tile' : ''} ${!hasLocalVideoTrack ? 'camera-off-studio' : ''} ${
+                  isLocalFloating
+                    ? `pip-floating-tile corner-${pipCorner} ${dragOffset ? 'dragging' : ''}`
+                    : ''
+                }`}
+                style={
+                  isLocalFloating && dragOffset
+                    ? {
+                        transform: `translate3d(${dragOffset.x}px, ${dragOffset.y}px, 0)`,
+                      }
+                    : undefined
+                }
+                onPointerDown={
+                  isLocalFloating ? handlePipPointerDown : undefined
+                }
+                onPointerMove={
+                  isLocalFloating ? handlePipPointerMove : undefined
+                }
+                onPointerUp={isLocalFloating ? handlePipPointerUp : undefined}
+                onPointerCancel={
+                  isLocalFloating ? handlePipPointerCancel : undefined
+                }
+                data-testid="local-tile"
               >
-                <SwapIcon />
-              </button>
-            )}
-
-            <div className="tile-top-bar">
-              <div className="tile-badges-left">
-                {handRaised && (
-                  <span className="hand-raised-pill">✋ Hand raised</span>
-                )}
-                {screenSharing && (
-                  <span className="screen-pill">Sharing screen</span>
-                )}
-              </div>
-
-              <div className="tile-hover-actions">
-                <button
-                  type="button"
-                  className="tile-icon-btn"
-                  onClick={handleToggleMirror}
-                  title="Flip self-view mirror (L)"
-                >
-                  {mirrorSelfView ? 'Unmirror' : 'Mirror'}
-                </button>
-                <button
-                  type="button"
-                  className={`tile-icon-btn ${effectiveSpotlightId === 'local' ? 'active' : ''}`}
-                  onClick={() =>
-                    setPinnedTargetId((curr) =>
-                      curr === 'local' ? null : 'local',
-                    )
-                  }
-                >
-                  {effectiveSpotlightId === 'local' ? 'Unpin' : 'Pin'}
-                </button>
-              </div>
-            </div>
-
-            <div className="tile-meta-bar">
-              <div className="tile-name-badge">
-                <span>{displayName || 'You'}</span>
-                {selfRole === 'host' && <span className="role-pill">Host</span>}
-                {selfRole === 'cohost' && (
-                  <span className="role-pill">Cohost</span>
-                )}
-                {user ? (
-                  <span
-                    className="role-pill verified-tile-pill"
-                    title="Verified account"
-                  >
-                    ✓
-                  </span>
-                ) : (
-                  <span
-                    className="role-pill guest-tile-pill"
-                    title="Guest attendee"
-                  >
-                    Guest
-                  </span>
-                )}
-              </div>
-              <div className="tile-status-icons">
-                <NetworkBarsBadge
-                  bars={localNetworkSummary.bars}
-                  level={localNetworkSummary.level}
-                  rttMs={localNetworkSummary.rttMs}
-                  packetLossPct={localNetworkSummary.packetLossPct}
-                  bitrateKbps={localNetworkSummary.bitrateKbps}
+                <video
+                  ref={callLocalVideoRef}
+                  muted
+                  autoPlay
+                  playsInline
+                  className={`tile-video ${hasLocalVideoTrack ? 'visible' : 'hidden'} ${!mirrorSelfView ? 'unmirrored' : ''}`}
                 />
-                {audioMuted && <span className="muted-badge">Muted</span>}
+                {!hasLocalVideoTrack && (
+                  <div className="tile-avatar-fallback">
+                    <div
+                      className={`tile-avatar-ring ${!audioMuted && micLevel > 12 ? 'speaking' : ''}`}
+                    >
+                      <Avatar
+                        name={displayName || user?.displayName || 'You'}
+                        src={user?.avatarUrl}
+                        className="tile-avatar-circle"
+                      />
+                    </div>
+                    {bandwidthMode === 'audio_only' && !isLocalFloating && (
+                      <small className="audio-only-tile-note">
+                        Audio-Only mode active
+                      </small>
+                    )}
+                  </div>
+                )}
+
+                {isLocalFloating && (
+                  <button
+                    type="button"
+                    className="pip-swap-btn"
+                    onPointerDown={(e) => e.stopPropagation()}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setIsPiPSwapped((prev) => !prev);
+                    }}
+                    aria-label="Swap video views"
+                    title="Swap video views"
+                  >
+                    <SwapIcon />
+                  </button>
+                )}
+
+                <div className="tile-top-bar">
+                  <div className="tile-badges-left">
+                    {handRaised && (
+                      <span className="hand-raised-pill">
+                        ✋ {selfQueueIdx >= 0 ? `#${selfQueueIdx + 1} ` : ''}
+                        Hand raised
+                      </span>
+                    )}
+                    {screenSharing && (
+                      <span className="screen-pill">Sharing screen</span>
+                    )}
+                  </div>
+
+                  <div className="tile-hover-actions">
+                    <button
+                      type="button"
+                      className="tile-icon-btn"
+                      onClick={handleToggleMirror}
+                      title="Flip self-view mirror (L)"
+                    >
+                      {mirrorSelfView ? 'Unmirror' : 'Mirror'}
+                    </button>
+                    <button
+                      type="button"
+                      className={`tile-icon-btn ${effectiveSpotlightId === 'local' ? 'active' : ''}`}
+                      onClick={() =>
+                        setPinnedTargetId((curr) =>
+                          curr === 'local' ? null : 'local',
+                        )
+                      }
+                    >
+                      {effectiveSpotlightId === 'local' ? 'Unpin' : 'Pin'}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="tile-meta-bar">
+                  <div className="tile-name-badge">
+                    <span>{displayName || 'You'}</span>
+                    {selfRole === 'host' && (
+                      <span className="role-pill">Host</span>
+                    )}
+                    {selfRole === 'cohost' && (
+                      <span className="role-pill">Cohost</span>
+                    )}
+                    {user ? (
+                      <span
+                        className="role-pill verified-tile-pill"
+                        title="Verified account"
+                      >
+                        ✓
+                      </span>
+                    ) : (
+                      <span
+                        className="role-pill guest-tile-pill"
+                        title="Guest attendee"
+                      >
+                        Guest
+                      </span>
+                    )}
+                  </div>
+                  <div className="tile-status-icons">
+                    <NetworkBarsBadge
+                      bars={localNetworkSummary.bars}
+                      level={localNetworkSummary.level}
+                      rttMs={localNetworkSummary.rttMs}
+                      packetLossPct={localNetworkSummary.packetLossPct}
+                      bitrateKbps={localNetworkSummary.bitrateKbps}
+                    />
+                    {audioMuted && <span className="muted-badge">Muted</span>}
+                  </div>
+                </div>
               </div>
-            </div>
-          </div>
+            );
+          })()}
 
           {/* Gallery pagination bar */}
           {layout.totalPages > 1 && (
@@ -4019,6 +4355,22 @@ export function MeetingRoomView({
               ) : (
                 chatMessages.map((msg) => (
                   <div key={msg.id} className="chat-message-item">
+                    {msg.replyToId && (
+                      <div className="chat-reply-quote">
+                        <span>
+                          ↳ In reply to{' '}
+                          <strong>
+                            {chatMessages.find((m) => m.id === msg.replyToId)
+                              ?.displayName || 'message'}
+                          </strong>
+                        </span>
+                        <small>
+                          {chatMessages
+                            .find((m) => m.id === msg.replyToId)
+                            ?.text.slice(0, 60)}
+                        </small>
+                      </div>
+                    )}
                     <div className="chat-message-meta">
                       <strong>{msg.displayName}</strong>
                       <time>
@@ -4028,16 +4380,137 @@ export function MeetingRoomView({
                         })}
                       </time>
                     </div>
-                    <p>{msg.text}</p>
+                    {msg.text && <p>{msg.text}</p>}
+                    {msg.file && (
+                      <div className="chat-file-attachment">
+                        <span className="file-icon">📎</span>
+                        <div className="file-info">
+                          <a
+                            href={msg.file.url}
+                            download={msg.file.name}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="file-name"
+                          >
+                            {msg.file.name}
+                          </a>
+                          <span className="file-size">
+                            {(msg.file.size / (1024 * 1024)).toFixed(2)} MB
+                          </span>
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="chat-msg-footer">
+                      <div className="chat-msg-reactions">
+                        {msg.reactions &&
+                          Object.entries(msg.reactions).map(
+                            ([emoji, peers]) => (
+                              <button
+                                key={emoji}
+                                type="button"
+                                className={`chat-reaction-tag ${
+                                  peers.includes(
+                                    signalingRef.current?.selfId ?? '',
+                                  )
+                                    ? 'reacted'
+                                    : ''
+                                }`}
+                                onClick={() =>
+                                  handleChatReaction(msg.id, emoji)
+                                }
+                                title={`Reacted by ${peers.length} participant(s)`}
+                              >
+                                <span>{emoji}</span>
+                                <span className="reaction-count">
+                                  {peers.length}
+                                </span>
+                              </button>
+                            ),
+                          )}
+                        <button
+                          type="button"
+                          className="btn-add-chat-reaction"
+                          title="Add thumbs up"
+                          onClick={() => handleChatReaction(msg.id, '👍')}
+                        >
+                          +👍
+                        </button>
+                        <button
+                          type="button"
+                          className="btn-add-chat-reaction"
+                          title="Add heart"
+                          onClick={() => handleChatReaction(msg.id, '❤️')}
+                        >
+                          +❤️
+                        </button>
+                      </div>
+                      <button
+                        type="button"
+                        className="btn-chat-reply"
+                        onClick={() => setReplyingToMessage(msg)}
+                        title="Reply to message"
+                      >
+                        Reply
+                      </button>
+                    </div>
                   </div>
                 ))
               )}
             </div>
 
+            {replyingToMessage && (
+              <div className="chat-reply-banner">
+                <span>
+                  Replying to <strong>{replyingToMessage.displayName}</strong>
+                </span>
+                <button
+                  type="button"
+                  className="btn-close-reply"
+                  onClick={() => setReplyingToMessage(null)}
+                  title="Cancel reply"
+                >
+                  ✕
+                </button>
+              </div>
+            )}
+
+            {chatAttachment && (
+              <div className="chat-attachment-preview">
+                <span>📎 {chatAttachment.name}</span>
+                <button
+                  type="button"
+                  className="btn-close-reply"
+                  onClick={() => setChatAttachment(null)}
+                  title="Remove attachment"
+                >
+                  ✕
+                </button>
+              </div>
+            )}
+
             <form className="chat-input-row" onSubmit={handleSendChat}>
               <input
+                type="file"
+                ref={fileInputRef}
+                style={{ display: 'none' }}
+                onChange={handleFileUpload}
+              />
+              <button
+                type="button"
+                className="btn-attach-file"
+                title="Attach file (up to 25MB)"
+                onClick={() => fileInputRef.current?.click()}
+              >
+                📎
+              </button>
+              <input
                 type="text"
-                placeholder="Send a message to everyone…"
+                placeholder={
+                  replyingToMessage
+                    ? `Reply to ${replyingToMessage.displayName}…`
+                    : 'Send a message to everyone…'
+                }
                 value={chatDraft}
                 maxLength={2000}
                 onChange={(e) => setChatDraft(e.target.value)}
@@ -4047,7 +4520,7 @@ export function MeetingRoomView({
               <button
                 type="submit"
                 className="btn primary"
-                disabled={!chatDraft.trim()}
+                disabled={!chatDraft.trim() && !chatAttachment}
                 data-testid="chat-send-btn"
               >
                 Send
@@ -4410,6 +4883,117 @@ export function MeetingRoomView({
         </div>
 
         <div className="call-dock-right">
+          {/* Breakout Rooms */}
+          <button
+            type="button"
+            className={`call-side-btn ${showBreakoutModal ? 'active-panel' : ''}`}
+            onClick={() => setShowBreakoutModal(true)}
+            aria-pressed={showBreakoutModal}
+            aria-label="Breakout Rooms"
+            title="Breakout Rooms"
+            data-testid="call-breakout-btn"
+          >
+            <span style={{ fontSize: 16 }}>🚪</span>
+            <span>Rooms</span>
+            {breakoutState?.active && (
+              <span
+                className="unread-chat-badge"
+                style={{ background: 'var(--brand-primary, #6366f1)' }}
+              >
+                On
+              </span>
+            )}
+          </button>
+
+          {/* In-call Polls & Quizzes */}
+          <button
+            type="button"
+            className={`call-side-btn ${showPollsPanel ? 'active-panel' : ''}`}
+            onClick={() => setShowPollsPanel((v) => !v)}
+            aria-pressed={showPollsPanel}
+            aria-label="Polls & Quizzes"
+            title="Polls & Quizzes"
+            data-testid="call-polls-btn"
+          >
+            <span style={{ fontSize: 16 }}>📊</span>
+            <span>Polls</span>
+            {polls.filter((p) => !p.closed).length > 0 && (
+              <span className="unread-chat-badge">
+                {polls.filter((p) => !p.closed).length}
+              </span>
+            )}
+          </button>
+
+          {/* FormIT survey launcher */}
+          <button
+            type="button"
+            className={`call-side-btn ${showFormItModal ? 'active-panel' : ''}`}
+            onClick={() => setShowFormItModal(true)}
+            aria-pressed={showFormItModal}
+            aria-label="FormIT Survey"
+            title="FormIT Survey"
+            data-testid="call-formit-btn"
+          >
+            <span style={{ fontSize: 16 }}>📋</span>
+            <span>FormIT</span>
+            {formItSession && (
+              <span
+                className="unread-chat-badge"
+                style={{ background: '#10b981' }}
+              >
+                Live
+              </span>
+            )}
+          </button>
+
+          {/* Q&A panel */}
+          <button
+            type="button"
+            className={`call-side-btn ${showQAPanel ? 'active-panel' : ''}`}
+            onClick={() => setShowQAPanel((v) => !v)}
+            aria-pressed={showQAPanel}
+            aria-label="Q&A"
+            title="Q&A"
+            data-testid="call-qa-btn"
+          >
+            <span style={{ fontSize: 16 }}>❓</span>
+            <span>Q&amp;A</span>
+            {qaQuestions.filter((q) => !q.answered && !q.dismissed).length >
+              0 && (
+              <span className="unread-chat-badge">
+                {qaQuestions.filter((q) => !q.answered && !q.dismissed).length}
+              </span>
+            )}
+          </button>
+
+          {/* Whiteboard */}
+          <button
+            type="button"
+            className={`call-side-btn ${showWhiteboardModal ? 'active-panel' : ''}`}
+            onClick={() => setShowWhiteboardModal((v) => !v)}
+            aria-pressed={showWhiteboardModal}
+            aria-label="Shared Whiteboard"
+            title="Shared Whiteboard"
+            data-testid="call-whiteboard-btn"
+          >
+            <span style={{ fontSize: 16 }}>🎨</span>
+            <span>Board</span>
+          </button>
+
+          {/* Shared Collaborative Notes */}
+          <button
+            type="button"
+            className={`call-side-btn ${showSharedNotesPanel ? 'active-panel' : ''}`}
+            onClick={() => setShowSharedNotesPanel((v) => !v)}
+            aria-pressed={showSharedNotesPanel}
+            aria-label="Collaborative Notes"
+            title="Collaborative Notes"
+            data-testid="call-notes-btn"
+          >
+            <span style={{ fontSize: 16 }}>📝</span>
+            <span>Notes</span>
+          </button>
+
           {/* People & Host Controls toggle button with waiting room badge */}
           <button
             type="button"
@@ -4687,6 +5271,112 @@ export function MeetingRoomView({
           onClose={() => setShowCaptionSettings(false)}
         />
       )}
+
+      {/* Collaboration Modals & Panels */}
+      <BreakoutModal
+        isOpen={showBreakoutModal}
+        onClose={() => setShowBreakoutModal(false)}
+        isHost={canModerate}
+        selfId={signalingRef.current?.selfId ?? ''}
+        peers={remoteList}
+        breakoutState={breakoutState}
+        onStartBreakout={() => signalingRef.current?.startBreakout()}
+        onCreateRooms={(rooms, durationMinutes) =>
+          signalingRef.current?.createBreakoutRooms(rooms, durationMinutes)
+        }
+        onAssignPeer={(roomId, peerId) =>
+          signalingRef.current?.assignBreakoutPeer(roomId, peerId)
+        }
+        onBroadcastMessage={(message) =>
+          signalingRef.current?.broadcastBreakout(message)
+        }
+        onRecallBreakout={(noticeSeconds) =>
+          signalingRef.current?.recallBreakout(noticeSeconds)
+        }
+        onEndBreakout={() => signalingRef.current?.endBreakout()}
+        onJoinRoom={(roomId) => signalingRef.current?.joinBreakoutRoom(roomId)}
+        onLeaveRoom={() => signalingRef.current?.leaveBreakoutRoom()}
+      />
+
+      <PollsPanel
+        isOpen={showPollsPanel}
+        onClose={() => setShowPollsPanel(false)}
+        isHost={canModerate}
+        selfId={signalingRef.current?.selfId ?? ''}
+        polls={polls}
+        onCreatePoll={(params) => signalingRef.current?.createPoll(params)}
+        onVotePoll={(pollId, optionIndices) =>
+          signalingRef.current?.votePoll(pollId, optionIndices)
+        }
+        onClosePoll={(pollId) => signalingRef.current?.closePoll(pollId)}
+        onDeletePoll={(pollId) => signalingRef.current?.deletePoll(pollId)}
+        onOpenFormItSurvey={() => setShowFormItModal(true)}
+      />
+
+      <FormItModal
+        isOpen={showFormItModal}
+        onClose={() => setShowFormItModal(false)}
+        isHost={canModerate}
+        selfId={signalingRef.current?.selfId ?? ''}
+        displayName={displayName || user?.displayName || 'Guest'}
+        activeSession={formItSession}
+        onLaunchFormIt={(formUrl, title) =>
+          signalingRef.current?.launchFormIt(formUrl, title)
+        }
+        onSubmitFormIt={(id, editKey) =>
+          signalingRef.current?.submitFormIt(id, editKey)
+        }
+        onCloseFormIt={(id) => signalingRef.current?.closeFormIt(id)}
+        onAttachToSummary={(session) => {
+          onToast(`Attached FormIT survey (${session.slug}) to meeting notes.`);
+        }}
+      />
+
+      <QAPanel
+        isOpen={showQAPanel}
+        onClose={() => setShowQAPanel(false)}
+        isHost={canModerate}
+        selfId={signalingRef.current?.selfId ?? ''}
+        questions={qaQuestions}
+        onAskQuestion={(question) =>
+          signalingRef.current?.askQuestion(question)
+        }
+        onUpvoteQuestion={(questionId) =>
+          signalingRef.current?.upvoteQuestion(questionId)
+        }
+        onAnswerQuestion={(questionId, answered) =>
+          signalingRef.current?.answerQuestion(questionId, answered)
+        }
+        onDismissQuestion={(questionId, dismissed) =>
+          signalingRef.current?.dismissQuestion(questionId, dismissed)
+        }
+        onDeleteQuestion={(questionId) =>
+          signalingRef.current?.deleteQuestion(questionId)
+        }
+      />
+
+      <WhiteboardModal
+        isOpen={showWhiteboardModal}
+        onClose={() => setShowWhiteboardModal(false)}
+        selfId={signalingRef.current?.selfId ?? ''}
+        whiteboardHistory={whiteboardHistory}
+        onSendAction={(action) =>
+          signalingRef.current?.sendWhiteboardAction(action)
+        }
+      />
+
+      <SharedNotesPanel
+        isOpen={showSharedNotesPanel}
+        onClose={() => setShowSharedNotesPanel(false)}
+        selfDisplayName={displayName || user?.displayName || 'Participant'}
+        notesDoc={notesDoc}
+        onUpdateNotes={(content, version) =>
+          signalingRef.current?.updateSharedNotes(content, version)
+        }
+        onAttachToMeetingRecord={() => {
+          onToast('Collaborative notes synced to meeting summary.');
+        }}
+      />
     </div>
   );
 }

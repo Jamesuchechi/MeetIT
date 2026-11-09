@@ -191,11 +191,11 @@ export function formatExpiryCountdown(expiresAtStr?: string): string | null {
     const now = Date.now();
     const diffMs = target - now;
     if (diffMs <= 0) return 'Expired';
-    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+    const diffDays = Math.round(diffMs / (1000 * 60 * 60 * 24));
     if (diffDays >= 1) {
       return `Expires in ${diffDays}d`;
     }
-    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+    const diffHours = Math.round(diffMs / (1000 * 60 * 60));
     if (diffHours >= 1) {
       return `Expires in ${diffHours}h`;
     }

@@ -2,14 +2,24 @@ import { createHash, randomUUID } from 'node:crypto';
 import type { WebSocket } from 'ws';
 import {
   generateRoomCode,
+  type AgendaItem,
+  type BreakoutRoom,
+  type BreakoutState,
   type ChatMessagePayload,
   type ErrorCode,
+  type FormItSession,
+  type HandRaiseItem,
+  type MeetingTimer,
+  type NotesDoc,
   type PeerInfo,
   type PeerRole,
   type PeerState,
+  type PollItem,
+  type QaItem,
   type RoomPermissions,
   type ServerMessage,
   type WaitingPeer,
+  type WhiteboardAction,
 } from '@meetit/protocol';
 
 const DEFAULT_PEER_STATE: PeerState = {
@@ -121,6 +131,21 @@ export class Room {
   activeEgressId: string | null = null;
   recordingStoragePath: string | null = null;
   readonly createdAt: number = Date.now();
+
+  // Phase 6 Collaboration State
+  breakout: BreakoutState = { active: false, rooms: [] };
+  readonly polls = new Map<string, PollItem>();
+  formit: FormItSession | null = null;
+  readonly qa = new Map<string, QaItem>();
+  handRaiseQueue: HandRaiseItem[] = [];
+  whiteboardHistory: WhiteboardAction[] = [];
+  notesDoc: NotesDoc = { content: '', version: 0, lastUpdatedAt: Date.now() };
+  meetingTimer: MeetingTimer = {
+    type: 'stopwatch',
+    running: false,
+    durationSeconds: 0,
+    agenda: [],
+  };
 
   private readonly peers = new Map<string, Peer>();
   private readonly waitingPeers = new Map<string, WaitingEntry>();
@@ -759,6 +784,9 @@ export class Room {
     }
 
     this.peers.delete(peerId);
+    this.handRaiseQueue = this.handRaiseQueue.filter(
+      (h) => h.peerId !== peerId,
+    );
 
     // Reassign host if the host left (prefer cohost -> verified attendee -> any active peer)
     if (this.hostId === peerId) {
@@ -824,6 +852,354 @@ export class Room {
         peer.reclaimTimer = null;
       }
     }
+  }
+
+  // --- Collaboration (Phase 6) methods ---
+
+  createBreakoutRooms(
+    rooms: Array<{ name: string; peerIds?: string[] }>,
+    durationMinutes?: number,
+  ): BreakoutState {
+    const breakoutRooms: BreakoutRoom[] = rooms.map((r, idx) => ({
+      id: `bo-${randomUUID().slice(0, 8)}`,
+      name: r.name || `Room ${idx + 1}`,
+      peerIds: r.peerIds ?? [],
+    }));
+
+    this.breakout = {
+      active: false,
+      rooms: breakoutRooms,
+      ...(durationMinutes
+        ? { timerEndsAt: Date.now() + durationMinutes * 60 * 1000 }
+        : {}),
+    };
+    return this.breakout;
+  }
+
+  assignBreakoutPeer(roomId: string, peerId: string): BreakoutState {
+    for (const room of this.breakout.rooms) {
+      room.peerIds = room.peerIds.filter((id) => id !== peerId);
+      if (room.id === roomId) {
+        room.peerIds.push(peerId);
+      }
+    }
+    return this.breakout;
+  }
+
+  startBreakout(): BreakoutState {
+    this.breakout.active = true;
+    delete this.breakout.returnNoticeSeconds;
+    return this.breakout;
+  }
+
+  recallBreakout(noticeSeconds = 30): BreakoutState {
+    this.breakout.returnNoticeSeconds = noticeSeconds;
+    return this.breakout;
+  }
+
+  endBreakout(): BreakoutState {
+    this.breakout.active = false;
+    delete this.breakout.returnNoticeSeconds;
+    return this.breakout;
+  }
+
+  createPoll(params: {
+    question: string;
+    options: string[];
+    isQuiz?: boolean | undefined;
+    correctOptionIndex?: number | undefined;
+    allowMultiple?: boolean | undefined;
+    createdBy: string;
+    creatorName: string;
+  }): PollItem {
+    const id = `poll-${randomUUID().slice(0, 8)}`;
+    const poll: PollItem = {
+      id,
+      question: params.question,
+      options: params.options,
+      ...(params.isQuiz !== undefined ? { isQuiz: params.isQuiz } : {}),
+      ...(params.correctOptionIndex !== undefined
+        ? { correctOptionIndex: params.correctOptionIndex }
+        : {}),
+      ...(params.allowMultiple !== undefined
+        ? { allowMultiple: params.allowMultiple }
+        : {}),
+      createdBy: params.createdBy,
+      creatorName: params.creatorName,
+      createdAt: Date.now(),
+      closed: false,
+      votes: {},
+    };
+    this.polls.set(id, poll);
+    return poll;
+  }
+
+  votePoll(
+    pollId: string,
+    peerId: string,
+    optionIndices: number[],
+  ): PollItem | null {
+    const poll = this.polls.get(pollId);
+    if (!poll || poll.closed) return null;
+    const firstOpt = optionIndices[0];
+    poll.votes[peerId] = poll.allowMultiple
+      ? optionIndices
+      : firstOpt !== undefined
+        ? [firstOpt]
+        : [];
+    return poll;
+  }
+
+  closePoll(pollId: string): PollItem | null {
+    const poll = this.polls.get(pollId);
+    if (!poll) return null;
+    poll.closed = true;
+    return poll;
+  }
+
+  deletePoll(pollId: string): boolean {
+    return this.polls.delete(pollId);
+  }
+
+  listPolls(): PollItem[] {
+    return Array.from(this.polls.values());
+  }
+
+  launchFormIt(formUrl: string, title?: string): FormItSession {
+    const match = formUrl.match(/\/f\/([^/?#]+)/);
+    const slug = match && match[1] ? match[1] : 'form';
+    const session: FormItSession = {
+      id: `formit-${randomUUID().slice(0, 8)}`,
+      formUrl,
+      slug,
+      ...(title ? { title } : {}),
+      active: true,
+      launchedAt: Date.now(),
+      submissionsCount: 0,
+      responses: [],
+    };
+    this.formit = session;
+    return session;
+  }
+
+  recordFormItSubmission(
+    peerId?: string,
+    displayName?: string,
+    editKey?: string | null,
+  ): FormItSession | null {
+    if (!this.formit || !this.formit.active) return null;
+    this.formit.submissionsCount += 1;
+    this.formit.responses.push({
+      ...(peerId ? { peerId } : {}),
+      ...(displayName ? { displayName } : {}),
+      submittedAt: Date.now(),
+      ...(editKey ? { editKey } : {}),
+    });
+    return this.formit;
+  }
+
+  closeFormIt(): FormItSession | null {
+    if (!this.formit) return null;
+    this.formit.active = false;
+    return this.formit;
+  }
+
+  askQuestion(peerId: string, displayName: string, question: string): QaItem {
+    const id = `qa-${randomUUID().slice(0, 8)}`;
+    const qaItem: QaItem = {
+      id,
+      peerId,
+      displayName,
+      question,
+      ts: Date.now(),
+      upvotes: [],
+      answered: false,
+    };
+    this.qa.set(id, qaItem);
+    return qaItem;
+  }
+
+  upvoteQuestion(questionId: string, peerId: string): QaItem | null {
+    const item = this.qa.get(questionId);
+    if (!item) return null;
+    if (item.upvotes.includes(peerId)) {
+      item.upvotes = item.upvotes.filter((id) => id !== peerId);
+    } else {
+      item.upvotes.push(peerId);
+    }
+    return item;
+  }
+
+  answerQuestion(questionId: string, answered: boolean): QaItem | null {
+    const item = this.qa.get(questionId);
+    if (!item) return null;
+    item.answered = answered;
+    if (answered) {
+      item.answeredAt = Date.now();
+    } else {
+      delete item.answeredAt;
+    }
+    return item;
+  }
+
+  dismissQuestion(questionId: string, dismissed: boolean): QaItem | null {
+    const item = this.qa.get(questionId);
+    if (!item) return null;
+    item.dismissed = dismissed;
+    return item;
+  }
+
+  deleteQuestion(questionId: string): boolean {
+    return this.qa.delete(questionId);
+  }
+
+  listQa(): QaItem[] {
+    return Array.from(this.qa.values());
+  }
+
+  updateHandRaise(
+    peerId: string,
+    displayName: string,
+    raised: boolean,
+  ): HandRaiseItem[] {
+    if (raised) {
+      if (!this.handRaiseQueue.some((item) => item.peerId === peerId)) {
+        this.handRaiseQueue.push({
+          peerId,
+          displayName,
+          raisedAt: Date.now(),
+        });
+      }
+    } else {
+      this.handRaiseQueue = this.handRaiseQueue.filter(
+        (item) => item.peerId !== peerId,
+      );
+    }
+    return this.handRaiseQueue;
+  }
+
+  lowerHand(targetPeerId?: string): HandRaiseItem[] {
+    if (targetPeerId) {
+      this.handRaiseQueue = this.handRaiseQueue.filter(
+        (item) => item.peerId !== targetPeerId,
+      );
+      const peer = this.peers.get(targetPeerId);
+      if (peer) {
+        peer.state.handRaised = false;
+      }
+    } else {
+      for (const item of this.handRaiseQueue) {
+        const peer = this.peers.get(item.peerId);
+        if (peer) {
+          peer.state.handRaised = false;
+        }
+      }
+      this.handRaiseQueue = [];
+    }
+    return this.handRaiseQueue;
+  }
+
+  recordWhiteboardAction(action: WhiteboardAction): void {
+    if (action.type === 'clear') {
+      this.whiteboardHistory = [action];
+    } else {
+      this.whiteboardHistory.push(action);
+      if (this.whiteboardHistory.length > 500) {
+        this.whiteboardHistory.shift();
+      }
+    }
+  }
+
+  updateNotes(
+    content: string,
+    version: number,
+    displayName?: string,
+  ): NotesDoc {
+    this.notesDoc = {
+      content,
+      version,
+      ...(displayName ? { lastUpdatedBy: displayName } : {}),
+      lastUpdatedAt: Date.now(),
+    };
+    return this.notesDoc;
+  }
+
+  updateMeetingTimer(params: {
+    action:
+      | 'start'
+      | 'pause'
+      | 'reset'
+      | 'set_countdown'
+      | 'next_agenda'
+      | 'set_agenda';
+    durationSeconds?: number | undefined;
+    agenda?: AgendaItem[] | undefined;
+  }): MeetingTimer {
+    if (params.action === 'set_countdown') {
+      this.meetingTimer.type = 'countdown';
+      this.meetingTimer.durationSeconds = params.durationSeconds ?? 300;
+      this.meetingTimer.remainingSeconds = this.meetingTimer.durationSeconds;
+    } else if (params.action === 'start') {
+      this.meetingTimer.running = true;
+      this.meetingTimer.startedAt = Date.now();
+    } else if (params.action === 'pause') {
+      this.meetingTimer.running = false;
+      if (
+        this.meetingTimer.type === 'countdown' &&
+        this.meetingTimer.startedAt &&
+        this.meetingTimer.remainingSeconds !== undefined
+      ) {
+        const elapsed = Math.floor(
+          (Date.now() - this.meetingTimer.startedAt) / 1000,
+        );
+        this.meetingTimer.remainingSeconds = Math.max(
+          0,
+          this.meetingTimer.remainingSeconds - elapsed,
+        );
+      }
+    } else if (params.action === 'reset') {
+      this.meetingTimer.running = false;
+      delete this.meetingTimer.startedAt;
+      this.meetingTimer.remainingSeconds = this.meetingTimer.durationSeconds;
+    } else if (params.action === 'set_agenda') {
+      if (params.agenda) {
+        this.meetingTimer.agenda = params.agenda;
+      }
+    } else if (params.action === 'next_agenda') {
+      const current = this.meetingTimer.activeAgendaIndex ?? 0;
+      if (this.meetingTimer.agenda && this.meetingTimer.agenda[current]) {
+        this.meetingTimer.agenda[current].completed = true;
+      }
+      if (
+        this.meetingTimer.agenda &&
+        current + 1 < this.meetingTimer.agenda.length
+      ) {
+        this.meetingTimer.activeAgendaIndex = current + 1;
+      }
+    }
+    return this.meetingTimer;
+  }
+
+  addChatReaction(
+    messageId: string,
+    emoji: string,
+    peerId: string,
+  ): Record<string, string[]> | null {
+    const msg = this.chatHistory.find((m) => m.id === messageId);
+    if (!msg) return null;
+    if (!msg.reactions) {
+      msg.reactions = {};
+    }
+    const currentList = msg.reactions[emoji] ?? [];
+    if (currentList.includes(peerId)) {
+      msg.reactions[emoji] = currentList.filter((p) => p !== peerId);
+      if (msg.reactions[emoji].length === 0) {
+        delete msg.reactions[emoji];
+      }
+    } else {
+      msg.reactions[emoji] = [...currentList, peerId];
+    }
+    return msg.reactions;
   }
 }
 

@@ -62,4 +62,82 @@ describe('protocol schemas and utilities', () => {
     });
     expect(jittered).toBe(4000);
   });
+
+  it('validates Phase 6 collaboration client messages', () => {
+    // Poll creation
+    expect(
+      clientMessageSchema.safeParse({
+        v: 1,
+        type: 'poll.create',
+        payload: {
+          question: 'What is your favorite feature?',
+          options: [
+            'Breakout rooms',
+            'FormIT integration',
+            'Shared whiteboard',
+          ],
+          isQuiz: false,
+        },
+      }).success,
+    ).toBe(true);
+
+    // FormIT launch
+    expect(
+      clientMessageSchema.safeParse({
+        v: 1,
+        type: 'formit.launch',
+        payload: {
+          formUrl: 'https://form-it-sandy.vercel.app/f/team-feedback',
+          title: 'Team Feedback Form',
+        },
+      }).success,
+    ).toBe(true);
+
+    // Breakout action
+    expect(
+      clientMessageSchema.safeParse({
+        v: 1,
+        type: 'host.action',
+        payload: {
+          action: 'breakout_create',
+          rooms: [
+            { name: 'Room Alpha', peerIds: [] },
+            { name: 'Room Beta', peerIds: [] },
+          ],
+          durationMinutes: 15,
+        },
+      }).success,
+    ).toBe(true);
+
+    // Q&A
+    expect(
+      clientMessageSchema.safeParse({
+        v: 1,
+        type: 'qa.ask',
+        payload: {
+          question: 'Will recordings include breakout room transcripts?',
+        },
+      }).success,
+    ).toBe(true);
+
+    // Whiteboard action
+    expect(
+      clientMessageSchema.safeParse({
+        v: 1,
+        type: 'whiteboard.action',
+        payload: {
+          id: 'stroke-1',
+          type: 'stroke',
+          color: '#3b82f6',
+          size: 3,
+          points: [
+            { x: 10, y: 20 },
+            { x: 30, y: 40 },
+          ],
+          peerId: '550e8400-e29b-41d4-a716-446655440000',
+          ts: Date.now(),
+        },
+      }).success,
+    ).toBe(true);
+  });
 });

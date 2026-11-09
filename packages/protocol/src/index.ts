@@ -49,7 +49,7 @@ export function computeBackoffMs(
 export const peerRoleSchema = z.enum(['host', 'cohost', 'attendee', 'guest']);
 export type PeerRole = z.infer<typeof peerRoleSchema>;
 
-export const reactionEmojiSchema = z.enum(['👍', '👏', '❤️', '🎉', '😂', '😮']);
+export const reactionEmojiSchema = z.string().min(1).max(32);
 export type ReactionEmoji = z.infer<typeof reactionEmojiSchema>;
 
 export const peerStateSchema = z.object({
@@ -86,15 +86,145 @@ export const waitingPeerSchema = z.object({
 });
 export type WaitingPeer = z.infer<typeof waitingPeerSchema>;
 
+export const chatAttachmentSchema = z.object({
+  name: z.string().min(1).max(255),
+  size: z.number().int().min(0),
+  url: z.string(),
+  mime: z.string().max(100),
+});
+export type ChatAttachment = z.infer<typeof chatAttachmentSchema>;
+
 export const chatMessageSchema = z.object({
   id: z.string().min(1),
   seq: z.number().int().optional(),
   from: z.string().uuid(),
   displayName: z.string().trim().min(1).max(80),
-  text: z.string().min(1).max(4000),
+  text: z.string().max(4000),
   ts: z.number(),
+  replyToId: z.string().optional(),
+  mentions: z.array(z.string()).optional(),
+  file: chatAttachmentSchema.optional(),
+  reactions: z.record(z.string(), z.array(z.string())).optional(),
 });
 export type ChatMessagePayload = z.infer<typeof chatMessageSchema>;
+
+// Breakout rooms
+export const breakoutRoomSchema = z.object({
+  id: z.string().min(1),
+  name: z.string().min(1).max(50),
+  peerIds: z.array(z.string().uuid()).default([]),
+});
+export type BreakoutRoom = z.infer<typeof breakoutRoomSchema>;
+
+export const breakoutStateSchema = z.object({
+  active: z.boolean(),
+  rooms: z.array(breakoutRoomSchema),
+  timerEndsAt: z.number().optional(),
+  returnNoticeSeconds: z.number().optional(),
+});
+export type BreakoutState = z.infer<typeof breakoutStateSchema>;
+
+// Polls & Quizzes
+export const pollItemSchema = z.object({
+  id: z.string().min(1),
+  question: z.string().min(1).max(500),
+  options: z.array(z.string().min(1).max(200)).min(2).max(10),
+  isQuiz: z.boolean().optional(),
+  correctOptionIndex: z.number().int().min(0).max(9).optional(),
+  allowMultiple: z.boolean().optional(),
+  createdBy: z.string().uuid(),
+  creatorName: z.string().min(1).max(80),
+  createdAt: z.number(),
+  closed: z.boolean(),
+  votes: z.record(z.string().uuid(), z.array(z.number().int())),
+});
+export type PollItem = z.infer<typeof pollItemSchema>;
+
+// FormIT Integration
+export const formItSessionSchema = z.object({
+  id: z.string().min(1),
+  formUrl: z.string().url(),
+  slug: z.string().min(1),
+  title: z.string().optional(),
+  active: z.boolean(),
+  launchedAt: z.number(),
+  submissionsCount: z.number().int().min(0),
+  responses: z
+    .array(
+      z.object({
+        peerId: z.string().uuid().optional(),
+        displayName: z.string().optional(),
+        submittedAt: z.number(),
+        editKey: z.string().nullable().optional(),
+      }),
+    )
+    .default([]),
+});
+export type FormItSession = z.infer<typeof formItSessionSchema>;
+
+// Q&A
+export const qaItemSchema = z.object({
+  id: z.string().min(1),
+  peerId: z.string().uuid(),
+  displayName: z.string().min(1).max(80),
+  question: z.string().min(1).max(1000),
+  ts: z.number(),
+  upvotes: z.array(z.string().uuid()).default([]),
+  answered: z.boolean(),
+  answeredAt: z.number().optional(),
+  dismissed: z.boolean().optional(),
+});
+export type QaItem = z.infer<typeof qaItemSchema>;
+
+// Hand Raise Queue
+export const handRaiseItemSchema = z.object({
+  peerId: z.string().uuid(),
+  displayName: z.string().min(1).max(80),
+  raisedAt: z.number(),
+});
+export type HandRaiseItem = z.infer<typeof handRaiseItemSchema>;
+
+// Shared Whiteboard
+export const whiteboardActionSchema = z.object({
+  id: z.string().min(1),
+  type: z.enum(['stroke', 'rect', 'circle', 'text', 'clear']),
+  color: z.string().min(1).max(32),
+  size: z.number().min(1).max(50),
+  points: z.array(z.object({ x: z.number(), y: z.number() })).optional(),
+  text: z.string().max(500).optional(),
+  peerId: z.string().uuid(),
+  ts: z.number(),
+});
+export type WhiteboardAction = z.infer<typeof whiteboardActionSchema>;
+
+// Shared Collaborative Notes
+export const notesDocSchema = z.object({
+  content: z.string().max(50000),
+  version: z.number().int().min(0),
+  lastUpdatedBy: z.string().optional(),
+  lastUpdatedAt: z.number(),
+});
+export type NotesDoc = z.infer<typeof notesDocSchema>;
+
+// Agenda & Timers
+export const agendaItemSchema = z.object({
+  id: z.string().min(1),
+  title: z.string().min(1).max(100),
+  durationMinutes: z.number().min(1).max(180),
+  completed: z.boolean(),
+});
+export type AgendaItem = z.infer<typeof agendaItemSchema>;
+
+export const meetingTimerSchema = z.object({
+  type: z.enum(['stopwatch', 'countdown']),
+  running: z.boolean(),
+  durationSeconds: z.number().int().min(0),
+  startedAt: z.number().optional(),
+  remainingSeconds: z.number().int().min(0).optional(),
+  agenda: z.array(agendaItemSchema).default([]),
+  activeAgendaIndex: z.number().int().min(0).optional(),
+});
+export type MeetingTimer = z.infer<typeof meetingTimerSchema>;
 
 export const captionCueSchema = z.object({
   id: z.string().min(1),
@@ -203,6 +333,42 @@ export const hostActionPayloadSchema = z.discriminatedUnion('action', [
   z.object({
     action: z.literal('stop_recording'),
   }),
+  z.object({
+    action: z.literal('breakout_create'),
+    rooms: z
+      .array(
+        z.object({
+          name: z.string().min(1).max(50),
+          peerIds: z.array(z.string().uuid()).default([]),
+        }),
+      )
+      .min(1)
+      .max(50),
+    durationMinutes: z.number().int().min(1).max(180).optional(),
+  }),
+  z.object({
+    action: z.literal('breakout_assign'),
+    roomId: z.string().min(1),
+    peerId: z.string().uuid(),
+  }),
+  z.object({
+    action: z.literal('breakout_start'),
+  }),
+  z.object({
+    action: z.literal('breakout_broadcast'),
+    message: z.string().min(1).max(1000),
+  }),
+  z.object({
+    action: z.literal('breakout_recall'),
+    noticeSeconds: z.number().int().min(0).max(120).default(30),
+  }),
+  z.object({
+    action: z.literal('breakout_end'),
+  }),
+  z.object({
+    action: z.literal('lower_hand'),
+    targetPeerId: z.string().uuid().optional(),
+  }),
 ]);
 export type HostActionPayload = z.infer<typeof hostActionPayloadSchema>;
 
@@ -258,8 +424,200 @@ export const clientMessageSchema = z.discriminatedUnion('type', [
     ts: z.number().optional(),
     type: z.literal('chat.send'),
     payload: z.object({
-      text: z.string().trim().min(1).max(4000),
+      text: z.string().max(4000).default(''),
       to: z.string().uuid().optional(),
+      replyToId: z.string().optional(),
+      mentions: z.array(z.string()).optional(),
+      file: chatAttachmentSchema.optional(),
+    }),
+  }),
+  z.object({
+    v: z.literal(1),
+    id: z.string().uuid().optional(),
+    ts: z.number().optional(),
+    type: z.literal('chat.reaction'),
+    payload: z.object({
+      messageId: z.string().min(1),
+      emoji: reactionEmojiSchema,
+    }),
+  }),
+  z.object({
+    v: z.literal(1),
+    id: z.string().uuid().optional(),
+    ts: z.number().optional(),
+    type: z.literal('poll.create'),
+    payload: z.object({
+      question: z.string().min(1).max(500),
+      options: z.array(z.string().min(1).max(200)).min(2).max(10),
+      isQuiz: z.boolean().optional(),
+      correctOptionIndex: z.number().int().min(0).max(9).optional(),
+      allowMultiple: z.boolean().optional(),
+    }),
+  }),
+  z.object({
+    v: z.literal(1),
+    id: z.string().uuid().optional(),
+    ts: z.number().optional(),
+    type: z.literal('poll.vote'),
+    payload: z.object({
+      pollId: z.string().min(1),
+      optionIndices: z.array(z.number().int().min(0).max(9)).min(1),
+    }),
+  }),
+  z.object({
+    v: z.literal(1),
+    id: z.string().uuid().optional(),
+    ts: z.number().optional(),
+    type: z.literal('poll.close'),
+    payload: z.object({
+      pollId: z.string().min(1),
+    }),
+  }),
+  z.object({
+    v: z.literal(1),
+    id: z.string().uuid().optional(),
+    ts: z.number().optional(),
+    type: z.literal('poll.delete'),
+    payload: z.object({
+      pollId: z.string().min(1),
+    }),
+  }),
+  z.object({
+    v: z.literal(1),
+    id: z.string().uuid().optional(),
+    ts: z.number().optional(),
+    type: z.literal('formit.launch'),
+    payload: z.object({
+      formUrl: z.string().url(),
+      title: z.string().optional(),
+    }),
+  }),
+  z.object({
+    v: z.literal(1),
+    id: z.string().uuid().optional(),
+    ts: z.number().optional(),
+    type: z.literal('formit.close'),
+    payload: z.object({
+      id: z.string().min(1),
+    }),
+  }),
+  z.object({
+    v: z.literal(1),
+    id: z.string().uuid().optional(),
+    ts: z.number().optional(),
+    type: z.literal('formit.submit'),
+    payload: z.object({
+      id: z.string().min(1),
+      editKey: z.string().nullable().optional(),
+    }),
+  }),
+  z.object({
+    v: z.literal(1),
+    id: z.string().uuid().optional(),
+    ts: z.number().optional(),
+    type: z.literal('qa.ask'),
+    payload: z.object({
+      question: z.string().min(1).max(1000),
+    }),
+  }),
+  z.object({
+    v: z.literal(1),
+    id: z.string().uuid().optional(),
+    ts: z.number().optional(),
+    type: z.literal('qa.upvote'),
+    payload: z.object({
+      questionId: z.string().min(1),
+    }),
+  }),
+  z.object({
+    v: z.literal(1),
+    id: z.string().uuid().optional(),
+    ts: z.number().optional(),
+    type: z.literal('qa.answer'),
+    payload: z.object({
+      questionId: z.string().min(1),
+      answered: z.boolean(),
+    }),
+  }),
+  z.object({
+    v: z.literal(1),
+    id: z.string().uuid().optional(),
+    ts: z.number().optional(),
+    type: z.literal('qa.dismiss'),
+    payload: z.object({
+      questionId: z.string().min(1),
+      dismissed: z.boolean(),
+    }),
+  }),
+  z.object({
+    v: z.literal(1),
+    id: z.string().uuid().optional(),
+    ts: z.number().optional(),
+    type: z.literal('qa.delete'),
+    payload: z.object({
+      questionId: z.string().min(1),
+    }),
+  }),
+  z.object({
+    v: z.literal(1),
+    id: z.string().uuid().optional(),
+    ts: z.number().optional(),
+    type: z.literal('whiteboard.action'),
+    payload: whiteboardActionSchema,
+  }),
+  z.object({
+    v: z.literal(1),
+    id: z.string().uuid().optional(),
+    ts: z.number().optional(),
+    type: z.literal('notes.update'),
+    payload: z.object({
+      content: z.string().max(50000),
+      version: z.number().int().min(0),
+    }),
+  }),
+  z.object({
+    v: z.literal(1),
+    id: z.string().uuid().optional(),
+    ts: z.number().optional(),
+    type: z.literal('timer.action'),
+    payload: z.object({
+      action: z.enum([
+        'start',
+        'pause',
+        'reset',
+        'set_countdown',
+        'next_agenda',
+        'set_agenda',
+      ]),
+      durationSeconds: z.number().int().min(0).optional(),
+      agenda: z.array(agendaItemSchema).optional(),
+    }),
+  }),
+  z.object({
+    v: z.literal(1),
+    id: z.string().uuid().optional(),
+    ts: z.number().optional(),
+    type: z.literal('breakout.join'),
+    payload: z.object({
+      roomId: z.string().min(1),
+    }),
+  }),
+  z.object({
+    v: z.literal(1),
+    id: z.string().uuid().optional(),
+    ts: z.number().optional(),
+    type: z.literal('breakout.leave'),
+    payload: z.object({}),
+  }),
+  z.object({
+    v: z.literal(1),
+    id: z.string().uuid().optional(),
+    ts: z.number().optional(),
+    type: z.literal('presentation.cursor'),
+    payload: z.object({
+      x: z.number(),
+      y: z.number(),
+      active: z.boolean(),
     }),
   }),
   z.object({
@@ -332,6 +690,14 @@ export const serverJoinedPayloadSchema = z.object({
     chatHistory: z.array(chatMessageSchema).optional(),
     recording: z.boolean().optional(),
     recordingStartedAt: z.number().optional(),
+    breakout: breakoutStateSchema.optional(),
+    polls: z.array(pollItemSchema).optional(),
+    qa: z.array(qaItemSchema).optional(),
+    formit: formItSessionSchema.nullable().optional(),
+    handRaiseQueue: z.array(handRaiseItemSchema).optional(),
+    whiteboardHistory: z.array(whiteboardActionSchema).optional(),
+    notes: notesDocSchema.optional(),
+    timer: meetingTimerSchema.optional(),
   }),
 });
 
@@ -378,13 +744,42 @@ export interface SignalingEvents {
   'signal.answer': { from: string; to: string; sdp: SdpPayload };
   'signal.ice': { from: string; to: string; candidate: IceCandidatePayload };
   'state.updated': { peerId: string; state: PeerState };
-  'chat.message': {
-    id: string;
-    seq?: number;
+  'chat.message': ChatMessagePayload;
+  'chat.reaction.updated': {
+    messageId: string;
+    reactions: Record<string, string[]>;
+  };
+  'breakout.updated': BreakoutState;
+  'breakout.broadcast': {
+    message: string;
     from: string;
-    displayName: string;
-    text: string;
     ts: number;
+  };
+  'poll.updated': {
+    poll: PollItem;
+  };
+  'poll.deleted': {
+    pollId: string;
+  };
+  'formit.updated': FormItSession | null;
+  'qa.updated': {
+    question: QaItem;
+  };
+  'qa.deleted': {
+    questionId: string;
+  };
+  'handraise.updated': {
+    queue: HandRaiseItem[];
+  };
+  'whiteboard.action': WhiteboardAction;
+  'notes.updated': NotesDoc;
+  'timer.updated': MeetingTimer;
+  'presentation.cursor': {
+    peerId: string;
+    displayName: string;
+    x: number;
+    y: number;
+    active: boolean;
   };
   'reaction.received': {
     id: string;

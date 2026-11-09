@@ -19,6 +19,22 @@ export interface MeetingNoteItem {
   chapters?: MeetingChapter[] | undefined;
   keyDecisions?: string[] | undefined;
   aiModel?: string | undefined;
+  formItSurvey?:
+    | {
+        formUrl: string;
+        slug: string;
+        title?: string | undefined;
+        submissionsCount: number;
+      }
+    | undefined;
+  pollResults?:
+    | Array<{
+        question: string;
+        options: string[];
+        results: Record<string, number>;
+      }>
+    | undefined;
+  collaborativeNotes?: string | undefined;
   createdAt: string;
   updatedAt: string;
 }
@@ -410,7 +426,24 @@ export async function deleteActionItem(itemId: string): Promise<void> {
 export function ensureNoteForCompletedMeeting(params: {
   ownerId: string;
   historyItem: MeetingHistoryItem;
-  chatTranscript?: { displayName: string; text: string; ts: number }[];
+  chatTranscript?:
+    { displayName: string; text: string; ts: number }[] | undefined;
+  formItSurvey?:
+    | {
+        formUrl: string;
+        slug: string;
+        title?: string | undefined;
+        submissionsCount: number;
+      }
+    | undefined;
+  pollResults?:
+    | Array<{
+        question: string;
+        options: string[];
+        results: Record<string, number>;
+      }>
+    | undefined;
+  collaborativeNotes?: string | undefined;
 }): MeetingNoteItem {
   const all = loadMeetingNotes();
   const existing = all.find((n) => n.meetingId === params.historyItem.id);
@@ -443,6 +476,11 @@ export function ensureNoteForCompletedMeeting(params: {
     content: defaultContent,
     attendees: attendeeNames,
     tags: ['call-summary'],
+    ...(params.formItSurvey ? { formItSurvey: params.formItSurvey } : {}),
+    ...(params.pollResults ? { pollResults: params.pollResults } : {}),
+    ...(params.collaborativeNotes
+      ? { collaborativeNotes: params.collaborativeNotes }
+      : {}),
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   };
