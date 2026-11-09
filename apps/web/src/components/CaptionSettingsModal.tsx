@@ -3,14 +3,22 @@ import {
   SUPPORTED_LANGUAGES,
   type SupportedLanguageCode,
 } from '../lib/speechRecognition';
+import {
+  TRANSLATION_LANGUAGES,
+  type TranslationLanguage,
+} from '../lib/translationService';
 import { type CaptionFontSize, type CaptionPosition } from './CaptionsOverlay';
 import { CloseIcon } from './Icons';
+import { Languages, Volume2 } from 'lucide-react';
 
 export interface CaptionConfig {
   language: SupportedLanguageCode;
   fontSize: CaptionFontSize;
   position: CaptionPosition;
   vocabulary: string[];
+  targetLanguage?: string | undefined;
+  showDualLanguage?: boolean | undefined;
+  dubbingEnabled?: boolean | undefined;
 }
 
 interface CaptionSettingsModalProps {
@@ -26,6 +34,15 @@ export function CaptionSettingsModal({
 }: CaptionSettingsModalProps) {
   const [language, setLanguage] = useState<SupportedLanguageCode>(
     config.language,
+  );
+  const [targetLanguage, setTargetLanguage] = useState<string>(
+    config.targetLanguage ?? 'none',
+  );
+  const [showDualLanguage, setShowDualLanguage] = useState<boolean>(
+    config.showDualLanguage ?? true,
+  );
+  const [dubbingEnabled, setDubbingEnabled] = useState<boolean>(
+    config.dubbingEnabled ?? false,
   );
   const [fontSize, setFontSize] = useState<CaptionFontSize>(config.fontSize);
   const [position, setPosition] = useState<CaptionPosition>(config.position);
@@ -54,6 +71,9 @@ export function CaptionSettingsModal({
       fontSize,
       position,
       vocabulary,
+      targetLanguage,
+      showDualLanguage,
+      dubbingEnabled,
     });
     onClose();
   };
@@ -95,7 +115,7 @@ export function CaptionSettingsModal({
           {/* Spoken Language */}
           <label className="device-select-group">
             <span style={{ fontSize: '0.875rem', fontWeight: 600 }}>
-              Spoken Language
+              Spoken Language (Input)
             </span>
             <select
               value={language}
@@ -111,6 +131,120 @@ export function CaptionSettingsModal({
               ))}
             </select>
           </label>
+
+          {/* Target Translation Language (30+ Languages) */}
+          <div
+            style={{
+              padding: '12px',
+              borderRadius: '10px',
+              border: '1px solid var(--line)',
+              background: 'var(--soft)',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '10px',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Languages size={18} style={{ color: 'var(--accent)' }} />
+              <div>
+                <span
+                  style={{
+                    fontSize: '0.875rem',
+                    fontWeight: 600,
+                    display: 'block',
+                  }}
+                >
+                  Live Translation (30+ Languages)
+                </span>
+                <span style={{ fontSize: '0.78rem', color: 'var(--muted)' }}>
+                  Translate speech in real-time with sub-second latency
+                </span>
+              </div>
+            </div>
+
+            <label className="device-select-group" style={{ margin: 0 }}>
+              <span style={{ fontSize: '0.8rem', fontWeight: 600 }}>
+                Translate Captions Into
+              </span>
+              <select
+                value={targetLanguage}
+                onChange={(e) => setTargetLanguage(e.target.value)}
+                data-testid="caption-target-translation-select"
+                style={{ background: 'var(--surface)' }}
+              >
+                <option value="none">
+                  Off (Display Original Language Only)
+                </option>
+                {TRANSLATION_LANGUAGES.filter((l) => l.code !== 'none').map(
+                  (l) => (
+                    <option key={l.code} value={l.code}>
+                      {l.label}
+                    </option>
+                  ),
+                )}
+              </select>
+            </label>
+
+            {targetLanguage !== 'none' && (
+              <div
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '8px',
+                  paddingTop: '4px',
+                }}
+              >
+                <label
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    fontSize: '0.82rem',
+                    cursor: 'pointer',
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={showDualLanguage}
+                    onChange={(e) => setShowDualLanguage(e.target.checked)}
+                    data-testid="caption-dual-language-toggle"
+                  />
+                  <span>
+                    Show dual-language subtitles (original text + translated)
+                  </span>
+                </label>
+
+                <label
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    fontSize: '0.82rem',
+                    cursor: 'pointer',
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={dubbingEnabled}
+                    onChange={(e) => setDubbingEnabled(e.target.checked)}
+                    data-testid="caption-dubbing-toggle"
+                  />
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                    }}
+                  >
+                    <Volume2 size={14} style={{ color: 'var(--accent)' }} />
+                    <span>
+                      Live voice dubbing (audibly speak translated captions)
+                    </span>
+                  </div>
+                </label>
+              </div>
+            )}
+          </div>
 
           {/* Font Size & Position in a row */}
           <div

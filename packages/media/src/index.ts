@@ -1109,3 +1109,18 @@ export class FakeTransport implements MediaTransport {
 }
 
 export { LiveKitTransport, type LiveKitTransportOptions } from './livekit.js';
+export {
+  VideoEffectProcessor,
+  DEFAULT_VIRTUAL_BACKGROUNDS,
+  type VideoEffectType,
+  type VideoEffectsConfig,
+  type GestureType,
+  type GestureListener,
+} from './videoEffects.js';
+export {
+  AudioEffectProcessor,
+  SpatialAudioEngine,
+  type NoiseSuppressionMode,
+  type AudioEffectsConfig,
+  type FeedbackListener,
+} from './audioEffects.js';

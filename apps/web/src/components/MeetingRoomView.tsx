@@ -49,6 +49,27 @@ import { WhiteboardModal } from './WhiteboardModal';
 import { SharedNotesPanel } from './SharedNotesPanel';
 import { TimerAgendaWidget } from './TimerAgendaWidget';
 import {
+  VideoEffectsModal,
+  loadSavedVideoEffects,
+  saveVideoEffects,
+} from './VideoEffectsModal';
+import {
+  AudioEffectsModal,
+  loadSavedAudioEffects,
+  saveAudioEffects,
+} from './AudioEffectsModal';
+import {
+  translateCaption,
+  speakDubbedCaption,
+} from '../lib/translationService';
+import {
+  type VideoEffectsConfig,
+  VideoEffectProcessor,
+  type AudioEffectsConfig,
+  AudioEffectProcessor,
+  SpatialAudioEngine,
+} from '@meetit/media';
+import {
   Users as UsersIcon,
   BarChart3 as BarChartIcon,
   ClipboardList as ClipboardIcon,
@@ -69,6 +90,10 @@ import {
   X as XIcon,
   Sliders as SlidersIcon,
   Clock as ClockIcon,
+  Sparkles as SparklesIcon,
+  Volume2 as Volume2Icon,
+  ShieldAlert as ShieldAlertIcon,
+  Languages as LanguagesIcon,
 } from 'lucide-react';
 import { Logo } from './Logo';
 import { Avatar } from './Avatar';
@@ -283,6 +308,8 @@ function RemoteVideoTile({
   onPipPointerCancel,
   onPipSwap,
   onTogglePin,
+  isSignInterpreter = false,
+  onToggleSignInterpreter,
   onMutePeer,
   onAskUnmutePeer,
   onRemovePeer,
@@ -311,6 +338,8 @@ function RemoteVideoTile({
     ((e: React.PointerEvent<HTMLDivElement>) => void) | undefined;
   onPipSwap?: (() => void) | undefined;
   onTogglePin: () => void;
+  isSignInterpreter?: boolean | undefined;
+  onToggleSignInterpreter?: (() => void) | undefined;
   onMutePeer: () => void;
   onAskUnmutePeer: () => void;
   onRemovePeer: () => void;
@@ -429,7 +458,11 @@ function RemoteVideoTile({
               className="hand-raised-pill"
               title={`${participant.displayName} raised their hand${handRaiseOrder ? ` (#${handRaiseOrder})` : ''}`}
             >
-              ✋ {handRaiseOrder ? `#${handRaiseOrder} ` : ''}Hand raised
+              <HandIcon
+                size={12}
+                style={{ display: 'inline', marginRight: 4 }}
+              />
+              {handRaiseOrder ? `#${handRaiseOrder} ` : ''}Hand raised
               {canModerate && onLowerHand && (
                 <button
                   type="button"
@@ -453,12 +486,52 @@ function RemoteVideoTile({
               )}
             </span>
           )}
+          {isSignInterpreter && (
+            <span
+              className="role-pill"
+              style={{
+                background: 'var(--accent)',
+                color: '#fff',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 4,
+                padding: '2px 8px',
+                borderRadius: '999px',
+                fontSize: '11px',
+                fontWeight: 600,
+              }}
+              title="Designated Sign Language Interpreter (video stream prioritized)"
+            >
+              <LanguagesIcon size={12} />
+              Sign Interpreter
+            </span>
+          )}
           {participant.state.screen && (
             <span className="screen-pill">Sharing screen</span>
           )}
         </div>
 
         <div className="tile-hover-actions">
+          {onToggleSignInterpreter && (
+            <button
+              type="button"
+              className={`tile-icon-btn ${isSignInterpreter ? 'active' : ''}`}
+              onClick={onToggleSignInterpreter}
+              title={
+                isSignInterpreter
+                  ? 'Remove sign language interpreter designation'
+                  : 'Designate as sign language interpreter'
+              }
+              aria-label={
+                isSignInterpreter
+                  ? 'Remove sign language interpreter designation'
+                  : 'Designate as sign language interpreter'
+              }
+              data-testid="toggle-interpreter-btn"
+            >
+              {isSignInterpreter ? 'Interpreter' : 'Sign mode'}
+            </button>
+          )}
           {canModerate && (
             <>
               {participant.state.audio ? (
@@ -743,7 +816,15 @@ export function MeetingRoomView({
     fontSize: 'medium',
     position: 'bottom',
     vocabulary: [],
+    targetLanguage: 'none',
+    showDualLanguage: true,
+    dubbingEnabled: false,
   });
+  const captionConfigRef = useRef(captionConfig);
+  captionConfigRef.current = captionConfig;
+  const [signLanguageInterpreterId, setSignLanguageInterpreterId] = useState<
+    string | null
+  >(null);
   const [liveCues, setLiveCues] = useState<DisplayCaptionCue[]>([]);
   const speechServiceRef = useRef<SpeechRecognitionService | null>(null);
   const transcriptCuesRef = useRef<TranscriptCue[]>([]);
@@ -905,6 +986,18 @@ export function MeetingRoomView({
   const [showWhiteboardModal, setShowWhiteboardModal] = useState(false);
   const [showSharedNotesPanel, setShowSharedNotesPanel] = useState(false);
   const [showTimerConfigModal, setShowTimerConfigModal] = useState(false);
+  const [showVideoEffectsModal, setShowVideoEffectsModal] = useState(false);
+  const [videoEffectsConfig, setVideoEffectsConfig] =
+    useState<VideoEffectsConfig>(() => loadSavedVideoEffects());
+  const videoProcessorRef = useRef<VideoEffectProcessor | null>(null);
+  const rawCameraTrackRef = useRef<MediaStreamTrack | null>(null);
+  const [showAudioEffectsModal, setShowAudioEffectsModal] = useState(false);
+  const [audioEffectsConfig, setAudioEffectsConfig] =
+    useState<AudioEffectsConfig>(() => loadSavedAudioEffects());
+  const audioProcessorRef = useRef<AudioEffectProcessor | null>(null);
+  const rawAudioTrackRef = useRef<MediaStreamTrack | null>(null);
+  const spatialAudioRef = useRef<SpatialAudioEngine | null>(null);
+  const [feedbackDetected, setFeedbackDetected] = useState(false);
 
   const [breakoutState, setBreakoutState] = useState<BreakoutState>({
     active: false,
@@ -1296,6 +1389,32 @@ export function MeetingRoomView({
       });
       const newVideoTrack = res.stream?.getVideoTracks()[0];
       if (newVideoTrack) {
+        rawCameraTrackRef.current = newVideoTrack;
+        let trackToPublish = newVideoTrack;
+        const hasEffects =
+          videoEffectsConfig.effect !== 'none' ||
+          videoEffectsConfig.lowLightEnhancement ||
+          videoEffectsConfig.touchUp ||
+          videoEffectsConfig.autoFraming ||
+          videoEffectsConfig.gestureReactions;
+
+        if (hasEffects) {
+          try {
+            const processor = new VideoEffectProcessor(videoEffectsConfig);
+            processor.onGesture((gesture) => {
+              if (gesture === 'thumbs_up') {
+                handleSendReaction('👍');
+              } else if (gesture === 'hand_raise') {
+                handleToggleHand();
+              }
+            });
+            videoProcessorRef.current = processor;
+            trackToPublish = await processor.processTrack(newVideoTrack);
+          } catch (e) {
+            console.error('Error applying video effects:', e);
+          }
+        }
+
         if (currentStream) {
           currentStream.addTrack(newVideoTrack);
           setLocalStream(new MediaStream(currentStream.getTracks()));
@@ -1304,7 +1423,7 @@ export function MeetingRoomView({
           setLocalStream(res.stream);
         }
         if (transportRef.current) {
-          await transportRef.current.replaceTrack('camera', newVideoTrack);
+          await transportRef.current.replaceTrack('camera', trackToPublish);
         }
       }
     }
@@ -1503,6 +1622,154 @@ export function MeetingRoomView({
     signalingRef.current?.sendReaction(emoji);
     setShowReactionPopover(false);
   }, []);
+
+  // Apply visual effects, virtual background, or AI framing to local camera
+  const handleApplyVideoEffects = useCallback(
+    async (newConfig: VideoEffectsConfig) => {
+      setVideoEffectsConfig(newConfig);
+      saveVideoEffects(newConfig);
+
+      const currentVideoTrack =
+        rawCameraTrackRef.current ||
+        localStreamRef.current?.getVideoTracks()[0];
+      if (!currentVideoTrack) {
+        onToast('Visual effects applied for next camera start.');
+        return;
+      }
+
+      if (!rawCameraTrackRef.current) {
+        rawCameraTrackRef.current = currentVideoTrack;
+      }
+
+      const hasActiveEffects =
+        newConfig.effect !== 'none' ||
+        newConfig.lowLightEnhancement ||
+        newConfig.touchUp ||
+        newConfig.autoFraming ||
+        newConfig.gestureReactions;
+
+      if (!hasActiveEffects) {
+        if (videoProcessorRef.current) {
+          videoProcessorRef.current.stop();
+          videoProcessorRef.current = null;
+        }
+        if (transportRef.current && rawCameraTrackRef.current) {
+          await transportRef.current.replaceTrack(
+            'camera',
+            rawCameraTrackRef.current,
+          );
+        }
+        onToast('Visual effects disabled.');
+        return;
+      }
+
+      try {
+        if (!videoProcessorRef.current) {
+          const processor = new VideoEffectProcessor(newConfig);
+          processor.onGesture((gesture) => {
+            if (gesture === 'thumbs_up') {
+              handleSendReaction('👍');
+              onToast('👍 Gesture detected: Sent thumbs up');
+            } else if (gesture === 'hand_raise') {
+              handleToggleHand();
+              onToast('✋ Gesture detected: Raised hand');
+            }
+          });
+          videoProcessorRef.current = processor;
+          const processedTrack = await processor.processTrack(
+            rawCameraTrackRef.current,
+          );
+          if (transportRef.current) {
+            await transportRef.current.replaceTrack('camera', processedTrack);
+          }
+        } else {
+          videoProcessorRef.current.updateConfig(newConfig);
+        }
+        onToast('Visual effects updated.');
+      } catch (err) {
+        console.error('Failed to process video effects track:', err);
+        onToast('Could not apply visual effects.');
+      }
+    },
+    [handleSendReaction, handleToggleHand, onToast],
+  );
+
+  // Apply AI noise suppression, vocal boost, feedback guard, or spatial audio
+  const handleApplyAudioEffects = useCallback(
+    async (newConfig: AudioEffectsConfig) => {
+      setAudioEffectsConfig(newConfig);
+      saveAudioEffects(newConfig);
+
+      // Handle adaptive voice-first mode
+      if (newConfig.voiceFirstMode) {
+        void handleSelectBandwidthMode('audio_only');
+      }
+
+      // Handle spatial audio toggle
+      if (!spatialAudioRef.current && newConfig.spatialAudio) {
+        spatialAudioRef.current = new SpatialAudioEngine(true);
+      } else if (spatialAudioRef.current) {
+        spatialAudioRef.current.setEnabled(newConfig.spatialAudio ?? false);
+      }
+
+      const currentAudioTrack =
+        rawAudioTrackRef.current || localStreamRef.current?.getAudioTracks()[0];
+      if (!currentAudioTrack) {
+        onToast('Audio settings saved for next microphone session.');
+        return;
+      }
+
+      if (!rawAudioTrackRef.current) {
+        rawAudioTrackRef.current = currentAudioTrack;
+      }
+
+      const hasAudioProcessing =
+        newConfig.noiseSuppression !== 'off' ||
+        newConfig.voiceBoost ||
+        newConfig.feedbackGuard;
+
+      if (!hasAudioProcessing) {
+        if (audioProcessorRef.current) {
+          audioProcessorRef.current.stop();
+          audioProcessorRef.current = null;
+        }
+        if (transportRef.current && rawAudioTrackRef.current) {
+          await transportRef.current.replaceTrack(
+            'microphone',
+            rawAudioTrackRef.current,
+          );
+        }
+        onToast('Audio processing disabled (raw capture).');
+        return;
+      }
+
+      try {
+        if (!audioProcessorRef.current) {
+          const processor = new AudioEffectProcessor(newConfig);
+          processor.onFeedbackDetected(() => {
+            setFeedbackDetected(true);
+            onToast(
+              '⚠️ Echo / feedback loop detected! Check speakers or use headphones.',
+            );
+          });
+          audioProcessorRef.current = processor;
+          const cleanedTrack = await processor.processTrack(
+            rawAudioTrackRef.current,
+          );
+          if (transportRef.current) {
+            await transportRef.current.replaceTrack('microphone', cleanedTrack);
+          }
+        } else {
+          audioProcessorRef.current.updateConfig(newConfig);
+        }
+        onToast('Audio intelligence settings updated.');
+      } catch (err) {
+        console.error('Failed to apply audio effects:', err);
+        onToast('Could not apply audio settings.');
+      }
+    },
+    [handleSelectBandwidthMode, onToast],
+  );
 
   // Send in-call chat message
   const handleSendChat = useCallback(
@@ -1854,9 +2121,17 @@ export function MeetingRoomView({
             },
           };
         });
+
+        if (track.kind === 'audio' && spatialAudioRef.current) {
+          const peerStream = stream ?? new MediaStream([track]);
+          spatialAudioRef.current.attachPeerStream(peerId, peerStream);
+        }
       });
 
       tr.on('trackUnsubscribed', ({ peerId, source }) => {
+        if (source === 'microphone') {
+          spatialAudioRef.current?.detachPeerStream(peerId);
+        }
         if (source === 'screen') {
           setRemotePeers((prev) => {
             const existing = prev[peerId];
@@ -2194,6 +2469,29 @@ export function MeetingRoomView({
           startMs,
           cueOrder: transcriptCuesRef.current.length,
           ...(cue.language ? { language: cue.language } : {}),
+        });
+      }
+
+      if (
+        captionConfigRef.current.targetLanguage &&
+        captionConfigRef.current.targetLanguage !== 'none'
+      ) {
+        const targetLang = captionConfigRef.current.targetLanguage;
+        void translateCaption(cue.text, targetLang).then((translatedText) => {
+          setLiveCues((prev) =>
+            prev.map((c) =>
+              c.id === cue.id
+                ? {
+                    ...c,
+                    translatedText,
+                    targetLanguage: targetLang,
+                  }
+                : c,
+            ),
+          );
+          if (cue.isFinal && captionConfigRef.current.dubbingEnabled) {
+            speakDubbedCaption(translatedText, targetLang);
+          }
         });
       }
     });
@@ -2649,6 +2947,29 @@ export function MeetingRoomView({
               language: lang,
             });
           }
+
+          if (
+            captionConfig.targetLanguage &&
+            captionConfig.targetLanguage !== 'none'
+          ) {
+            const targetLang = captionConfig.targetLanguage;
+            void translateCaption(text, targetLang).then((translatedText) => {
+              setLiveCues((prev) =>
+                prev.map((c) =>
+                  c.id === cueId
+                    ? {
+                        ...c,
+                        translatedText,
+                        targetLanguage: targetLang,
+                      }
+                    : c,
+                ),
+              );
+              if (isFinal && captionConfig.dubbingEnabled) {
+                speakDubbedCaption(translatedText, targetLang);
+              }
+            });
+          }
         },
         onError: (err) => {
           console.warn('Speech recognition warning:', err);
@@ -2689,6 +3010,16 @@ export function MeetingRoomView({
 
   const remoteList = useMemo(() => Object.values(remotePeers), [remotePeers]);
   const totalParticipantCount = remoteList.length + 1;
+
+  // Update spatial audio stereo panning based on stage tile arrangement
+  useEffect(() => {
+    if (!spatialAudioRef.current) return;
+    const total = remoteList.length;
+    remoteList.forEach((peer, idx) => {
+      const normalizedX = total > 1 ? idx / (total - 1) : 0.5;
+      spatialAudioRef.current?.updatePeerPan(peer.id, normalizedX);
+    });
+  }, [remoteList]);
 
   // Aggregate local network quality from active peer stats
   const localNetworkSummary = useMemo((): {
@@ -2762,7 +3093,26 @@ export function MeetingRoomView({
     return null;
   }, [screenSharing, localScreenStream, remoteList, displayName]);
 
+  const handleToggleSignInterpreter = (peerId: string) => {
+    setSignLanguageInterpreterId((curr) => {
+      const next = curr === peerId ? null : peerId;
+      if (next) {
+        transportRef.current?.setTrackResolutionTier?.(
+          peerId,
+          'camera',
+          'high',
+        );
+        onToast('Designated as Sign Language Interpreter (stream prioritized)');
+        announce('Sign language interpreter designated');
+      } else {
+        onToast('Sign language interpreter designation cleared');
+      }
+      return next;
+    });
+  };
+
   const effectiveSpotlightId =
+    signLanguageInterpreterId ??
     pinnedTargetId ??
     (activeScreenTile
       ? activeScreenTile.id
@@ -3121,6 +3471,32 @@ export function MeetingRoomView({
                   title="Flip local camera preview"
                 >
                   <span>{mirrorSelfView ? 'Mirrored' : 'Normal'}</span>
+                </button>
+
+                <button
+                  type="button"
+                  className={`ctrl-btn ${videoEffectsConfig.effect !== 'none' || videoEffectsConfig.lowLightEnhancement || videoEffectsConfig.touchUp || videoEffectsConfig.autoFraming || videoEffectsConfig.gestureReactions ? 'active' : ''}`}
+                  onClick={() => setShowVideoEffectsModal(true)}
+                  aria-label="Visual effects and virtual backgrounds"
+                  title="Visual effects and virtual backgrounds"
+                  data-testid="lobby-effects-btn"
+                  style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+                >
+                  <SparklesIcon size={14} style={{ color: 'var(--accent)' }} />
+                  <span>Effects</span>
+                </button>
+
+                <button
+                  type="button"
+                  className={`ctrl-btn ${audioEffectsConfig.noiseSuppression !== 'off' || audioEffectsConfig.voiceBoost || audioEffectsConfig.spatialAudio ? 'active' : ''}`}
+                  onClick={() => setShowAudioEffectsModal(true)}
+                  aria-label="Audio intelligence and noise suppression"
+                  title="Audio intelligence and noise suppression"
+                  data-testid="lobby-audio-fx-btn"
+                  style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+                >
+                  <Volume2Icon size={14} style={{ color: 'var(--accent)' }} />
+                  <span>Audio FX</span>
                 </button>
               </div>
             </div>
@@ -3684,6 +4060,68 @@ export function MeetingRoomView({
         </div>
       </header>
 
+      {feedbackDetected && (
+        <div
+          role="alert"
+          style={{
+            position: 'absolute',
+            top: '58px',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            zIndex: 150,
+            background: 'var(--danger, #ef4444)',
+            color: '#fff',
+            padding: '8px 16px',
+            borderRadius: '10px',
+            boxShadow: '0 8px 24px rgba(0, 0, 0, 0.35)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '12px',
+            fontSize: '13px',
+            fontWeight: 500,
+          }}
+          data-testid="feedback-loop-alert"
+        >
+          <ShieldAlertIcon size={18} />
+          <span>
+            Acoustic feedback / echo loop detected. Please use headphones.
+          </span>
+          <button
+            type="button"
+            onClick={() => {
+              if (!audioMuted) handleToggleMic();
+              setFeedbackDetected(false);
+            }}
+            style={{
+              background: '#fff',
+              color: 'var(--danger, #ef4444)',
+              border: 0,
+              padding: '4px 10px',
+              borderRadius: '6px',
+              fontWeight: 700,
+              fontSize: '12px',
+              cursor: 'pointer',
+            }}
+          >
+            Mute Mic
+          </button>
+          <button
+            type="button"
+            onClick={() => setFeedbackDetected(false)}
+            aria-label="Dismiss feedback alert"
+            style={{
+              background: 'transparent',
+              border: 0,
+              color: 'rgba(255,255,255,0.85)',
+              cursor: 'pointer',
+              padding: '2px',
+            }}
+          >
+            <XIcon size={14} />
+          </button>
+        </div>
+      )}
+
       {breakoutState?.active && (
         <div className="active-breakout-banner" data-testid="breakout-banner">
           <span
@@ -4064,6 +4502,10 @@ export function MeetingRoomView({
                       setPinnedTargetId((curr) =>
                         curr === peer.id ? null : peer.id,
                       )
+                    }
+                    isSignInterpreter={signLanguageInterpreterId === peer.id}
+                    onToggleSignInterpreter={() =>
+                      handleToggleSignInterpreter(peer.id)
                     }
                     onMutePeer={() => handleHostMutePeer(peer.id)}
                     onAskUnmutePeer={() =>
@@ -5136,6 +5578,57 @@ export function MeetingRoomView({
                   />
                   <span>Join / leave sound chimes</span>
                 </label>
+
+                {selfRole !== 'viewer' && (
+                  <button
+                    type="button"
+                    className="panel-btn-secondary"
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '8px',
+                      padding: '8px 12px',
+                      fontSize: '12.5px',
+                      marginTop: '4px',
+                      width: '100%',
+                    }}
+                    onClick={() => {
+                      setShowVideoEffectsModal(true);
+                      setShowDevicePopover(false);
+                    }}
+                    data-testid="call-open-effects-btn"
+                  >
+                    <SparklesIcon
+                      size={15}
+                      style={{ color: 'var(--accent)' }}
+                    />
+                    <span>Visual Effects &amp; Backgrounds</span>
+                  </button>
+                )}
+
+                <button
+                  type="button"
+                  className="panel-btn-secondary"
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '8px',
+                    padding: '8px 12px',
+                    fontSize: '12.5px',
+                    marginTop: '6px',
+                    width: '100%',
+                  }}
+                  onClick={() => {
+                    setShowAudioEffectsModal(true);
+                    setShowDevicePopover(false);
+                  }}
+                  data-testid="call-open-audio-fx-btn"
+                >
+                  <Volume2Icon size={15} style={{ color: 'var(--accent)' }} />
+                  <span>Audio Intelligence &amp; FX</span>
+                </button>
               </div>
             )}
           </div>
@@ -5701,6 +6194,68 @@ export function MeetingRoomView({
                   <span>Options</span>
                 </button>
 
+                {/* Visual Effects & Backgrounds */}
+                {selfRole !== 'viewer' && (
+                  <button
+                    type="button"
+                    className={`mobile-activity-card ${videoEffectsConfig.effect !== 'none' || videoEffectsConfig.lowLightEnhancement || videoEffectsConfig.touchUp || videoEffectsConfig.autoFraming || videoEffectsConfig.gestureReactions ? 'active' : ''}`}
+                    onClick={() => {
+                      setShowVideoEffectsModal(true);
+                      setShowMoreActivitiesSheet(false);
+                    }}
+                    data-testid="mobile-sheet-effects-btn"
+                  >
+                    <div className="mobile-activity-icon-wrap">
+                      <SparklesIcon size={18} />
+                    </div>
+                    <span>Effects</span>
+                  </button>
+                )}
+
+                {/* Audio Intelligence & Effects */}
+                <button
+                  type="button"
+                  className={`mobile-activity-card ${audioEffectsConfig.noiseSuppression !== 'off' || audioEffectsConfig.voiceBoost || audioEffectsConfig.spatialAudio ? 'active' : ''}`}
+                  onClick={() => {
+                    setShowAudioEffectsModal(true);
+                    setShowMoreActivitiesSheet(false);
+                  }}
+                  data-testid="mobile-sheet-audio-fx-btn"
+                >
+                  <div className="mobile-activity-icon-wrap">
+                    <Volume2Icon size={18} />
+                  </div>
+                  <span>Audio FX</span>
+                </button>
+
+                {/* Sign Language Mode */}
+                <button
+                  type="button"
+                  className={`mobile-activity-card ${signLanguageInterpreterId ? 'active' : ''}`}
+                  onClick={() => {
+                    if (signLanguageInterpreterId) {
+                      setSignLanguageInterpreterId(null);
+                      onToast('Sign language interpreter unpinned');
+                    } else if (remoteList.length > 0) {
+                      handleToggleSignInterpreter(remoteList[0]!.id);
+                    } else {
+                      onToast(
+                        'No remote attendees to designate as sign interpreter',
+                      );
+                    }
+                    setShowMoreActivitiesSheet(false);
+                  }}
+                  data-testid="mobile-sheet-sign-mode-btn"
+                >
+                  <div className="mobile-activity-icon-wrap">
+                    <LanguagesIcon size={18} />
+                    {signLanguageInterpreterId && (
+                      <span className="mobile-activity-badge live">On</span>
+                    )}
+                  </div>
+                  <span>Sign Mode</span>
+                </button>
+
                 {/* Screen Share (if permitted) */}
                 {selfRole !== 'viewer' && (
                   <button
@@ -6212,6 +6767,24 @@ export function MeetingRoomView({
           />
         </aside>
       )}
+
+      {/* Phase 8 Video Effects & Backgrounds Modal */}
+      <VideoEffectsModal
+        isOpen={showVideoEffectsModal}
+        onClose={() => setShowVideoEffectsModal(false)}
+        currentConfig={videoEffectsConfig}
+        onApplyConfig={(cfg) => void handleApplyVideoEffects(cfg)}
+        activeMediaStream={localStream}
+      />
+
+      {/* Phase 8 Audio Intelligence & Effects Modal */}
+      <AudioEffectsModal
+        isOpen={showAudioEffectsModal}
+        onClose={() => setShowAudioEffectsModal(false)}
+        currentConfig={audioEffectsConfig}
+        onApplyConfig={(cfg) => void handleApplyAudioEffects(cfg)}
+        liveAudioLevel={audioProcessorRef.current?.getAudioLevel() ?? 0}
+      />
     </div>
   );
 }

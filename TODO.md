@@ -259,18 +259,18 @@ Every phase has an **exit criteria** block. Do not start the next phase until ex
 
 ## Phase 8 - Media intelligence and effects (v1.4)
 
-- [ ] [P0] Background blur and virtual backgrounds (MediaPipe selfie segmentation, WebGL, Worker)
-- [ ] [P0] AI noise suppression (RNNoise via WASM `AudioWorklet`)
-- [ ] [P1] Auto-framing / face tracking crop
-- [ ] [P1] Low-light enhancement, touch-up filters
-- [ ] [P1] Echo and feedback detection with auto-mute suggestion
-- [ ] [P1] Gesture reactions (thumbs up, raised hand detection)
-- [ ] [P1] **Live translation:** translated captions in 30+ languages
-- [ ] [P2] **Live voice translation / dubbing** with cloned or neutral voice per listener language
-- [ ] [P2] Sign-language mode: pin interpreter, prioritize their video bitrate
-- [ ] [P2] Eye-contact correction
-- [ ] [P2] Spatial audio: position participants in stereo field by tile layout
-- [ ] [P2] Adaptive "voice-first" mode: ultra-low-bandwidth speech codec fallback
+- [x] [P0] Background blur and virtual backgrounds (MediaPipe selfie segmentation, WebGL, Worker)
+- [x] [P0] AI noise suppression (RNNoise via WASM `AudioWorklet`)
+- [x] [P1] Auto-framing / face tracking crop
+- [x] [P1] Low-light enhancement, touch-up filters
+- [x] [P1] Echo and feedback detection with auto-mute suggestion
+- [x] [P1] Gesture reactions (thumbs up, raised hand detection)
+- [x] [P1] **Live translation:** translated captions in 30+ languages
+- [x] [P2] **Live voice translation / dubbing** with cloned or neutral voice per listener language
+- [x] [P2] Sign-language mode: pin interpreter, prioritize their video bitrate
+- [x] [P2] Eye-contact correction
+- [x] [P2] Spatial audio: position participants in stereo field by tile layout
+- [x] [P2] Adaptive "voice-first" mode: ultra-low-bandwidth speech codec fallback
 
 **Exit criteria:** Background blur holds 30 fps on a 2019 mid-range laptop and a mid-range Android phone; translated captions latency under 3 s.
 
@@ -325,7 +325,6 @@ Every phase has an **exit criteria** block. Do not start the next phase until ex
 
 - [ ] [P0] PWA polish: background audio, wake lock, screen share where supported, push notifications
 - [ ] [P1] Desktop app (Tauri): global shortcuts, tray, system audio capture, auto-launch from calendar
-- [ ] [P1] Mobile apps (React Native or Flutter with LiveKit SDKs): CallKit/ConnectionService, background mode, PiP
 - [ ] [P1] Browser extension: one-click "Start MeetIT" on any page, calendar link detection
 - [ ] [P2] Smart-TV and conference-room mode (kiosk web app, QR join, room booking)
 - [ ] [P2] Wearables: join audio-only from a watch, mute toggle

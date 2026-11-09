@@ -1,5 +1,8 @@
 import React from 'react';
-import { Settings as SettingsIcon } from 'lucide-react';
+import {
+  Settings as SettingsIcon,
+  Languages as LanguagesIcon,
+} from 'lucide-react';
 
 export type CaptionFontSize = 'small' | 'medium' | 'large';
 export type CaptionPosition = 'bottom' | 'top';
@@ -12,6 +15,8 @@ export interface DisplayCaptionCue {
   ts: number;
   isFinal: boolean;
   language?: string | undefined;
+  translatedText?: string | undefined;
+  targetLanguage?: string | undefined;
 }
 
 interface CaptionsOverlayProps {
@@ -156,14 +161,43 @@ export function CaptionsOverlay({
             >
               {cue.displayName}:
             </strong>
-            <span
+            <div
               style={{
-                fontStyle: cue.isFinal ? 'normal' : 'italic',
-                wordBreak: 'break-word',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '2px',
+                flex: 1,
+                minWidth: 0,
               }}
             >
-              {cue.text}
-            </span>
+              <span
+                style={{
+                  fontStyle: cue.isFinal ? 'normal' : 'italic',
+                  wordBreak: 'break-word',
+                }}
+              >
+                {cue.text}
+              </span>
+              {cue.translatedText && (
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '5px',
+                    fontSize: '0.92em',
+                    color: '#93c5fd',
+                    fontStyle: 'normal',
+                  }}
+                  data-testid="translated-caption-text"
+                >
+                  <LanguagesIcon
+                    size={12}
+                    style={{ flexShrink: 0, opacity: 0.85 }}
+                  />
+                  <span>{cue.translatedText}</span>
+                </div>
+              )}
+            </div>
           </div>
         ))}
       </div>
