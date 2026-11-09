@@ -59,6 +59,10 @@ import {
   saveAudioEffects,
 } from './AudioEffectsModal';
 import {
+  AppsMarketplaceModal,
+  type MarketplaceApp,
+} from './AppsMarketplaceModal';
+import {
   translateCaption,
   speakDubbedCaption,
 } from '../lib/translationService';
@@ -94,6 +98,7 @@ import {
   Volume2 as Volume2Icon,
   ShieldAlert as ShieldAlertIcon,
   Languages as LanguagesIcon,
+  LayoutGrid as LayoutGridIcon,
 } from 'lucide-react';
 import { Logo } from './Logo';
 import { Avatar } from './Avatar';
@@ -986,6 +991,9 @@ export function MeetingRoomView({
   const [showWhiteboardModal, setShowWhiteboardModal] = useState(false);
   const [showSharedNotesPanel, setShowSharedNotesPanel] = useState(false);
   const [showTimerConfigModal, setShowTimerConfigModal] = useState(false);
+  const [showAppsModal, setShowAppsModal] = useState(false);
+  const [activeMarketplaceApp, setActiveMarketplaceApp] =
+    useState<MarketplaceApp | null>(null);
   const [showVideoEffectsModal, setShowVideoEffectsModal] = useState(false);
   const [videoEffectsConfig, setVideoEffectsConfig] =
     useState<VideoEffectsConfig>(() => loadSavedVideoEffects());
@@ -1334,6 +1342,65 @@ export function MeetingRoomView({
     }
     return createMicLevelMonitor(localStream, setMicLevel);
   }, [stage, audioMuted, localStream]);
+
+  // Phase 9: Embeddable SDK bidirectional postMessage bridge
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const isEmbedded =
+      window.parent !== window ||
+      new URLSearchParams(window.location.search).get('embed') === '1';
+
+    if (!isEmbedded) return;
+
+    // Notify parent frame that MeetIT iframe is loaded and ready
+    window.parent.postMessage({ type: 'meetit:event:ready' }, '*');
+
+    const handleEmbedCommand = (event: MessageEvent) => {
+      if (!event.data || typeof event.data !== 'object') return;
+      const { type, payload } = event.data;
+
+      if (type === 'meetit:cmd:set_mic') {
+        const targetEnabled = payload?.enabled ?? true;
+        if (targetEnabled && audioMuted) {
+          handleToggleMic();
+        } else if (!targetEnabled && !audioMuted) {
+          handleToggleMic();
+        }
+      } else if (type === 'meetit:cmd:set_camera') {
+        const targetEnabled = payload?.enabled ?? true;
+        if (targetEnabled && !videoEnabled) {
+          void handleToggleVideo();
+        } else if (!targetEnabled && videoEnabled) {
+          void handleToggleVideo();
+        }
+      } else if (type === 'meetit:cmd:leave') {
+        handleHangUp();
+      } else if (type === 'meetit:cmd:send_chat' && payload?.text) {
+        signalingRef.current?.sendChatMessage(payload.text);
+      }
+    };
+
+    window.addEventListener('message', handleEmbedCommand);
+    return () => window.removeEventListener('message', handleEmbedCommand);
+  }, [audioMuted, videoEnabled]);
+
+  // Phase 9: Forward meeting lifecycle events to embed parent frame
+  useEffect(() => {
+    if (typeof window === 'undefined' || window.parent === window) return;
+    if (stage === 'call') {
+      window.parent.postMessage(
+        {
+          type: 'meetit:event:joined',
+          payload: {
+            roomCode,
+            selfId: signalingRef.current?.getSelfId(),
+            displayName: displayName || user?.displayName || 'Guest',
+          },
+        },
+        '*',
+      );
+    }
+  }, [stage, roomCode, displayName, user?.displayName]);
 
   // Active speaker detection across local + remote streams during call
   useEffect(() => {
@@ -5014,6 +5081,55 @@ export function MeetingRoomView({
           </aside>
         )}
 
+        {/* Phase 9 Marketplace App In-Meeting Panel */}
+        {activeMarketplaceApp && (
+          <aside
+            className="call-chat-panel marketplace-app-panel"
+            aria-label={activeMarketplaceApp.name}
+            data-testid="marketplace-app-panel"
+            style={{ display: 'flex', flexDirection: 'column' }}
+          >
+            <div className="chat-panel-header">
+              <div
+                style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
+              >
+                <LayoutGridIcon size={16} />
+                <h3 style={{ margin: 0, fontSize: '14px', fontWeight: 600 }}>
+                  {activeMarketplaceApp.name}
+                </h3>
+              </div>
+              <button
+                type="button"
+                className="btn-icon-subtle"
+                onClick={() => setActiveMarketplaceApp(null)}
+                aria-label="Close app panel"
+              >
+                <CloseIcon />
+              </button>
+            </div>
+            <div
+              style={{
+                flex: 1,
+                position: 'relative',
+                width: '100%',
+                minHeight: 320,
+              }}
+            >
+              <iframe
+                src={activeMarketplaceApp.iframeUrl}
+                title={activeMarketplaceApp.name}
+                sandbox="allow-scripts allow-forms allow-same-origin"
+                style={{
+                  width: '100%',
+                  height: '100%',
+                  border: 'none',
+                  background: 'var(--surface)',
+                }}
+              />
+            </div>
+          </aside>
+        )}
+
         {/* In-call text chat panel */}
         {showChatPanel && (
           <aside
@@ -5886,6 +6002,20 @@ export function MeetingRoomView({
             <span>Notes</span>
           </button>
 
+          {/* Phase 9 Apps Marketplace */}
+          <button
+            type="button"
+            className={`call-side-btn ${showAppsModal || activeMarketplaceApp ? 'active-panel' : ''}`}
+            onClick={() => setShowAppsModal(true)}
+            aria-pressed={showAppsModal || !!activeMarketplaceApp}
+            aria-label="Apps & Integrations"
+            title="In-Meeting Apps Marketplace"
+            data-testid="call-apps-btn"
+          >
+            <LayoutGridIcon size={16} />
+            <span>Apps</span>
+          </button>
+
           {/* People & Host Controls toggle button with waiting room badge */}
           <button
             type="button"
@@ -6110,6 +6240,25 @@ export function MeetingRoomView({
                     <FileTextIcon size={18} />
                   </div>
                   <span>Notes</span>
+                </button>
+
+                {/* Phase 9 Apps Marketplace */}
+                <button
+                  type="button"
+                  className={`mobile-activity-card ${showAppsModal || activeMarketplaceApp ? 'active' : ''}`}
+                  onClick={() => {
+                    setShowAppsModal(true);
+                    setShowMoreActivitiesSheet(false);
+                  }}
+                  data-testid="mobile-sheet-apps-btn"
+                >
+                  <div className="mobile-activity-icon-wrap">
+                    <LayoutGridIcon size={18} />
+                    {activeMarketplaceApp && (
+                      <span className="mobile-activity-badge live">On</span>
+                    )}
+                  </div>
+                  <span>Apps</span>
                 </button>
 
                 {/* Timer & Agenda Controls */}
@@ -6784,6 +6933,22 @@ export function MeetingRoomView({
         currentConfig={audioEffectsConfig}
         onApplyConfig={(cfg) => void handleApplyAudioEffects(cfg)}
         liveAudioLevel={audioProcessorRef.current?.getAudioLevel() ?? 0}
+      />
+
+      {/* Phase 9 In-Meeting Apps Marketplace Modal */}
+      <AppsMarketplaceModal
+        isOpen={showAppsModal}
+        onClose={() => setShowAppsModal(false)}
+        activeAppId={activeMarketplaceApp?.id ?? null}
+        onLaunchApp={(app) => {
+          setActiveMarketplaceApp(app);
+          setShowAppsModal(false);
+          onToast(`Launched ${app.name}`);
+        }}
+        onCloseActiveApp={() => {
+          setActiveMarketplaceApp(null);
+          onToast('Closed active app');
+        }}
       />
     </div>
   );

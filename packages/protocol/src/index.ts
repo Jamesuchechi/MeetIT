@@ -1029,3 +1029,87 @@ export interface SignalingChannel {
     handler: (payload: SignalingEvents[K]) => void,
   ): () => void;
 }
+
+// ==========================================
+// Phase 9: Developer Platform & Webhooks
+// ==========================================
+
+export const apiKeyScopeSchema = z.enum([
+  'rooms:read',
+  'rooms:write',
+  'meetings:read',
+  'recordings:read',
+  'transcripts:read',
+  'webhooks:manage',
+]);
+export type ApiKeyScope = z.infer<typeof apiKeyScopeSchema>;
+
+export const apiKeySchema = z.object({
+  id: z.string().min(1),
+  name: z.string().min(1).max(100),
+  keyPrefix: z.string().min(8),
+  hashedSecret: z.string().min(16),
+  scopes: z.array(apiKeyScopeSchema),
+  createdAt: z.number().int(),
+  lastUsedAt: z.number().int().optional(),
+  expiresAt: z.number().int().optional(),
+});
+export type ApiKey = z.infer<typeof apiKeySchema>;
+
+export const createRoomApiRequestSchema = z.object({
+  title: z.string().max(120).optional(),
+  maxParticipants: z.number().int().min(2).max(1000).optional(),
+  passcode: z.string().max(64).optional(),
+  features: z
+    .object({
+      breakout: z.boolean().optional(),
+      recording: z.boolean().optional(),
+      transcription: z.boolean().optional(),
+      webinar: z.boolean().optional(),
+      e2ee: z.boolean().optional(),
+    })
+    .optional(),
+  webhookUrl: z.string().url().optional(),
+  expiresInHours: z.number().min(1).max(168).optional(),
+});
+export type CreateRoomApiRequest = z.infer<typeof createRoomApiRequestSchema>;
+
+export const createRoomApiResponseSchema = z.object({
+  roomCode: z.string().regex(ROOM_CODE_REGEX),
+  roomUrl: z.string().url(),
+  hostUrl: z.string().url(),
+  hostToken: z.string().min(1),
+  guestToken: z.string().min(1),
+  createdAt: z.number().int(),
+  expiresAt: z.number().int(),
+});
+export type CreateRoomApiResponse = z.infer<typeof createRoomApiResponseSchema>;
+
+export const webhookEventTypeSchema = z.enum([
+  'meeting.started',
+  'meeting.ended',
+  'participant.joined',
+  'participant.left',
+  'recording.ready',
+  'transcript.ready',
+]);
+export type WebhookEventType = z.infer<typeof webhookEventTypeSchema>;
+
+export const webhookSubscriptionSchema = z.object({
+  id: z.string().min(1),
+  url: z.string().url(),
+  secret: z.string().min(16),
+  events: z.array(webhookEventTypeSchema),
+  active: z.boolean(),
+  createdAt: z.number().int(),
+});
+export type WebhookSubscription = z.infer<typeof webhookSubscriptionSchema>;
+
+export const webhookPayloadSchema = z.object({
+  id: z.string().min(1),
+  event: webhookEventTypeSchema,
+  timestamp: z.number().int(),
+  data: z.record(z.string(), z.unknown()),
+  attempt: z.number().int().min(1).default(1),
+});
+export type WebhookPayload = z.infer<typeof webhookPayloadSchema>;

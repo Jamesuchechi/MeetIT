@@ -119,13 +119,21 @@ export function TimerAgendaWidget({
     <div className="meeting-timer-widget">
       {/* Mini floating pill */}
       <div className="meeting-timer-pill">
-        <span
+        <button
+          type="button"
+          onClick={isHost ? () => setShowConfig(!showConfig) : undefined}
+          title={isHost ? 'Configure timer & agenda' : 'Meeting timer'}
           style={{
             display: 'flex',
             alignItems: 'center',
             gap: '6px',
             fontFamily: 'monospace',
             fontWeight: 700,
+            background: 'transparent',
+            border: 'none',
+            color: 'inherit',
+            padding: 0,
+            cursor: isHost ? 'pointer' : 'default',
           }}
         >
           <Timer
@@ -135,7 +143,7 @@ export function TimerAgendaWidget({
             }}
           />
           {formatTime(secondsDisplay)}
-        </span>
+        </button>
 
         {currentAgenda && (
           <div
@@ -180,7 +188,13 @@ export function TimerAgendaWidget({
                 type="button"
                 onClick={() => onSendTimerAction({ action: 'start' })}
                 className="app-modal-close"
-                style={{ padding: '3px' }}
+                style={{
+                  padding: '4px',
+                  display: 'grid',
+                  placeItems: 'center',
+                  minWidth: '22px',
+                  minHeight: '22px',
+                }}
                 title="Start timer"
               >
                 <Play size={13} />
@@ -190,7 +204,13 @@ export function TimerAgendaWidget({
                 type="button"
                 onClick={() => onSendTimerAction({ action: 'pause' })}
                 className="app-modal-close"
-                style={{ padding: '3px' }}
+                style={{
+                  padding: '4px',
+                  display: 'grid',
+                  placeItems: 'center',
+                  minWidth: '22px',
+                  minHeight: '22px',
+                }}
                 title="Pause timer"
               >
                 <Pause size={13} />
@@ -200,7 +220,13 @@ export function TimerAgendaWidget({
               type="button"
               onClick={() => onSendTimerAction({ action: 'reset' })}
               className="app-modal-close"
-              style={{ padding: '3px' }}
+              style={{
+                padding: '4px',
+                display: 'grid',
+                placeItems: 'center',
+                minWidth: '22px',
+                minHeight: '22px',
+              }}
               title="Reset timer"
             >
               <RotateCcw size={13} />
@@ -209,7 +235,13 @@ export function TimerAgendaWidget({
               type="button"
               onClick={() => setShowConfig(!showConfig)}
               className="app-modal-close"
-              style={{ padding: '3px' }}
+              style={{
+                padding: '4px',
+                display: 'grid',
+                placeItems: 'center',
+                minWidth: '22px',
+                minHeight: '22px',
+              }}
               title="Timer & Agenda settings"
               data-testid="timer-settings-btn"
             >

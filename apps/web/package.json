@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "prebuild": "pnpm --filter @meetit/protocol build && pnpm --filter @meetit/media build && pnpm --filter @meetit/ui build",
+    "prebuild": "pnpm --filter @meetit/protocol build && pnpm --filter @meetit/media build && pnpm --filter @meetit/ui build && pnpm --filter @meetit/sdk build",
     "dev": "vite --host 0.0.0.0",
     "build": "tsc -b && vite build",
     "lint": "eslint src vite.config.ts",
@@ -13,6 +13,7 @@
   "dependencies": {
     "@meetit/media": "workspace:*",
     "@meetit/protocol": "workspace:*",
+    "@meetit/sdk": "workspace:*",
     "@meetit/ui": "workspace:*",
     "@sentry/react": "^11.11.0",
     "@supabase/supabase-js": "^2.119.0",

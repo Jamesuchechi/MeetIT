@@ -215,4 +215,79 @@ describe('protocol schemas and utilities', () => {
       }).success,
     ).toBe(true);
   });
+
+  it('validates Phase 9 developer platform and webhook schemas', async () => {
+    const {
+      apiKeySchema,
+      createRoomApiRequestSchema,
+      createRoomApiResponseSchema,
+      webhookSubscriptionSchema,
+      webhookPayloadSchema,
+    } = await import('./index.js');
+
+    // API Key schema
+    expect(
+      apiKeySchema.safeParse({
+        id: 'key_123',
+        name: 'Production Backend Key',
+        keyPrefix: 'mkit_live_9f8e',
+        hashedSecret:
+          'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
+        scopes: ['rooms:read', 'rooms:write', 'recordings:read'],
+        createdAt: Date.now(),
+      }).success,
+    ).toBe(true);
+
+    // Create Room API Request & Response
+    expect(
+      createRoomApiRequestSchema.safeParse({
+        title: 'Board Meeting Q4',
+        maxParticipants: 50,
+        features: {
+          recording: true,
+          transcription: true,
+          breakout: true,
+        },
+        expiresInHours: 24,
+      }).success,
+    ).toBe(true);
+
+    expect(
+      createRoomApiResponseSchema.safeParse({
+        roomCode: 'abc-defg-hij',
+        roomUrl: 'https://meetit.app/m/abc-defg-hij',
+        hostUrl: 'https://meetit.app/m/abc-defg-hij?token=host-token-123',
+        hostToken: 'host-token-123',
+        guestToken: 'guest-token-456',
+        createdAt: Date.now(),
+        expiresAt: Date.now() + 86400000,
+      }).success,
+    ).toBe(true);
+
+    // Webhook Subscription & Payload
+    expect(
+      webhookSubscriptionSchema.safeParse({
+        id: 'wh_sub_001',
+        url: 'https://api.example.com/webhooks/meetit',
+        secret: 'whsec_abcdef1234567890',
+        events: ['meeting.started', 'recording.ready'],
+        active: true,
+        createdAt: Date.now(),
+      }).success,
+    ).toBe(true);
+
+    expect(
+      webhookPayloadSchema.safeParse({
+        id: 'evt_999',
+        event: 'recording.ready',
+        timestamp: Date.now(),
+        data: {
+          roomCode: 'abc-defg-hij',
+          recordingUrl: 'https://cdn.meetit.app/recordings/abc.mp4',
+          durationSeconds: 1840,
+        },
+        attempt: 1,
+      }).success,
+    ).toBe(true);
+  });
 });

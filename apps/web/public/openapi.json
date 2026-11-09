@@ -1,0 +1,230 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "MeetIT Public REST API",
+    "version": "1.0.0",
+    "description": "Developer platform REST API for programmatically managing MeetIT video rooms, recordings, transcripts, and webhooks."
+  },
+  "servers": [
+    {
+      "url": "https://meetit.app",
+      "description": "Production Server"
+    }
+  ],
+  "security": [
+    {
+      "BearerAuth": []
+    }
+  ],
+  "paths": {
+    "/api/v1/rooms": {
+      "post": {
+        "summary": "Create a new meeting room",
+        "operationId": "createRoom",
+        "security": [{ "BearerAuth": ["rooms:write"] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "title": {
+                    "type": "string",
+                    "example": "Client Presentation"
+                  },
+                  "maxParticipants": { "type": "integer", "default": 100 },
+                  "passcode": { "type": "string" },
+                  "features": {
+                    "type": "object",
+                    "properties": {
+                      "breakout": { "type": "boolean" },
+                      "recording": { "type": "boolean" },
+                      "transcription": { "type": "boolean" },
+                      "webinar": { "type": "boolean" },
+                      "e2ee": { "type": "boolean" }
+                    }
+                  },
+                  "webhookUrl": { "type": "string", "format": "uri" },
+                  "expiresInHours": { "type": "number", "default": 24 }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Room created successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean", "example": true },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "roomCode": {
+                          "type": "string",
+                          "example": "abc-defg-hij"
+                        },
+                        "roomUrl": {
+                          "type": "string",
+                          "example": "https://meetit.app/m/abc-defg-hij?token=guest..."
+                        },
+                        "hostUrl": {
+                          "type": "string",
+                          "example": "https://meetit.app/m/abc-defg-hij?token=host..."
+                        },
+                        "hostToken": { "type": "string" },
+                        "guestToken": { "type": "string" },
+                        "createdAt": { "type": "integer" },
+                        "expiresAt": { "type": "integer" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": { "description": "Unauthorized - Missing or invalid API key" },
+          "403": {
+            "description": "Forbidden - API key lacks 'rooms:write' scope"
+          }
+        }
+      }
+    },
+    "/api/v1/rooms/{code}": {
+      "get": {
+        "summary": "Get room details and live stats",
+        "operationId": "getRoom",
+        "security": [{ "BearerAuth": ["rooms:read"] }],
+        "parameters": [
+          {
+            "name": "code",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Room status details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean", "example": true },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "roomCode": { "type": "string" },
+                        "active": { "type": "boolean" },
+                        "activeParticipantsCount": { "type": "integer" },
+                        "maxParticipants": { "type": "integer" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/recordings": {
+      "get": {
+        "summary": "List meeting recordings",
+        "operationId": "listRecordings",
+        "security": [{ "BearerAuth": ["recordings:read"] }],
+        "responses": {
+          "200": {
+            "description": "List of recordings",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean", "example": true },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": { "type": "string" },
+                          "roomCode": { "type": "string" },
+                          "title": { "type": "string" },
+                          "durationSeconds": { "type": "integer" },
+                          "downloadUrl": { "type": "string", "format": "uri" },
+                          "sizeBytes": { "type": "integer" },
+                          "createdAt": { "type": "integer" }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/webhooks": {
+      "get": {
+        "summary": "List active webhook subscriptions",
+        "operationId": "listWebhooks",
+        "security": [{ "BearerAuth": ["webhooks:manage"] }],
+        "responses": {
+          "200": { "description": "Active webhook endpoints" }
+        }
+      },
+      "post": {
+        "summary": "Register a new webhook subscription",
+        "operationId": "createWebhook",
+        "security": [{ "BearerAuth": ["webhooks:manage"] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["url", "events"],
+                "properties": {
+                  "url": { "type": "string", "format": "uri" },
+                  "secret": { "type": "string" },
+                  "events": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "enum": [
+                        "meeting.started",
+                        "meeting.ended",
+                        "participant.joined",
+                        "participant.left",
+                        "recording.ready",
+                        "transcript.ready"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": { "description": "Webhook registered" }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "BearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "mkit_live_..."
+      }
+    }
+  }
+}

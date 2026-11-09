@@ -3706,6 +3706,105 @@ aside.context-bar {
   }
 }
 
+/* Dedicated mobile call layout (phones <= 768px) */
+@media (max-width: 768px) {
+  /* On mobile phones, hide the redundant horizontal-scrolling second dock.
+     All activities & extra tools are neatly organized in the "More (•••)" bottom sheet! */
+  .call-dock-right {
+    display: none !important;
+  }
+
+  .call-dock-bar {
+    padding: 6px 12px calc(14px + env(safe-area-inset-bottom, 0px));
+    justify-content: center;
+  }
+
+  .call-dock {
+    display: flex;
+    align-items: center;
+    justify-content: space-around;
+    width: 100%;
+    max-width: 380px;
+    gap: 8px;
+    padding: 6px 10px;
+    border-radius: 999px;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+    margin: 0 auto;
+  }
+
+  .dock-btn {
+    width: 44px;
+    height: 44px;
+    min-width: 44px;
+    flex-shrink: 0;
+  }
+
+  .dock-btn.end {
+    width: 52px;
+    height: 44px;
+    min-width: 52px;
+    flex-shrink: 0;
+  }
+
+  .call-topbar {
+    padding: 0 8px;
+    gap: 6px;
+    height: 48px;
+    min-height: 48px;
+  }
+
+  .call-topbar-left {
+    gap: 4px;
+  }
+
+  .call-room-code {
+    font-size: 12px;
+    max-width: 76px;
+  }
+
+  .call-topbar-icon-btn {
+    width: 30px;
+    height: 30px;
+  }
+
+  .call-participants-chip {
+    padding: 3px 6px;
+    font-size: 11px;
+    gap: 4px;
+  }
+
+  .call-participants-chip .call-topbar-avatar {
+    width: 22px !important;
+    height: 22px !important;
+  }
+}
+
+@media (max-width: 380px) {
+  .call-room-code,
+  .call-topbar-sep {
+    display: none !important;
+  }
+
+  .call-dock {
+    gap: 4px;
+    padding: 4px 6px;
+  }
+
+  .dock-btn {
+    width: 40px;
+    height: 40px;
+    min-width: 40px;
+  }
+
+  .dock-btn.end {
+    width: 48px;
+    height: 40px;
+    min-width: 48px;
+  }
+}
+
 @media (max-width: 640px) {
   .lobby-header {
     padding-top: 12px;
@@ -7836,12 +7935,27 @@ aside.context-bar {
 }
 
 @media (max-width: 640px) {
-  .meeting-timer-agenda-label {
-    max-width: 80px !important;
+  .timer-config-backdrop {
+    padding: 10px 10px 0;
+    align-items: flex-end;
   }
+
+  .timer-config-dialog {
+    max-width: 100%;
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
+    border-radius: 20px 20px 0 0;
+    padding: 16px 18px calc(24px + env(safe-area-inset-bottom, 0px));
+    max-height: 80vh;
+  }
+
+  .meeting-timer-agenda-label {
+    display: none !important;
+  }
+
   .meeting-timer-pill {
-    padding: 4px 8px;
-    gap: 6px;
+    padding: 3px 8px;
+    gap: 5px;
     font-size: 11px;
   }
 }

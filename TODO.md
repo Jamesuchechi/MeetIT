@@ -280,23 +280,23 @@ Every phase has an **exit criteria** block. Do not start the next phase until ex
 
 ### Calendar and productivity
 
-- [ ] [P0] Google Calendar and Outlook: create meeting with MeetIT link, two-way sync
-- [ ] [P1] Gmail / Outlook add-ins: "Add MeetIT meeting" button
-- [ ] [P1] Slack and Microsoft Teams: `/meetit` slash command, instant room link, post summaries
-- [ ] [P1] Notion, Linear, Jira, GitHub: push action items and notes
-- [ ] [P2] CRM (HubSpot, Salesforce): log calls, attach transcripts
-- [ ] [P2] Zapier and Make connectors
+- [x] [P0] Google Calendar and Outlook: create meeting with MeetIT link, two-way sync
+- [x] [P1] Gmail / Outlook add-ins: "Add MeetIT meeting" button
+- [x] [P1] Slack and Microsoft Teams: `/meetit` slash command, instant room link, post summaries
+- [x] [P1] Notion, Linear, Jira, GitHub: push action items and notes
+- [x] [P2] CRM (HubSpot, Salesforce): log calls, attach transcripts
+- [x] [P2] Zapier and Make connectors
 
 ### Developer platform
 
-- [ ] [P0] Public REST API: rooms, meetings, participants, recordings, transcripts
-- [ ] [P0] Webhooks: `meeting.started`, `participant.joined`, `recording.ready`, `transcript.ready` (signed, retried)
-- [ ] [P0] **Embeddable SDK** (`@meetit/sdk`): React components + vanilla JS, iframe and headless modes
-- [ ] [P1] API keys, scopes, usage dashboard, rate limits
-- [ ] [P1] OpenAPI spec + generated clients (TS, Python)
-- [ ] [P1] Docs site with live playground and example apps
-- [ ] [P2] **Apps marketplace:** in-meeting apps (whiteboards, games, polls) via sandboxed iframes and a postMessage SDK
-- [ ] [P2] Bots and agents as participants (join via API, speak and listen), including an AI note-taker bot
+- [x] [P0] Public REST API: rooms, meetings, participants, recordings, transcripts
+- [x] [P0] Webhooks: `meeting.started`, `participant.joined`, `recording.ready`, `transcript.ready` (signed, retried)
+- [x] [P0] **Embeddable SDK** (`@meetit/sdk`): React components + vanilla JS, iframe and headless modes
+- [x] [P1] API keys, scopes, usage dashboard, rate limits
+- [x] [P1] OpenAPI spec + generated clients (TS, Python)
+- [x] [P1] Docs site with live playground and example apps
+- [x] [P2] **Apps marketplace:** in-meeting apps (whiteboards, games, polls) via sandboxed iframes and a postMessage SDK
+- [x] [P2] Bots and agents as participants (join via API, speak and listen), including an AI note-taker bot
 
 **Exit criteria:** Third party embeds a meeting in under 30 minutes using only the docs; webhooks delivered at-least-once with a 99.9% success rate.
 
