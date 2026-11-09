@@ -2,6 +2,7 @@ import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import {
   Radio as RadioIcon,
   MessageSquare as MessageSquareIcon,
+  Code2 as Code2Icon,
 } from 'lucide-react';
 import { Logo } from './Logo';
 import {
@@ -58,6 +59,7 @@ import { ScheduleView } from './ScheduleView';
 import { NotesView } from './NotesView';
 import { RecordingsView } from './RecordingsView';
 import { TranscriptsView } from './TranscriptsView';
+import { DeveloperHubView } from './DeveloperHubView';
 import { BackendStatusIndicator } from './BackendStatusIndicator';
 
 interface DashboardViewProps {
@@ -78,6 +80,7 @@ const TAB_LABELS: Record<DashboardTab, string> = {
   notes: 'Notes & Action Items',
   recordings: 'Recordings',
   transcripts: 'Transcripts & Captions',
+  developer: 'Developer Platform',
   settings: 'Settings',
   profile: 'Public Profile',
   'profile-edit': 'Edit Profile',
@@ -385,6 +388,20 @@ export function DashboardView({
           </button>
           <button
             type="button"
+            aria-current={activeTab === 'developer' ? 'page' : undefined}
+            onClick={() => {
+              selectTab('developer');
+              setIsNavDrawerOpen(false);
+            }}
+            data-testid="sidebar-developer-btn"
+          >
+            <span>
+              <Code2Icon size={16} />
+            </span>
+            <span>Developers</span>
+          </button>
+          <button
+            type="button"
             aria-current={activeTab === 'settings' ? 'page' : undefined}
             onClick={() => {
               selectTab('settings');
@@ -667,6 +684,8 @@ export function DashboardView({
               onSaved={() => selectTab('profile', user?.id ?? null)}
               onToast={onToast}
             />
+          ) : activeTab === 'developer' ? (
+            <DeveloperHubView onToast={onToast} />
           ) : activeTab === 'settings' ? (
             <SettingsView
               user={user ?? null}

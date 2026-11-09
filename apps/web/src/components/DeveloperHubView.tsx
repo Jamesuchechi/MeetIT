@@ -16,10 +16,11 @@ import { MeetItMeeting } from '@meetit/sdk';
 import { ApiKeysModal } from './ApiKeysModal';
 
 interface DeveloperHubViewProps {
-  onBack: () => void;
+  onBack?: () => void;
+  onToast?: (msg: string) => void;
 }
 
-export function DeveloperHubView({ onBack }: DeveloperHubViewProps) {
+export function DeveloperHubView({ onBack, onToast }: DeveloperHubViewProps) {
   const [activeCodeTab, setActiveCodeTab] = useState<
     'react' | 'vanilla' | 'curl' | 'python'
   >('react');
@@ -144,15 +145,17 @@ print(f"Host Join URL: {data['hostUrl']}")`;
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-          <button
-            type="button"
-            className="btn btn-sm secondary"
-            onClick={onBack}
-            data-testid="dev-hub-back-btn"
-          >
-            <ArrowLeft size={14} style={{ marginRight: 4 }} />
-            Back to App
-          </button>
+          {onBack && (
+            <button
+              type="button"
+              className="btn btn-sm secondary"
+              onClick={onBack}
+              data-testid="dev-hub-back-btn"
+            >
+              <ArrowLeft size={14} style={{ marginRight: 4 }} />
+              Back
+            </button>
+          )}
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <Code2 size={20} style={{ color: 'var(--accent)' }} />
             <strong style={{ fontSize: '15px' }}>

@@ -20,6 +20,7 @@ export type DashboardTab =
   | 'notes'
   | 'recordings'
   | 'transcripts'
+  | 'developer'
   | 'settings'
   | 'profile'
   | 'profile-edit';
