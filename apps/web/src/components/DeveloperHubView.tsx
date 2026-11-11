@@ -123,28 +123,10 @@ print(f"Host Join URL: {data['hostUrl']}")`;
   };
 
   return (
-    <div
-      style={{
-        minHeight: '100vh',
-        background: 'var(--bg)',
-        color: 'var(--ink)',
-        display: 'flex',
-        flexDirection: 'column',
-      }}
-    >
+    <div className="dev-hub-root">
       {/* Top Navigation */}
-      <header
-        style={{
-          height: '64px',
-          padding: '0 24px',
-          borderBottom: '1px solid var(--line)',
-          background: 'var(--surface)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+      <header className="dev-hub-header">
+        <div className="dev-hub-header-left">
           {onBack && (
             <button
               type="button"
@@ -156,18 +138,22 @@ print(f"Host Join URL: {data['hostUrl']}")`;
               Back
             </button>
           )}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <Code2 size={20} style={{ color: 'var(--accent)' }} />
-            <strong style={{ fontSize: '15px' }}>
-              MeetIT Developer Platform
-            </strong>
-            <span className="panel-badge accent" style={{ fontSize: '11px' }}>
+          <div className="dev-hub-brand-group">
+            <Code2
+              size={20}
+              style={{ color: 'var(--accent)', flexShrink: 0 }}
+            />
+            <strong className="dev-hub-title">MeetIT Developer Platform</strong>
+            <span
+              className="panel-badge accent dev-hub-badge"
+              style={{ fontSize: '11px', whiteSpace: 'nowrap' }}
+            >
               v1.5 API &amp; SDK
             </span>
           </div>
         </div>
 
-        <div style={{ display: 'flex', gap: '10px' }}>
+        <div className="dev-hub-header-actions">
           <a
             href="/openapi.json"
             target="_blank"
@@ -176,7 +162,7 @@ print(f"Host Join URL: {data['hostUrl']}")`;
             style={{ textDecoration: 'none' }}
           >
             <FileCode size={14} style={{ marginRight: 4 }} />
-            OpenAPI 3.1 Spec
+            OpenAPI Spec
           </a>
           <button
             type="button"
@@ -191,26 +177,9 @@ print(f"Host Join URL: {data['hostUrl']}")`;
       </header>
 
       {/* Main Content Layout */}
-      <main
-        style={{
-          flex: 1,
-          display: 'grid',
-          gridTemplateColumns: '340px 1fr',
-          overflow: 'hidden',
-        }}
-      >
+      <main className="dev-hub-main">
         {/* Left Column: Config Controls */}
-        <aside
-          style={{
-            borderRight: '1px solid var(--line)',
-            background: 'var(--surface)',
-            padding: '20px',
-            overflowY: 'auto',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '16px',
-          }}
-        >
+        <aside className="dev-hub-sidebar">
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <Sliders size={18} style={{ color: 'var(--accent)' }} />
             <h4 style={{ margin: 0, fontSize: '14px', fontWeight: 700 }}>
@@ -357,15 +326,7 @@ print(f"Host Join URL: {data['hostUrl']}")`;
         </aside>
 
         {/* Right Column: Live Embed Monitor & Code Snippets */}
-        <section
-          style={{
-            display: 'flex',
-            flexDirection: 'column',
-            overflowY: 'auto',
-            padding: '24px',
-            gap: '24px',
-          }}
-        >
+        <section className="dev-hub-content">
           {/* Live Embed Preview Monitor */}
           <div
             style={{
@@ -379,6 +340,8 @@ print(f"Host Join URL: {data['hostUrl']}")`;
                 display: 'flex',
                 justifyContent: 'space-between',
                 alignItems: 'center',
+                flexWrap: 'wrap',
+                gap: '8px',
               }}
             >
               <div
@@ -398,6 +361,7 @@ print(f"Host Join URL: {data['hostUrl']}")`;
               style={{
                 width: '100%',
                 height: '420px',
+                minHeight: '280px',
                 borderRadius: '14px',
                 overflow: 'hidden',
                 border: '1px solid var(--line)',
@@ -407,6 +371,11 @@ print(f"Host Join URL: {data['hostUrl']}")`;
             >
               <MeetItMeeting
                 roomCode={roomCode}
+                baseUrl={
+                  typeof window !== 'undefined'
+                    ? window.location.origin
+                    : undefined
+                }
                 theme={theme}
                 audioMuted={audioMuted}
                 videoEnabled={videoEnabled}
@@ -509,6 +478,7 @@ print(f"Host Join URL: {data['hostUrl']}")`;
       <ApiKeysModal
         isOpen={showApiKeysModal}
         onClose={() => setShowApiKeysModal(false)}
+        onToast={onToast}
       />
     </div>
   );

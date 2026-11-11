@@ -28,6 +28,44 @@ const API_KEYS_STORAGE_KEY = 'meetit_api_keys_v1';
 const RATE_LIMIT_STORAGE_KEY = 'meetit_rate_limits_v1';
 
 export class ApiKeyService {
+  private static async hashSecret(rawSecret: string): Promise<string> {
+    try {
+      if (
+        typeof crypto !== 'undefined' &&
+        crypto.subtle &&
+        typeof crypto.subtle.digest === 'function'
+      ) {
+        const encoder = new TextEncoder();
+        const hashBuffer = await crypto.subtle.digest(
+          'SHA-256',
+          encoder.encode(rawSecret),
+        );
+        return Array.from(new Uint8Array(hashBuffer))
+          .map((b) => b.toString(16).padStart(2, '0'))
+          .join('');
+      }
+    } catch {
+      // fallback
+    }
+
+    let h1 = 0xdeadbeef;
+    let h2 = 0x41c6ce57;
+    for (let i = 0; i < rawSecret.length; i++) {
+      const ch = rawSecret.charCodeAt(i);
+      h1 = Math.imul(h1 ^ ch, 2654435761);
+      h2 = Math.imul(h2 ^ ch, 1597334677);
+    }
+    h1 =
+      Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^
+      Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+    h2 =
+      Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^
+      Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+    return (4294967296 * (2097151 & h2) + (h1 >>> 0))
+      .toString(16)
+      .padStart(64, '0');
+  }
+
   public static getKeys(): ApiKey[] {
     try {
       if (typeof window === 'undefined' || !window.localStorage) return [];
@@ -46,15 +84,7 @@ export class ApiKeyService {
     const rawSecret = `mkit_live_${Math.random().toString(36).slice(2)}${Math.random().toString(36).slice(2)}${Math.random().toString(36).slice(2)}`;
     const prefix = rawSecret.slice(0, 16);
 
-    const encoder = new TextEncoder();
-    const hashBuffer = await crypto.subtle.digest(
-      'SHA-256',
-      encoder.encode(rawSecret),
-    );
-    const hashArray = Array.from(new Uint8Array(hashBuffer));
-    const hashedSecret = hashArray
-      .map((b) => b.toString(16).padStart(2, '0'))
-      .join('');
+    const hashedSecret = await this.hashSecret(rawSecret);
 
     const key: ApiKey = {
       id: `key_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
@@ -69,7 +99,7 @@ export class ApiKeyService {
     };
 
     const keys = this.getKeys();
-    keys.push(key);
+    keys.unshift(key);
     if (typeof window !== 'undefined' && window.localStorage) {
       window.localStorage.setItem(API_KEYS_STORAGE_KEY, JSON.stringify(keys));
     }
@@ -104,14 +134,7 @@ export class ApiKeyService {
       return { valid: false, error: 'Invalid API key format' };
     }
 
-    const encoder = new TextEncoder();
-    const hashBuffer = await crypto.subtle.digest(
-      'SHA-256',
-      encoder.encode(bearerToken),
-    );
-    const hashed = Array.from(new Uint8Array(hashBuffer))
-      .map((b) => b.toString(16).padStart(2, '0'))
-      .join('');
+    const hashed = await this.hashSecret(bearerToken);
 
     const keys = this.getKeys();
     const matched = keys.find((k) => k.hashedSecret === hashed);

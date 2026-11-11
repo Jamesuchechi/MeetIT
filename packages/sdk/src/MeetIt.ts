@@ -29,10 +29,11 @@ export class MeetIt {
       );
     }
 
-    const baseUrl = (options.baseUrl || 'https://meetit.app').replace(
-      /\/$/,
-      '',
-    );
+    const defaultOrigin =
+      typeof window !== 'undefined' && window.location?.origin
+        ? window.location.origin
+        : 'https://meetit.app';
+    const baseUrl = (options.baseUrl || defaultOrigin).replace(/\/$/, '');
     const searchParams = new URLSearchParams();
 
     if (options.token) searchParams.set('token', options.token);

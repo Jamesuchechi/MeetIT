@@ -887,7 +887,7 @@ export function MeetingRoomView({
   const [showMoreDesktopMenu, setShowMoreDesktopMenu] = useState(false);
   const [showReactionPopover, setShowReactionPopover] = useState(false);
   const [showChatPanel, setShowChatPanel] = useState(false);
-  const [showActivitiesPanel, setShowActivitiesPanel] = useState(false);
+  const [showActivitiesPopover, setShowActivitiesPopover] = useState(false);
   const [showShortcutsModal, setShowShortcutsModal] = useState(false);
   const [pinnedTargetId, setPinnedTargetId] = useState<string | null>(null);
   const [activeSpeakerId, setActiveSpeakerId] = useState<string | null>(null);
@@ -5422,306 +5422,6 @@ export function MeetingRoomView({
           </aside>
         )}
 
-        {/* Activities Side Panel */}
-        {showActivitiesPanel && (
-          <aside
-            className="call-chat-panel call-activities-panel"
-            aria-label="Meeting activities"
-            data-testid="activities-panel"
-          >
-            <div className="chat-panel-header">
-              <h3>Activities</h3>
-              <button
-                type="button"
-                className="btn-icon-subtle"
-                onClick={() => setShowActivitiesPanel(false)}
-                aria-label="Close activities panel"
-              >
-                <CloseIcon />
-              </button>
-            </div>
-
-            <div
-              style={{
-                flex: 1,
-                overflowY: 'auto',
-                padding: '16px',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '10px',
-              }}
-            >
-              {/* Breakout Rooms */}
-              <button
-                type="button"
-                className="activity-card-btn"
-                onClick={() => {
-                  setShowBreakoutModal(true);
-                  setShowActivitiesPanel(false);
-                }}
-                data-testid="call-breakout-btn"
-              >
-                <div className="activity-card-icon">
-                  <UsersIcon size={20} />
-                </div>
-                <div className="activity-card-info">
-                  <div className="activity-card-title">Breakout Rooms</div>
-                  <div className="activity-card-desc">
-                    Split meeting into smaller discussion groups
-                  </div>
-                </div>
-                {breakoutState?.active && (
-                  <span
-                    className="unread-chat-badge"
-                    style={{ background: 'var(--brand-primary, #6366f1)' }}
-                  >
-                    On
-                  </span>
-                )}
-              </button>
-
-              {/* Polls & Quizzes */}
-              <button
-                type="button"
-                className="activity-card-btn"
-                onClick={() => {
-                  setShowPollsPanel(true);
-                  setShowActivitiesPanel(false);
-                }}
-                data-testid="call-polls-btn"
-              >
-                <div className="activity-card-icon">
-                  <BarChartIcon size={20} />
-                </div>
-                <div className="activity-card-info">
-                  <div className="activity-card-title">Polls &amp; Quizzes</div>
-                  <div className="activity-card-desc">
-                    Create and vote on live multiple-choice questions
-                  </div>
-                </div>
-                {polls.filter((p) => !p.closed).length > 0 && (
-                  <span className="unread-chat-badge">
-                    {polls.filter((p) => !p.closed).length}
-                  </span>
-                )}
-              </button>
-
-              {/* FormIT Surveys */}
-              <button
-                type="button"
-                className="activity-card-btn"
-                onClick={() => {
-                  setShowFormItModal(true);
-                  setShowActivitiesPanel(false);
-                }}
-                data-testid="call-formit-btn"
-              >
-                <div className="activity-card-icon">
-                  <ClipboardIcon size={20} />
-                </div>
-                <div className="activity-card-info">
-                  <div className="activity-card-title">FormIT Surveys</div>
-                  <div className="activity-card-desc">
-                    Collect structured participant feedback in real time
-                  </div>
-                </div>
-                {formItSession && (
-                  <span
-                    className="unread-chat-badge"
-                    style={{ background: '#10b981' }}
-                  >
-                    Live
-                  </span>
-                )}
-              </button>
-
-              {/* Q&A */}
-              <button
-                type="button"
-                className="activity-card-btn"
-                onClick={() => {
-                  setShowQAPanel(true);
-                  setShowActivitiesPanel(false);
-                }}
-                data-testid="call-qa-btn"
-              >
-                <div className="activity-card-icon">
-                  <HelpIcon size={20} />
-                </div>
-                <div className="activity-card-info">
-                  <div className="activity-card-title">Q&amp;A</div>
-                  <div className="activity-card-desc">
-                    Structured questions and upvoting from participants
-                  </div>
-                </div>
-                {qaQuestions.filter((q) => !q.answered && !q.dismissed).length >
-                  0 && (
-                  <span className="unread-chat-badge">
-                    {
-                      qaQuestions.filter((q) => !q.answered && !q.dismissed)
-                        .length
-                    }
-                  </span>
-                )}
-              </button>
-
-              {/* Whiteboard */}
-              <button
-                type="button"
-                className="activity-card-btn"
-                onClick={() => {
-                  setShowWhiteboardModal(true);
-                  setShowActivitiesPanel(false);
-                }}
-                data-testid="call-whiteboard-btn"
-              >
-                <div className="activity-card-icon">
-                  <PaintbrushIcon size={20} />
-                </div>
-                <div className="activity-card-info">
-                  <div className="activity-card-title">Shared Whiteboard</div>
-                  <div className="activity-card-desc">
-                    Draw, diagram, and brainstorm collaboratively
-                  </div>
-                </div>
-              </button>
-
-              {/* Shared Collaborative Notes */}
-              <button
-                type="button"
-                className="activity-card-btn"
-                onClick={() => {
-                  setShowSharedNotesPanel(true);
-                  setShowActivitiesPanel(false);
-                }}
-                data-testid="call-notes-btn"
-              >
-                <div className="activity-card-icon">
-                  <FileTextIcon size={20} />
-                </div>
-                <div className="activity-card-info">
-                  <div className="activity-card-title">Collaborative Notes</div>
-                  <div className="activity-card-desc">
-                    Live document syncing and AI meeting summary
-                  </div>
-                </div>
-              </button>
-
-              {/* Apps Marketplace */}
-              <button
-                type="button"
-                className="activity-card-btn"
-                onClick={() => {
-                  setShowAppsModal(true);
-                  setShowActivitiesPanel(false);
-                }}
-                data-testid="call-apps-btn"
-              >
-                <div className="activity-card-icon">
-                  <LayoutGridIcon size={20} />
-                </div>
-                <div className="activity-card-info">
-                  <div className="activity-card-title">
-                    Apps &amp; Integrations
-                  </div>
-                  <div className="activity-card-desc">
-                    Extend your meeting with interactive integrations
-                  </div>
-                </div>
-                {activeMarketplaceApp && (
-                  <span
-                    className="unread-chat-badge"
-                    style={{ background: '#10b981' }}
-                  >
-                    Active
-                  </span>
-                )}
-              </button>
-
-              {/* Webinar items if webinar mode enabled */}
-              {webinarState?.enabled && (
-                <>
-                  <button
-                    type="button"
-                    className="activity-card-btn"
-                    onClick={() => {
-                      setShowWebinarQaPanel(true);
-                      setShowActivitiesPanel(false);
-                    }}
-                    data-testid="call-webinar-qa-btn"
-                  >
-                    <div className="activity-card-icon">
-                      <MessageSquareIcon size={20} />
-                    </div>
-                    <div className="activity-card-info">
-                      <div className="activity-card-title">Webinar Q&amp;A</div>
-                      <div className="activity-card-desc">
-                        Moderate viewer questions before broadcast
-                      </div>
-                    </div>
-                  </button>
-
-                  {canModerate && (
-                    <>
-                      <button
-                        type="button"
-                        className="activity-card-btn"
-                        onClick={() => {
-                          setShowWebinarStreamModal(true);
-                          setShowActivitiesPanel(false);
-                        }}
-                        data-testid="call-webinar-stream-btn"
-                      >
-                        <div className="activity-card-icon">
-                          <RadioIcon size={20} />
-                        </div>
-                        <div className="activity-card-info">
-                          <div className="activity-card-title">
-                            Live Stream Out
-                          </div>
-                          <div className="activity-card-desc">
-                            Broadcast to YouTube, RTMP, or HLS
-                          </div>
-                        </div>
-                        {webinarState?.streamOut?.status === 'live' && (
-                          <span
-                            className="unread-chat-badge"
-                            style={{ background: '#ef4444' }}
-                          >
-                            Live
-                          </span>
-                        )}
-                      </button>
-
-                      <button
-                        type="button"
-                        className="activity-card-btn"
-                        onClick={() => {
-                          setShowWebinarAnalyticsModal(true);
-                          setShowActivitiesPanel(false);
-                        }}
-                        data-testid="call-webinar-analytics-btn"
-                      >
-                        <div className="activity-card-icon">
-                          <TrendingUpIcon size={20} />
-                        </div>
-                        <div className="activity-card-info">
-                          <div className="activity-card-title">
-                            Attendee Analytics
-                          </div>
-                          <div className="activity-card-desc">
-                            View attendance stats and retention charts
-                          </div>
-                        </div>
-                      </button>
-                    </>
-                  )}
-                </>
-              )}
-            </div>
-          </aside>
-        )}
-
         {/* In-call text chat panel */}
         {showChatPanel && (
           <aside
@@ -6092,7 +5792,7 @@ export function MeetingRoomView({
             onClick={() => {
               setShowChatPanel((v) => !v);
               setShowHostPanel(false);
-              setShowActivitiesPanel(false);
+              setShowActivitiesPopover(false);
             }}
             aria-pressed={showChatPanel}
             aria-label="Toggle in-call chat"
@@ -6600,31 +6300,281 @@ export function MeetingRoomView({
         </div>
 
         <div className="call-dock-right">
-          {/* Activities Button */}
-          <button
-            type="button"
-            className={`call-side-btn ${showActivitiesPanel ? 'active-panel' : ''}`}
-            onClick={() => {
-              setShowActivitiesPanel((v) => !v);
-              setShowChatPanel(false);
-              setShowHostPanel(false);
-            }}
-            aria-pressed={showActivitiesPanel}
-            aria-label="Activities and Collaboration"
-            title="Activities (Rooms, Polls, FormIT, Q&A, Whiteboard, Notes, Apps)"
-            data-testid="call-activities-btn"
-          >
-            <ShapesIcon size={16} />
-            <span>Activities</span>
-            {hasActiveActivity && (
-              <span
-                className="unread-chat-badge"
-                style={{ background: 'var(--brand-primary, #6366f1)' }}
-              >
-                ●
-              </span>
+          {/* Activities Button with Popover (matches More popover) */}
+          <div className="dock-popover-anchor">
+            <button
+              type="button"
+              className={`call-side-btn ${showActivitiesPopover ? 'active-panel' : ''}`}
+              onClick={() => {
+                setShowActivitiesPopover((v) => !v);
+                setShowMoreDesktopMenu(false);
+                setShowDevicePopover(false);
+                setShowReactionPopover(false);
+              }}
+              aria-expanded={showActivitiesPopover}
+              aria-label="Activities and Collaboration"
+              title="Activities (Rooms, Polls, FormIT, Q&A, Whiteboard, Notes, Apps)"
+              data-testid="call-activities-btn"
+            >
+              <ShapesIcon size={16} />
+              <span>Activities</span>
+              {hasActiveActivity && (
+                <span
+                  className="unread-chat-badge"
+                  style={{ background: 'var(--brand-primary, #6366f1)' }}
+                >
+                  ●
+                </span>
+              )}
+            </button>
+
+            {showActivitiesPopover && (
+              <>
+                <div
+                  style={{ position: 'fixed', inset: 0, zIndex: 59 }}
+                  onClick={() => setShowActivitiesPopover(false)}
+                />
+                <div
+                  className="call-activities-desktop-popover"
+                  role="menu"
+                  aria-label="Meeting activities"
+                >
+                  <div className="call-activities-popover-header">
+                    Collaboration &amp; Activities
+                  </div>
+
+                  {/* Breakout Rooms */}
+                  <button
+                    type="button"
+                    className="call-more-menu-item"
+                    onClick={() => {
+                      setShowBreakoutModal(true);
+                      setShowActivitiesPopover(false);
+                    }}
+                    data-testid="call-breakout-btn"
+                  >
+                    <UsersIcon size={16} className="menu-icon-accent" />
+                    <div className="menu-item-text">
+                      <span>Breakout Rooms</span>
+                      <small>Split into smaller discussion groups</small>
+                    </div>
+                    {breakoutState?.active && (
+                      <span
+                        className="unread-chat-badge"
+                        style={{ background: 'var(--brand-primary, #6366f1)' }}
+                      >
+                        On
+                      </span>
+                    )}
+                  </button>
+
+                  {/* Polls & Quizzes */}
+                  <button
+                    type="button"
+                    className="call-more-menu-item"
+                    onClick={() => {
+                      setShowPollsPanel(true);
+                      setShowActivitiesPopover(false);
+                    }}
+                    data-testid="call-polls-btn"
+                  >
+                    <BarChartIcon size={16} className="menu-icon-accent" />
+                    <div className="menu-item-text">
+                      <span>Polls &amp; Quizzes</span>
+                      <small>Live multiple-choice surveys &amp; voting</small>
+                    </div>
+                    {polls.filter((p) => !p.closed).length > 0 && (
+                      <span className="unread-chat-badge">
+                        {polls.filter((p) => !p.closed).length}
+                      </span>
+                    )}
+                  </button>
+
+                  {/* FormIT Surveys */}
+                  <button
+                    type="button"
+                    className="call-more-menu-item"
+                    onClick={() => {
+                      setShowFormItModal(true);
+                      setShowActivitiesPopover(false);
+                    }}
+                    data-testid="call-formit-btn"
+                  >
+                    <ClipboardIcon size={16} className="menu-icon-accent" />
+                    <div className="menu-item-text">
+                      <span>FormIT Surveys</span>
+                      <small>Collect structured attendee responses</small>
+                    </div>
+                    {formItSession && (
+                      <span
+                        className="unread-chat-badge"
+                        style={{ background: '#10b981' }}
+                      >
+                        Live
+                      </span>
+                    )}
+                  </button>
+
+                  {/* Q&A */}
+                  <button
+                    type="button"
+                    className="call-more-menu-item"
+                    onClick={() => {
+                      setShowQAPanel(true);
+                      setShowActivitiesPopover(false);
+                    }}
+                    data-testid="call-qa-btn"
+                  >
+                    <HelpIcon size={16} className="menu-icon-accent" />
+                    <div className="menu-item-text">
+                      <span>Q&amp;A</span>
+                      <small>Structured questions &amp; upvoting</small>
+                    </div>
+                    {qaQuestions.filter((q) => !q.answered && !q.dismissed)
+                      .length > 0 && (
+                      <span className="unread-chat-badge">
+                        {
+                          qaQuestions.filter((q) => !q.answered && !q.dismissed)
+                            .length
+                        }
+                      </span>
+                    )}
+                  </button>
+
+                  {/* Shared Whiteboard */}
+                  <button
+                    type="button"
+                    className="call-more-menu-item"
+                    onClick={() => {
+                      setShowWhiteboardModal(true);
+                      setShowActivitiesPopover(false);
+                    }}
+                    data-testid="call-whiteboard-btn"
+                  >
+                    <PaintbrushIcon size={16} className="menu-icon-accent" />
+                    <div className="menu-item-text">
+                      <span>Shared Whiteboard</span>
+                      <small>Draw, diagram, and brainstorm together</small>
+                    </div>
+                  </button>
+
+                  {/* Collaborative Notes */}
+                  <button
+                    type="button"
+                    className="call-more-menu-item"
+                    onClick={() => {
+                      setShowSharedNotesPanel(true);
+                      setShowActivitiesPopover(false);
+                    }}
+                    data-testid="call-notes-btn"
+                  >
+                    <FileTextIcon size={16} className="menu-icon-accent" />
+                    <div className="menu-item-text">
+                      <span>Collaborative Notes</span>
+                      <small>Live notes and AI meeting summary</small>
+                    </div>
+                  </button>
+
+                  {/* Apps Marketplace */}
+                  <button
+                    type="button"
+                    className="call-more-menu-item"
+                    onClick={() => {
+                      setShowAppsModal(true);
+                      setShowActivitiesPopover(false);
+                    }}
+                    data-testid="call-apps-btn"
+                  >
+                    <LayoutGridIcon size={16} className="menu-icon-accent" />
+                    <div className="menu-item-text">
+                      <span>Apps &amp; Integrations</span>
+                      <small>In-meeting tools and widgets</small>
+                    </div>
+                    {activeMarketplaceApp && (
+                      <span
+                        className="unread-chat-badge"
+                        style={{ background: '#10b981' }}
+                      >
+                        Active
+                      </span>
+                    )}
+                  </button>
+
+                  {/* Webinar items if webinar enabled */}
+                  {webinarState?.enabled && (
+                    <>
+                      <div className="menu-divider" />
+                      <button
+                        type="button"
+                        className="call-more-menu-item"
+                        onClick={() => {
+                          setShowWebinarQaPanel(true);
+                          setShowActivitiesPopover(false);
+                        }}
+                        data-testid="call-webinar-qa-btn"
+                      >
+                        <MessageSquareIcon
+                          size={16}
+                          className="menu-icon-accent"
+                        />
+                        <div className="menu-item-text">
+                          <span>Webinar Q&amp;A</span>
+                          <small>Audience moderation before broadcast</small>
+                        </div>
+                      </button>
+
+                      {canModerate && (
+                        <>
+                          <button
+                            type="button"
+                            className="call-more-menu-item"
+                            onClick={() => {
+                              setShowWebinarStreamModal(true);
+                              setShowActivitiesPopover(false);
+                            }}
+                            data-testid="call-webinar-stream-btn"
+                          >
+                            <RadioIcon size={16} className="menu-icon-accent" />
+                            <div className="menu-item-text">
+                              <span>Live Stream Out</span>
+                              <small>Broadcast to YouTube, RTMP, HLS</small>
+                            </div>
+                            {webinarState?.streamOut?.status === 'live' && (
+                              <span
+                                className="unread-chat-badge"
+                                style={{ background: '#ef4444' }}
+                              >
+                                Live
+                              </span>
+                            )}
+                          </button>
+
+                          <button
+                            type="button"
+                            className="call-more-menu-item"
+                            onClick={() => {
+                              setShowWebinarAnalyticsModal(true);
+                              setShowActivitiesPopover(false);
+                            }}
+                            data-testid="call-webinar-analytics-btn"
+                          >
+                            <TrendingUpIcon
+                              size={16}
+                              className="menu-icon-accent"
+                            />
+                            <div className="menu-item-text">
+                              <span>Attendee Analytics</span>
+                              <small>Viewer engagement &amp; attendance</small>
+                            </div>
+                          </button>
+                        </>
+                      )}
+                    </>
+                  )}
+                </div>
+              </>
             )}
-          </button>
+          </div>
 
           {/* People & Host Controls toggle button with waiting room badge */}
           <button
@@ -6633,7 +6583,7 @@ export function MeetingRoomView({
             onClick={() => {
               setShowHostPanel((v) => !v);
               setShowChatPanel(false);
-              setShowActivitiesPanel(false);
+              setShowActivitiesPopover(false);
             }}
             aria-pressed={showHostPanel}
             aria-label="Toggle people and host controls"
@@ -6656,7 +6606,7 @@ export function MeetingRoomView({
             onClick={() => {
               setShowChatPanel((v) => !v);
               setShowHostPanel(false);
-              setShowActivitiesPanel(false);
+              setShowActivitiesPopover(false);
             }}
             aria-pressed={showChatPanel}
             aria-label="Toggle in-call chat (C)"

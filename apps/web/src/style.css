@@ -3548,6 +3548,150 @@ aside.context-bar {
   line-height: 1.3;
 }
 
+/* Desktop "Activities" Popover Menu (Matches More Popover) */
+.call-activities-desktop-popover {
+  position: absolute;
+  bottom: calc(100% + 14px);
+  right: 0;
+  width: 320px;
+  max-height: 480px;
+  overflow-y: auto;
+  padding: 8px;
+  border-radius: 16px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  box-shadow: 0 16px 44px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(255, 255, 255, 0.08);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  z-index: 60;
+  color: var(--ink);
+  animation: slideUpPopover 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.call-activities-popover-header {
+  padding: 8px 12px 6px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 4px;
+}
+
+/* Developer Platform / Hub Responsive Styles */
+.dev-hub-root {
+  min-height: 100vh;
+  background: var(--bg);
+  color: var(--ink);
+  display: flex;
+  flex-direction: column;
+}
+
+.dev-hub-header {
+  min-height: 64px;
+  padding: 12px 24px;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.dev-hub-header-left {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.dev-hub-brand-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.dev-hub-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.dev-hub-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.dev-hub-main {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 340px 1fr;
+  overflow: hidden;
+}
+
+.dev-hub-sidebar {
+  border-right: 1px solid var(--line);
+  background: var(--surface);
+  padding: 20px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.dev-hub-content {
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  padding: 24px;
+  gap: 24px;
+}
+
+@media (max-width: 860px) {
+  .dev-hub-header {
+    padding: 12px 16px;
+    gap: 10px;
+  }
+  .dev-hub-header-left {
+    gap: 8px;
+    width: 100%;
+    justify-content: space-between;
+  }
+  .dev-hub-title {
+    font-size: 13.5px;
+  }
+  .dev-hub-header-actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+  .dev-hub-header-actions .btn {
+    flex: 1;
+    text-align: center;
+    justify-content: center;
+  }
+  .dev-hub-main {
+    grid-template-columns: 1fr;
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+  }
+  .dev-hub-sidebar {
+    border-right: none;
+    border-bottom: 1px solid var(--line);
+    padding: 16px;
+    overflow-y: visible;
+  }
+  .dev-hub-content {
+    padding: 16px;
+    overflow-y: visible;
+  }
+}
+
 /* Leave / End Meeting Confirmation Modal & Action Sheet */
 .leave-modal-backdrop {
   position: fixed;

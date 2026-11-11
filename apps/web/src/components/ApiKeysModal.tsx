@@ -25,6 +25,7 @@ import {
 interface ApiKeysModalProps {
   isOpen: boolean;
   onClose: () => void;
+  onToast?: ((msg: string) => void) | undefined;
 }
 
 const ALL_SCOPES: Array<{ scope: ApiKeyScope; label: string; desc: string }> = [
@@ -60,7 +61,7 @@ const ALL_SCOPES: Array<{ scope: ApiKeyScope; label: string; desc: string }> = [
   },
 ];
 
-export function ApiKeysModal({ isOpen, onClose }: ApiKeysModalProps) {
+export function ApiKeysModal({ isOpen, onClose, onToast }: ApiKeysModalProps) {
   const [activeTab, setActiveTab] = useState<'keys' | 'webhooks'>('keys');
   const [keys, setKeys] = useState<ApiKey[]>([]);
   const [webhooks, setWebhooks] = useState<WebhookSubscription[]>([]);
@@ -75,6 +76,8 @@ export function ApiKeysModal({ isOpen, onClose }: ApiKeysModalProps) {
   ]);
   const [createdSecret, setCreatedSecret] = useState<string | null>(null);
   const [copiedKey, setCopiedKey] = useState(false);
+  const [createKeyError, setCreateKeyError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Create Webhook Form State
   const [showCreateWebhookForm, setShowCreateWebhookForm] = useState(false);
@@ -99,14 +102,26 @@ export function ApiKeysModal({ isOpen, onClose }: ApiKeysModalProps) {
   const handleCreateKeySubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newKeyName.trim() || selectedScopes.length === 0) return;
-    const { apiKey, secretKey } = await ApiKeyService.createKey(
-      newKeyName.trim(),
-      selectedScopes,
-    );
-    setKeys(ApiKeyService.getKeys());
-    setCreatedSecret(secretKey);
-    setShowCreateKeyForm(false);
-    setNewKeyName('');
+    setCreateKeyError(null);
+    setIsSubmitting(true);
+    try {
+      const { apiKey, secretKey } = await ApiKeyService.createKey(
+        newKeyName.trim(),
+        selectedScopes,
+      );
+      setKeys(ApiKeyService.getKeys());
+      setCreatedSecret(secretKey);
+      setShowCreateKeyForm(false);
+      setNewKeyName('');
+      onToast?.('API Key generated successfully');
+    } catch (err) {
+      console.error('Failed to create API key:', err);
+      setCreateKeyError(
+        err instanceof Error ? err.message : 'Could not create API key',
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleRevokeKey = (id: string) => {
@@ -250,6 +265,7 @@ export function ApiKeysModal({ isOpen, onClose }: ApiKeysModalProps) {
                       display: 'flex',
                       gap: '8px',
                       alignItems: 'center',
+                      flexWrap: 'wrap',
                     }}
                   >
                     <input
@@ -360,7 +376,8 @@ export function ApiKeysModal({ isOpen, onClose }: ApiKeysModalProps) {
                     <div
                       style={{
                         display: 'grid',
-                        gridTemplateColumns: '1fr 1fr',
+                        gridTemplateColumns:
+                          'repeat(auto-fit, minmax(200px, 1fr))',
                         gap: '8px',
                       }}
                     >
@@ -401,6 +418,20 @@ export function ApiKeysModal({ isOpen, onClose }: ApiKeysModalProps) {
                     </div>
                   </div>
 
+                  {createKeyError && (
+                    <div
+                      style={{
+                        color: 'var(--danger)',
+                        fontSize: '12px',
+                        padding: '6px 10px',
+                        borderRadius: '6px',
+                        background: 'rgba(239, 68, 68, 0.1)',
+                      }}
+                    >
+                      {createKeyError}
+                    </div>
+                  )}
+
                   <div
                     style={{
                       display: 'flex',
@@ -420,11 +451,13 @@ export function ApiKeysModal({ isOpen, onClose }: ApiKeysModalProps) {
                       type="submit"
                       className="btn btn-sm primary"
                       disabled={
-                        !newKeyName.trim() || selectedScopes.length === 0
+                        !newKeyName.trim() ||
+                        selectedScopes.length === 0 ||
+                        isSubmitting
                       }
                       data-testid="submit-create-key-btn"
                     >
-                      Generate Secret Key
+                      {isSubmitting ? 'Generating…' : 'Generate Secret Key'}
                     </button>
                   </div>
                 </form>
