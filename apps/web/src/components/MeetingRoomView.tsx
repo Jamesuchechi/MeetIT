@@ -3558,7 +3558,14 @@ export function MeetingRoomView({
       : 5;
 
     const finalizeAndSave = async (blob: Blob) => {
-      const recId = `rec_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+      const recId =
+        typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+          ? crypto.randomUUID()
+          : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+              const r = (Math.random() * 16) | 0;
+              const v = c === 'x' ? r : (r & 0x3) | 0x8;
+              return v.toString(16);
+            });
       await storeRecordingBlob(recId, blob);
       const blobUrl = URL.createObjectURL(blob);
 
@@ -3594,21 +3601,20 @@ export function MeetingRoomView({
         try {
           await supabase.from('recordings').insert({
             id: recId,
-            meeting_code: roomCode,
-            title: newRec.roomTitle,
+            room_code: roomCode,
             duration_seconds: durationSecs,
             file_size_bytes: blob.size,
             status: 'ready',
-            play_url: '',
-            download_url: '',
             layout: newRec.layout,
-            has_transcript: captionsEnabled,
-            retention_days: newRec.retentionDays,
-            expires_at: newRec.expiresAt,
-            owner_id: user.id,
+            storage_path: newRec.storagePath,
+            storage_bucket: 'recordings',
+            download_url: '',
+            started_at: newRec.startedAt,
+            ended_at: newRec.endedAt,
+            started_by: user.id,
           });
-        } catch {
-          // Handled via local storage
+        } catch (err) {
+          console.warn('Failed to sync recording to Supabase:', err);
         }
       }
 
