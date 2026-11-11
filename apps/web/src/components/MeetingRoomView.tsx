@@ -99,7 +99,15 @@ import {
   ShieldAlert as ShieldAlertIcon,
   Languages as LanguagesIcon,
   LayoutGrid as LayoutGridIcon,
+  Shapes as ShapesIcon,
 } from 'lucide-react';
+import {
+  loadLocalRecordings,
+  saveLocalRecordings,
+  storeRecordingBlob,
+  type RecordingItem,
+} from '../lib/recordingsStore';
+import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import { Logo } from './Logo';
 import { Avatar } from './Avatar';
 import {
@@ -799,6 +807,11 @@ export function MeetingRoomView({
   const [recordingStartedAt, setRecordingStartedAt] = useState<number | null>(
     null,
   );
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const mediaRecorderChunksRef = useRef<Blob[]>([]);
+  const recordingStartedAtRef = useRef<number | null>(null);
+  const startRecordingCaptureRef = useRef<() => void>(() => {});
+  const stopRecordingCaptureRef = useRef<() => Promise<void>>(async () => {});
   const [recordingDuration, setRecordingDuration] = useState('00:00');
   const [showRecordingConsentNotice, setShowRecordingConsentNotice] =
     useState(false);
@@ -871,8 +884,10 @@ export function MeetingRoomView({
   // Panels, popovers, & spotlight state
   const [dismissedReadyCard, setDismissedReadyCard] = useState(false);
   const [showDevicePopover, setShowDevicePopover] = useState(false);
+  const [showMoreDesktopMenu, setShowMoreDesktopMenu] = useState(false);
   const [showReactionPopover, setShowReactionPopover] = useState(false);
   const [showChatPanel, setShowChatPanel] = useState(false);
+  const [showActivitiesPanel, setShowActivitiesPanel] = useState(false);
   const [showShortcutsModal, setShowShortcutsModal] = useState(false);
   const [pinnedTargetId, setPinnedTargetId] = useState<string | null>(null);
   const [activeSpeakerId, setActiveSpeakerId] = useState<string | null>(null);
@@ -2488,6 +2503,7 @@ export function MeetingRoomView({
     signaling.on('recording.started', (payload) => {
       setIsRecording(true);
       setRecordingStartedAt(payload.startedAt);
+      startRecordingCaptureRef.current();
       const by = payload.byDisplayName || 'The host';
       const isoNotice = payload.isoTracks ? ' (ISO stems active)' : '';
       onToast(`${by} started recording this meeting${isoNotice}.`);
@@ -2501,6 +2517,7 @@ export function MeetingRoomView({
       setIsRecording(false);
       setRecordingStartedAt(null);
       setShowRecordingConsentNotice(false);
+      void stopRecordingCaptureRef.current();
       const by = payload.byDisplayName || 'The host';
       onToast(`${by} stopped recording.`);
       announce(`${by} stopped recording`);
@@ -2850,6 +2867,13 @@ export function MeetingRoomView({
 
   const handleHangUp = () => {
     hasConnectedTransportRef.current = false;
+    if (
+      isRecording ||
+      (mediaRecorderRef.current &&
+        mediaRecorderRef.current.state !== 'inactive')
+    ) {
+      void stopRecordingCaptureRef.current();
+    }
     if (callStartedAtRef.current) {
       const historyItem = recordCompletedMeetingSession({
         roomCode,
@@ -3364,10 +3388,277 @@ export function MeetingRoomView({
     handleHangUp();
   };
 
+  const startLocalMediaRecorder = useCallback(() => {
+    if (
+      typeof window === 'undefined' ||
+      typeof window.MediaRecorder === 'undefined'
+    ) {
+      return;
+    }
+    try {
+      if (
+        mediaRecorderRef.current &&
+        mediaRecorderRef.current.state !== 'inactive'
+      ) {
+        try {
+          mediaRecorderRef.current.stop();
+        } catch {
+          // ignore
+        }
+      }
+
+      mediaRecorderChunksRef.current = [];
+      recordingStartedAtRef.current = Date.now();
+
+      const tracks: MediaStreamTrack[] = [];
+
+      // 1. Video track: screen share takes precedence, then camera
+      if (
+        localScreenStreamRef.current &&
+        localScreenStreamRef.current.getVideoTracks().length > 0
+      ) {
+        tracks.push(localScreenStreamRef.current.getVideoTracks()[0]!);
+      } else if (
+        localStreamRef.current &&
+        localStreamRef.current.getVideoTracks().length > 0
+      ) {
+        tracks.push(localStreamRef.current.getVideoTracks()[0]!);
+      }
+
+      // 2. Audio track: mix local mic and remote peer audio
+      let mixedAudioTrack: MediaStreamTrack | null = null;
+      try {
+        const AudioCtx =
+          window.AudioContext ||
+          (window as unknown as { webkitAudioContext: typeof AudioContext })
+            .webkitAudioContext;
+        if (AudioCtx) {
+          const ctx = new AudioCtx();
+          const dest = ctx.createMediaStreamDestination();
+          let hasAudio = false;
+
+          if (
+            localStreamRef.current &&
+            localStreamRef.current.getAudioTracks().length > 0
+          ) {
+            try {
+              const src = ctx.createMediaStreamSource(localStreamRef.current);
+              src.connect(dest);
+              hasAudio = true;
+            } catch {
+              // ignore
+            }
+          }
+
+          Object.values(remotePeers).forEach((peer) => {
+            if (peer.stream && peer.stream.getAudioTracks().length > 0) {
+              try {
+                const pSrc = ctx.createMediaStreamSource(peer.stream);
+                pSrc.connect(dest);
+                hasAudio = true;
+              } catch {
+                // ignore
+              }
+            }
+          });
+
+          if (hasAudio && dest.stream.getAudioTracks().length > 0) {
+            mixedAudioTrack = dest.stream.getAudioTracks()[0]!;
+          }
+        }
+      } catch {
+        // Fallback
+      }
+
+      if (
+        !mixedAudioTrack &&
+        localStreamRef.current &&
+        localStreamRef.current.getAudioTracks().length > 0
+      ) {
+        mixedAudioTrack = localStreamRef.current.getAudioTracks()[0]!;
+      }
+
+      if (mixedAudioTrack) {
+        tracks.push(mixedAudioTrack);
+      }
+
+      // 3. Fallback video canvas if camera is off
+      if (!tracks.some((t) => t.kind === 'video')) {
+        try {
+          const canvas = document.createElement('canvas');
+          canvas.width = 640;
+          canvas.height = 360;
+          const ctx = canvas.getContext('2d');
+          if (ctx) {
+            ctx.fillStyle = '#0f172a';
+            ctx.fillRect(0, 0, 640, 360);
+            ctx.fillStyle = '#f8fafc';
+            ctx.font = 'bold 20px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText(roomTitle || 'MeetIT Recording', 320, 160);
+            ctx.fillStyle = '#94a3b8';
+            ctx.font = '14px sans-serif';
+            ctx.fillText(roomCode, 320, 200);
+          }
+          if (canvas.captureStream) {
+            const canvasStream = canvas.captureStream(10);
+            if (canvasStream.getVideoTracks().length > 0) {
+              tracks.push(canvasStream.getVideoTracks()[0]!);
+            }
+          }
+        } catch {
+          // ignore
+        }
+      }
+
+      if (tracks.length === 0) return;
+
+      const combinedStream = new MediaStream(tracks);
+      const candidates = [
+        'video/webm;codecs=vp9,opus',
+        'video/webm;codecs=vp8,opus',
+        'video/webm',
+        'video/mp4',
+        'audio/webm',
+      ];
+      let chosenMime = '';
+      for (const m of candidates) {
+        if (
+          typeof MediaRecorder.isTypeSupported === 'function' &&
+          MediaRecorder.isTypeSupported(m)
+        ) {
+          chosenMime = m;
+          break;
+        }
+      }
+
+      const recorder = new MediaRecorder(
+        combinedStream,
+        chosenMime ? { mimeType: chosenMime } : undefined,
+      );
+
+      recorder.ondataavailable = (e) => {
+        if (e.data && e.data.size > 0) {
+          mediaRecorderChunksRef.current.push(e.data);
+        }
+      };
+
+      recorder.start(1000);
+      mediaRecorderRef.current = recorder;
+    } catch (err) {
+      console.warn('Failed to start client-side MediaRecorder:', err);
+    }
+  }, [remotePeers, roomCode, roomTitle]);
+
+  const stopAndSaveRecording = useCallback(async () => {
+    const startedAt = recordingStartedAtRef.current;
+    const durationSecs = startedAt
+      ? Math.max(1, Math.round((Date.now() - startedAt) / 1000))
+      : 5;
+
+    const finalizeAndSave = async (blob: Blob) => {
+      const recId = `rec_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+      await storeRecordingBlob(recId, blob);
+      const blobUrl = URL.createObjectURL(blob);
+
+      const nowIso = new Date().toISOString();
+      const newRec: RecordingItem = {
+        id: recId,
+        roomCode,
+        roomTitle: roomTitle || `Meeting ${roomCode}`,
+        startedAt: recordingStartedAtRef.current
+          ? new Date(recordingStartedAtRef.current).toISOString()
+          : nowIso,
+        endedAt: nowIso,
+        durationSeconds: durationSecs,
+        fileSizeBytes: blob.size,
+        status: 'ready',
+        layout: recordingLayoutChoice || 'grid',
+        storagePath: `recordings/${roomCode}/${recId}.webm`,
+        playUrl: blobUrl,
+        downloadUrl: blobUrl,
+        startedBy: user?.id,
+        startedByName: displayName || user?.displayName || 'Host',
+        retentionDays: recordingRetentionChoice || 30,
+        expiresAt: new Date(
+          Date.now() + (recordingRetentionChoice || 30) * 86400 * 1000,
+        ).toISOString(),
+        isoTracks: recordingIsoChoice,
+      };
+
+      const existing = loadLocalRecordings();
+      saveLocalRecordings([newRec, ...existing.filter((r) => r.id !== recId)]);
+
+      if (isSupabaseConfigured && supabase && user?.id) {
+        try {
+          await supabase.from('recordings').insert({
+            id: recId,
+            meeting_code: roomCode,
+            title: newRec.roomTitle,
+            duration_seconds: durationSecs,
+            file_size_bytes: blob.size,
+            status: 'ready',
+            play_url: '',
+            download_url: '',
+            layout: newRec.layout,
+            has_transcript: captionsEnabled,
+            retention_days: newRec.retentionDays,
+            expires_at: newRec.expiresAt,
+            owner_id: user.id,
+          });
+        } catch {
+          // Handled via local storage
+        }
+      }
+
+      onToast('Recording saved to your Recordings Vault!');
+    };
+
+    if (
+      mediaRecorderRef.current &&
+      mediaRecorderRef.current.state !== 'inactive'
+    ) {
+      const recorder = mediaRecorderRef.current;
+      recorder.onstop = () => {
+        const mime = recorder.mimeType || 'video/webm';
+        const blob = new Blob(mediaRecorderChunksRef.current, { type: mime });
+        mediaRecorderRef.current = null;
+        mediaRecorderChunksRef.current = [];
+        recordingStartedAtRef.current = null;
+        void finalizeAndSave(blob);
+      };
+      try {
+        recorder.stop();
+      } catch {
+        // ignore
+      }
+    } else if (mediaRecorderChunksRef.current.length > 0) {
+      const blob = new Blob(mediaRecorderChunksRef.current, {
+        type: 'video/webm',
+      });
+      mediaRecorderRef.current = null;
+      mediaRecorderChunksRef.current = [];
+      recordingStartedAtRef.current = null;
+      await finalizeAndSave(blob);
+    }
+  }, [
+    captionsEnabled,
+    onToast,
+    recordingLayoutChoice,
+    recordingRetentionChoice,
+    roomCode,
+    roomTitle,
+    user?.id,
+  ]);
+
+  startRecordingCaptureRef.current = startLocalMediaRecorder;
+  stopRecordingCaptureRef.current = stopAndSaveRecording;
+
   const handleToggleRecording = () => {
     if (!canModerate) return;
     if (isRecording) {
       signalingRef.current?.stopRecording();
+      void stopAndSaveRecording();
     } else {
       setShowStartRecordingConfirm(true);
     }
@@ -3381,6 +3672,7 @@ export function MeetingRoomView({
       isoTracks: recordingIsoChoice,
       retentionDays: recordingRetentionChoice,
     });
+    startLocalMediaRecorder();
   };
 
   if (stage === 'waiting_room') {
@@ -5130,6 +5422,306 @@ export function MeetingRoomView({
           </aside>
         )}
 
+        {/* Activities Side Panel */}
+        {showActivitiesPanel && (
+          <aside
+            className="call-chat-panel call-activities-panel"
+            aria-label="Meeting activities"
+            data-testid="activities-panel"
+          >
+            <div className="chat-panel-header">
+              <h3>Activities</h3>
+              <button
+                type="button"
+                className="btn-icon-subtle"
+                onClick={() => setShowActivitiesPanel(false)}
+                aria-label="Close activities panel"
+              >
+                <CloseIcon />
+              </button>
+            </div>
+
+            <div
+              style={{
+                flex: 1,
+                overflowY: 'auto',
+                padding: '16px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '10px',
+              }}
+            >
+              {/* Breakout Rooms */}
+              <button
+                type="button"
+                className="activity-card-btn"
+                onClick={() => {
+                  setShowBreakoutModal(true);
+                  setShowActivitiesPanel(false);
+                }}
+                data-testid="call-breakout-btn"
+              >
+                <div className="activity-card-icon">
+                  <UsersIcon size={20} />
+                </div>
+                <div className="activity-card-info">
+                  <div className="activity-card-title">Breakout Rooms</div>
+                  <div className="activity-card-desc">
+                    Split meeting into smaller discussion groups
+                  </div>
+                </div>
+                {breakoutState?.active && (
+                  <span
+                    className="unread-chat-badge"
+                    style={{ background: 'var(--brand-primary, #6366f1)' }}
+                  >
+                    On
+                  </span>
+                )}
+              </button>
+
+              {/* Polls & Quizzes */}
+              <button
+                type="button"
+                className="activity-card-btn"
+                onClick={() => {
+                  setShowPollsPanel(true);
+                  setShowActivitiesPanel(false);
+                }}
+                data-testid="call-polls-btn"
+              >
+                <div className="activity-card-icon">
+                  <BarChartIcon size={20} />
+                </div>
+                <div className="activity-card-info">
+                  <div className="activity-card-title">Polls &amp; Quizzes</div>
+                  <div className="activity-card-desc">
+                    Create and vote on live multiple-choice questions
+                  </div>
+                </div>
+                {polls.filter((p) => !p.closed).length > 0 && (
+                  <span className="unread-chat-badge">
+                    {polls.filter((p) => !p.closed).length}
+                  </span>
+                )}
+              </button>
+
+              {/* FormIT Surveys */}
+              <button
+                type="button"
+                className="activity-card-btn"
+                onClick={() => {
+                  setShowFormItModal(true);
+                  setShowActivitiesPanel(false);
+                }}
+                data-testid="call-formit-btn"
+              >
+                <div className="activity-card-icon">
+                  <ClipboardIcon size={20} />
+                </div>
+                <div className="activity-card-info">
+                  <div className="activity-card-title">FormIT Surveys</div>
+                  <div className="activity-card-desc">
+                    Collect structured participant feedback in real time
+                  </div>
+                </div>
+                {formItSession && (
+                  <span
+                    className="unread-chat-badge"
+                    style={{ background: '#10b981' }}
+                  >
+                    Live
+                  </span>
+                )}
+              </button>
+
+              {/* Q&A */}
+              <button
+                type="button"
+                className="activity-card-btn"
+                onClick={() => {
+                  setShowQAPanel(true);
+                  setShowActivitiesPanel(false);
+                }}
+                data-testid="call-qa-btn"
+              >
+                <div className="activity-card-icon">
+                  <HelpIcon size={20} />
+                </div>
+                <div className="activity-card-info">
+                  <div className="activity-card-title">Q&amp;A</div>
+                  <div className="activity-card-desc">
+                    Structured questions and upvoting from participants
+                  </div>
+                </div>
+                {qaQuestions.filter((q) => !q.answered && !q.dismissed).length >
+                  0 && (
+                  <span className="unread-chat-badge">
+                    {
+                      qaQuestions.filter((q) => !q.answered && !q.dismissed)
+                        .length
+                    }
+                  </span>
+                )}
+              </button>
+
+              {/* Whiteboard */}
+              <button
+                type="button"
+                className="activity-card-btn"
+                onClick={() => {
+                  setShowWhiteboardModal(true);
+                  setShowActivitiesPanel(false);
+                }}
+                data-testid="call-whiteboard-btn"
+              >
+                <div className="activity-card-icon">
+                  <PaintbrushIcon size={20} />
+                </div>
+                <div className="activity-card-info">
+                  <div className="activity-card-title">Shared Whiteboard</div>
+                  <div className="activity-card-desc">
+                    Draw, diagram, and brainstorm collaboratively
+                  </div>
+                </div>
+              </button>
+
+              {/* Shared Collaborative Notes */}
+              <button
+                type="button"
+                className="activity-card-btn"
+                onClick={() => {
+                  setShowSharedNotesPanel(true);
+                  setShowActivitiesPanel(false);
+                }}
+                data-testid="call-notes-btn"
+              >
+                <div className="activity-card-icon">
+                  <FileTextIcon size={20} />
+                </div>
+                <div className="activity-card-info">
+                  <div className="activity-card-title">Collaborative Notes</div>
+                  <div className="activity-card-desc">
+                    Live document syncing and AI meeting summary
+                  </div>
+                </div>
+              </button>
+
+              {/* Apps Marketplace */}
+              <button
+                type="button"
+                className="activity-card-btn"
+                onClick={() => {
+                  setShowAppsModal(true);
+                  setShowActivitiesPanel(false);
+                }}
+                data-testid="call-apps-btn"
+              >
+                <div className="activity-card-icon">
+                  <LayoutGridIcon size={20} />
+                </div>
+                <div className="activity-card-info">
+                  <div className="activity-card-title">
+                    Apps &amp; Integrations
+                  </div>
+                  <div className="activity-card-desc">
+                    Extend your meeting with interactive integrations
+                  </div>
+                </div>
+                {activeMarketplaceApp && (
+                  <span
+                    className="unread-chat-badge"
+                    style={{ background: '#10b981' }}
+                  >
+                    Active
+                  </span>
+                )}
+              </button>
+
+              {/* Webinar items if webinar mode enabled */}
+              {webinarState?.enabled && (
+                <>
+                  <button
+                    type="button"
+                    className="activity-card-btn"
+                    onClick={() => {
+                      setShowWebinarQaPanel(true);
+                      setShowActivitiesPanel(false);
+                    }}
+                    data-testid="call-webinar-qa-btn"
+                  >
+                    <div className="activity-card-icon">
+                      <MessageSquareIcon size={20} />
+                    </div>
+                    <div className="activity-card-info">
+                      <div className="activity-card-title">Webinar Q&amp;A</div>
+                      <div className="activity-card-desc">
+                        Moderate viewer questions before broadcast
+                      </div>
+                    </div>
+                  </button>
+
+                  {canModerate && (
+                    <>
+                      <button
+                        type="button"
+                        className="activity-card-btn"
+                        onClick={() => {
+                          setShowWebinarStreamModal(true);
+                          setShowActivitiesPanel(false);
+                        }}
+                        data-testid="call-webinar-stream-btn"
+                      >
+                        <div className="activity-card-icon">
+                          <RadioIcon size={20} />
+                        </div>
+                        <div className="activity-card-info">
+                          <div className="activity-card-title">
+                            Live Stream Out
+                          </div>
+                          <div className="activity-card-desc">
+                            Broadcast to YouTube, RTMP, or HLS
+                          </div>
+                        </div>
+                        {webinarState?.streamOut?.status === 'live' && (
+                          <span
+                            className="unread-chat-badge"
+                            style={{ background: '#ef4444' }}
+                          >
+                            Live
+                          </span>
+                        )}
+                      </button>
+
+                      <button
+                        type="button"
+                        className="activity-card-btn"
+                        onClick={() => {
+                          setShowWebinarAnalyticsModal(true);
+                          setShowActivitiesPanel(false);
+                        }}
+                        data-testid="call-webinar-analytics-btn"
+                      >
+                        <div className="activity-card-icon">
+                          <TrendingUpIcon size={20} />
+                        </div>
+                        <div className="activity-card-info">
+                          <div className="activity-card-title">
+                            Attendee Analytics
+                          </div>
+                          <div className="activity-card-desc">
+                            View attendance stats and retention charts
+                          </div>
+                        </div>
+                      </button>
+                    </>
+                  )}
+                </>
+              )}
+            </div>
+          </aside>
+        )}
+
         {/* In-call text chat panel */}
         {showChatPanel && (
           <aside
@@ -5500,6 +6092,7 @@ export function MeetingRoomView({
             onClick={() => {
               setShowChatPanel((v) => !v);
               setShowHostPanel(false);
+              setShowActivitiesPanel(false);
             }}
             aria-pressed={showChatPanel}
             aria-label="Toggle in-call chat"
@@ -5749,6 +6342,189 @@ export function MeetingRoomView({
             )}
           </div>
 
+          {/* Desktop More Options (•••) popover menu */}
+          <div className="dock-popover-anchor hide-on-mobile">
+            <button
+              type="button"
+              className={`dock-btn icon-pill ${showMoreDesktopMenu ? 'active-panel' : ''}`}
+              onClick={() => {
+                setShowMoreDesktopMenu((v) => !v);
+                setShowDevicePopover(false);
+                setShowReactionPopover(false);
+              }}
+              aria-expanded={showMoreDesktopMenu}
+              aria-label="More call options"
+              title="More call options"
+              data-testid="call-more-btn"
+            >
+              <MoreHorizontalIcon size={18} />
+              <span className="dock-btn-label">More</span>
+            </button>
+
+            {showMoreDesktopMenu && (
+              <>
+                <div
+                  style={{ position: 'fixed', inset: 0, zIndex: 59 }}
+                  onClick={() => setShowMoreDesktopMenu(false)}
+                />
+                <div
+                  className="call-more-desktop-popover"
+                  role="menu"
+                  aria-label="More call options"
+                >
+                  {selfRole !== 'viewer' && (
+                    <button
+                      type="button"
+                      className="call-more-menu-item"
+                      onClick={() => {
+                        setShowVideoEffectsModal(true);
+                        setShowMoreDesktopMenu(false);
+                      }}
+                      data-testid="desktop-menu-effects-btn"
+                    >
+                      <SparklesIcon size={16} className="menu-icon-accent" />
+                      <div className="menu-item-text">
+                        <span>Visual Effects &amp; Backgrounds</span>
+                        <small>
+                          Blur, virtual backgrounds, studio lighting
+                        </small>
+                      </div>
+                    </button>
+                  )}
+
+                  <button
+                    type="button"
+                    className="call-more-menu-item"
+                    onClick={() => {
+                      setShowAudioEffectsModal(true);
+                      setShowMoreDesktopMenu(false);
+                    }}
+                    data-testid="desktop-menu-audio-fx-btn"
+                  >
+                    <Volume2Icon size={16} className="menu-icon-accent" />
+                    <div className="menu-item-text">
+                      <span>Audio Intelligence &amp; FX</span>
+                      <small>Noise suppression, voice boost, spatial</small>
+                    </div>
+                  </button>
+
+                  <button
+                    type="button"
+                    className="call-more-menu-item"
+                    onClick={() => {
+                      if (signLanguageInterpreterId) {
+                        setSignLanguageInterpreterId(null);
+                        onToast('Sign language interpreter unpinned');
+                      } else if (remoteList.length > 0) {
+                        handleToggleSignInterpreter(remoteList[0]!.id);
+                      } else {
+                        onToast(
+                          'No remote attendees to designate as sign interpreter',
+                        );
+                      }
+                      setShowMoreDesktopMenu(false);
+                    }}
+                    data-testid="desktop-menu-sign-mode-btn"
+                  >
+                    <LanguagesIcon size={16} className="menu-icon-accent" />
+                    <div className="menu-item-text">
+                      <span>Sign Language Mode</span>
+                      <small>
+                        {signLanguageInterpreterId
+                          ? 'Active (Click to unpin)'
+                          : 'Pin interpreter in dedicated view'}
+                      </small>
+                    </div>
+                  </button>
+
+                  {canModerate && (
+                    <button
+                      type="button"
+                      className={`call-more-menu-item ${isRecording ? 'danger' : ''}`}
+                      onClick={() => {
+                        handleToggleRecording();
+                        setShowMoreDesktopMenu(false);
+                      }}
+                      data-testid="desktop-menu-record-btn"
+                    >
+                      <CircleIcon
+                        size={16}
+                        className={
+                          isRecording ? 'menu-icon-danger' : 'menu-icon-accent'
+                        }
+                        fill={isRecording ? 'currentColor' : 'none'}
+                      />
+                      <div className="menu-item-text">
+                        <span>
+                          {isRecording
+                            ? `Stop Recording (${recordingDuration})`
+                            : 'Record Meeting'}
+                        </span>
+                        <small>
+                          {isRecording
+                            ? 'Save recording to vault'
+                            : 'Capture meeting video & audio'}
+                        </small>
+                      </div>
+                    </button>
+                  )}
+
+                  {canModerate && (
+                    <button
+                      type="button"
+                      className="call-more-menu-item"
+                      onClick={() => {
+                        setShowTimerConfigModal(true);
+                        setShowMoreDesktopMenu(false);
+                      }}
+                      data-testid="desktop-menu-timer-btn"
+                    >
+                      <ClockIcon size={16} className="menu-icon-accent" />
+                      <div className="menu-item-text">
+                        <span>Timer &amp; Agenda Controls</span>
+                        <small>Countdown timer and meeting agenda</small>
+                      </div>
+                    </button>
+                  )}
+
+                  <div className="menu-divider" />
+
+                  <button
+                    type="button"
+                    className="call-more-menu-item"
+                    onClick={() => {
+                      setShowDevicePopover(true);
+                      setShowMoreDesktopMenu(false);
+                    }}
+                    data-testid="desktop-menu-settings-btn"
+                  >
+                    <SlidersIcon size={16} />
+                    <div className="menu-item-text">
+                      <span>Audio &amp; Video Settings</span>
+                      <small>Microphone, camera, data saver</small>
+                    </div>
+                  </button>
+
+                  <button
+                    type="button"
+                    className="call-more-menu-item"
+                    onClick={() => {
+                      setShowShortcutsModal(true);
+                      setShowMoreDesktopMenu(false);
+                    }}
+                    data-testid="desktop-menu-shortcuts-btn"
+                  >
+                    <HelpIcon size={16} />
+                    <div className="menu-item-text">
+                      <span>Keyboard Shortcuts</span>
+                      <small>View in-call key bindings</small>
+                    </div>
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+
           {/* Leave Call or End Meeting for All (when Host) */}
           <div className="dock-popover-anchor">
             <button
@@ -5824,196 +6600,30 @@ export function MeetingRoomView({
         </div>
 
         <div className="call-dock-right">
-          {/* Breakout Rooms */}
+          {/* Activities Button */}
           <button
             type="button"
-            className={`call-side-btn ${showBreakoutModal ? 'active-panel' : ''}`}
-            onClick={() => setShowBreakoutModal(true)}
-            aria-pressed={showBreakoutModal}
-            aria-label="Breakout Rooms"
-            title="Breakout Rooms"
-            data-testid="call-breakout-btn"
+            className={`call-side-btn ${showActivitiesPanel ? 'active-panel' : ''}`}
+            onClick={() => {
+              setShowActivitiesPanel((v) => !v);
+              setShowChatPanel(false);
+              setShowHostPanel(false);
+            }}
+            aria-pressed={showActivitiesPanel}
+            aria-label="Activities and Collaboration"
+            title="Activities (Rooms, Polls, FormIT, Q&A, Whiteboard, Notes, Apps)"
+            data-testid="call-activities-btn"
           >
-            <UsersIcon size={16} />
-            <span>Rooms</span>
-            {breakoutState?.active && (
+            <ShapesIcon size={16} />
+            <span>Activities</span>
+            {hasActiveActivity && (
               <span
                 className="unread-chat-badge"
                 style={{ background: 'var(--brand-primary, #6366f1)' }}
               >
-                On
+                ●
               </span>
             )}
-          </button>
-
-          {/* In-call Polls & Quizzes */}
-          <button
-            type="button"
-            className={`call-side-btn ${showPollsPanel ? 'active-panel' : ''}`}
-            onClick={() => setShowPollsPanel((v) => !v)}
-            aria-pressed={showPollsPanel}
-            aria-label="Polls & Quizzes"
-            title="Polls & Quizzes"
-            data-testid="call-polls-btn"
-          >
-            <BarChartIcon size={16} />
-            <span>Polls</span>
-            {polls.filter((p) => !p.closed).length > 0 && (
-              <span className="unread-chat-badge">
-                {polls.filter((p) => !p.closed).length}
-              </span>
-            )}
-          </button>
-
-          {/* FormIT survey launcher */}
-          <button
-            type="button"
-            className={`call-side-btn ${showFormItModal ? 'active-panel' : ''}`}
-            onClick={() => setShowFormItModal(true)}
-            aria-pressed={showFormItModal}
-            aria-label="FormIT Survey"
-            title="FormIT Survey"
-            data-testid="call-formit-btn"
-          >
-            <ClipboardIcon size={16} />
-            <span>FormIT</span>
-            {formItSession && (
-              <span
-                className="unread-chat-badge"
-                style={{ background: '#10b981' }}
-              >
-                Live
-              </span>
-            )}
-          </button>
-
-          {/* Q&A panel */}
-          <button
-            type="button"
-            className={`call-side-btn ${showQAPanel ? 'active-panel' : ''}`}
-            onClick={() => setShowQAPanel((v) => !v)}
-            aria-pressed={showQAPanel}
-            aria-label="Q&A"
-            title="Q&A"
-            data-testid="call-qa-btn"
-          >
-            <HelpIcon size={16} />
-            <span>Q&amp;A</span>
-            {qaQuestions.filter((q) => !q.answered && !q.dismissed).length >
-              0 && (
-              <span className="unread-chat-badge">
-                {qaQuestions.filter((q) => !q.answered && !q.dismissed).length}
-              </span>
-            )}
-          </button>
-
-          {/* Phase 7 Webinar Audience Q&A */}
-          {webinarState?.enabled && (
-            <button
-              type="button"
-              className={`call-side-btn ${showWebinarQaPanel ? 'active-panel' : ''}`}
-              onClick={() => setShowWebinarQaPanel((v) => !v)}
-              aria-pressed={showWebinarQaPanel}
-              aria-label="Webinar Q&A"
-              title="Webinar Audience Q&A"
-              data-testid="call-webinar-qa-btn"
-            >
-              <MessageSquareIcon size={16} />
-              <span>Webinar Q&amp;A</span>
-              {webinarQaQuestions.filter(
-                (q) => q.status === 'pending' || q.status === 'approved',
-              ).length > 0 && (
-                <span className="unread-chat-badge">
-                  {
-                    webinarQaQuestions.filter(
-                      (q) => q.status === 'pending' || q.status === 'approved',
-                    ).length
-                  }
-                </span>
-              )}
-            </button>
-          )}
-
-          {/* Phase 7 Live Stream Out (RTMP / HLS) */}
-          {webinarState?.enabled && canModerate && (
-            <button
-              type="button"
-              className={`call-side-btn ${showWebinarStreamModal ? 'active-panel' : ''}`}
-              onClick={() => setShowWebinarStreamModal(true)}
-              aria-pressed={showWebinarStreamModal}
-              aria-label="Live Stream Out"
-              title="Broadcast to YouTube / RTMP / HLS"
-              data-testid="call-webinar-stream-btn"
-            >
-              <RadioIcon size={16} />
-              <span>Stream</span>
-              {webinarState?.streamOut?.status === 'live' && (
-                <span
-                  className="unread-chat-badge"
-                  style={{ background: '#ef4444' }}
-                >
-                  Live
-                </span>
-              )}
-            </button>
-          )}
-
-          {/* Phase 7 Webinar Attendee Analytics */}
-          {webinarState?.enabled && canModerate && (
-            <button
-              type="button"
-              className={`call-side-btn ${showWebinarAnalyticsModal ? 'active-panel' : ''}`}
-              onClick={() => setShowWebinarAnalyticsModal(true)}
-              aria-pressed={showWebinarAnalyticsModal}
-              aria-label="Attendee Analytics"
-              title="Webinar Analytics & Attendance"
-              data-testid="call-webinar-analytics-btn"
-            >
-              <TrendingUpIcon size={16} />
-              <span>Analytics</span>
-            </button>
-          )}
-
-          {/* Whiteboard */}
-          <button
-            type="button"
-            className={`call-side-btn ${showWhiteboardModal ? 'active-panel' : ''}`}
-            onClick={() => setShowWhiteboardModal((v) => !v)}
-            aria-pressed={showWhiteboardModal}
-            aria-label="Shared Whiteboard"
-            title="Shared Whiteboard"
-            data-testid="call-whiteboard-btn"
-          >
-            <PaintbrushIcon size={16} />
-            <span>Board</span>
-          </button>
-
-          {/* Shared Collaborative Notes */}
-          <button
-            type="button"
-            className={`call-side-btn ${showSharedNotesPanel ? 'active-panel' : ''}`}
-            onClick={() => setShowSharedNotesPanel((v) => !v)}
-            aria-pressed={showSharedNotesPanel}
-            aria-label="Collaborative Notes"
-            title="Collaborative Notes"
-            data-testid="call-notes-btn"
-          >
-            <FileTextIcon size={16} />
-            <span>Notes</span>
-          </button>
-
-          {/* Phase 9 Apps Marketplace */}
-          <button
-            type="button"
-            className={`call-side-btn ${showAppsModal || activeMarketplaceApp ? 'active-panel' : ''}`}
-            onClick={() => setShowAppsModal(true)}
-            aria-pressed={showAppsModal || !!activeMarketplaceApp}
-            aria-label="Apps & Integrations"
-            title="In-Meeting Apps Marketplace"
-            data-testid="call-apps-btn"
-          >
-            <LayoutGridIcon size={16} />
-            <span>Apps</span>
           </button>
 
           {/* People & Host Controls toggle button with waiting room badge */}
@@ -6023,6 +6633,7 @@ export function MeetingRoomView({
             onClick={() => {
               setShowHostPanel((v) => !v);
               setShowChatPanel(false);
+              setShowActivitiesPanel(false);
             }}
             aria-pressed={showHostPanel}
             aria-label="Toggle people and host controls"
@@ -6045,6 +6656,7 @@ export function MeetingRoomView({
             onClick={() => {
               setShowChatPanel((v) => !v);
               setShowHostPanel(false);
+              setShowActivitiesPanel(false);
             }}
             aria-pressed={showChatPanel}
             aria-label="Toggle in-call chat (C)"

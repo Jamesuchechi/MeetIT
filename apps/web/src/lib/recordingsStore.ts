@@ -25,6 +25,74 @@ export interface RecordingItem {
 }
 
 const RECORDINGS_STORAGE_KEY = 'meetit_recordings_v1';
+const IDB_NAME = 'meetit_media_db';
+const IDB_STORE = 'recordings_blobs';
+
+function openRecordingsDb(): Promise<IDBDatabase> {
+  return new Promise((resolve, reject) => {
+    if (typeof window === 'undefined' || !window.indexedDB) {
+      reject(new Error('IndexedDB not supported'));
+      return;
+    }
+    const req = window.indexedDB.open(IDB_NAME, 1);
+    req.onupgradeneeded = () => {
+      const db = req.result;
+      if (!db.objectStoreNames.contains(IDB_STORE)) {
+        db.createObjectStore(IDB_STORE);
+      }
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+export async function storeRecordingBlob(
+  id: string,
+  blob: Blob,
+): Promise<void> {
+  try {
+    const db = await openRecordingsDb();
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction(IDB_STORE, 'readwrite');
+      const store = tx.objectStore(IDB_STORE);
+      const req = store.put(blob, id);
+      req.onsuccess = () => resolve();
+      req.onerror = () => reject(req.error);
+    });
+  } catch (err) {
+    console.warn('Could not store recording blob in IndexedDB:', err);
+  }
+}
+
+export async function getRecordingBlob(id: string): Promise<Blob | null> {
+  try {
+    const db = await openRecordingsDb();
+    return await new Promise<Blob | null>((resolve, reject) => {
+      const tx = db.transaction(IDB_STORE, 'readonly');
+      const store = tx.objectStore(IDB_STORE);
+      const req = store.get(id);
+      req.onsuccess = () => resolve((req.result as Blob) || null);
+      req.onerror = () => reject(req.error);
+    });
+  } catch {
+    return null;
+  }
+}
+
+export async function deleteRecordingBlob(id: string): Promise<void> {
+  try {
+    const db = await openRecordingsDb();
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction(IDB_STORE, 'readwrite');
+      const store = tx.objectStore(IDB_STORE);
+      const req = store.delete(id);
+      req.onsuccess = () => resolve();
+      req.onerror = () => reject(req.error);
+    });
+  } catch {
+    // ignore
+  }
+}
 
 export function loadLocalRecordings(ownerId?: string): RecordingItem[] {
   try {
@@ -71,8 +139,22 @@ export async function fetchRecordings(
 ): Promise<RecordingItem[]> {
   const local = loadLocalRecordings(ownerId);
 
+  // Hydrate local recordings with active blob URLs from IndexedDB if available
+  const hydratedLocal = await Promise.all(
+    local.map(async (rec) => {
+      if (!rec.playUrl || !rec.downloadUrl) {
+        const blob = await getRecordingBlob(rec.id);
+        if (blob) {
+          const url = URL.createObjectURL(blob);
+          return { ...rec, playUrl: url, downloadUrl: url };
+        }
+      }
+      return rec;
+    }),
+  );
+
   if (!isSupabaseConfigured || !supabase) {
-    return local;
+    return hydratedLocal;
   }
 
   try {
@@ -87,7 +169,7 @@ export async function fetchRecordings(
 
     const { data, error } = await query;
     if (error || !data) {
-      return local;
+      return hydratedLocal;
     }
 
     const remoteRecords: RecordingItem[] = data.map((row) => {
@@ -120,19 +202,20 @@ export async function fetchRecordings(
     });
 
     if (remoteRecords.length === 0) {
-      return local;
+      return hydratedLocal;
     }
 
     saveLocalRecordings(remoteRecords);
     return remoteRecords;
   } catch {
-    return local;
+    return hydratedLocal;
   }
 }
 
 export async function deleteRecording(id: string): Promise<boolean> {
-  // Update local storage
+  // Update local storage and IndexedDB
   try {
+    void deleteRecordingBlob(id);
     const existing = loadLocalRecordings();
     const target = existing.find((r) => r.id === id);
     const updated = existing.filter((r) => r.id !== id);
