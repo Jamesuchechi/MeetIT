@@ -2513,6 +2513,40 @@ aside.context-bar {
   color: #fff;
 }
 
+.ctrl-btn.active svg {
+  color: #fff !important;
+}
+
+.lobby-enhancements-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.lobby-enhancements-row .btn {
+  flex: 1;
+  min-width: 140px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 8px 12px;
+  font-size: 12.5px;
+  border-radius: 10px;
+}
+
+.enhancement-pill-badge {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  background: var(--accent);
+  color: #fff;
+  padding: 1px 6px;
+  border-radius: 999px;
+  margin-left: 4px;
+}
+
 @media (max-width: 680px) {
   .lobby-preview-controls {
     gap: 6px;

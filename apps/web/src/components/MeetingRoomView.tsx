@@ -3851,7 +3851,7 @@ export function MeetingRoomView({
                   title="Visual effects and virtual backgrounds"
                   data-testid="lobby-effects-btn"
                 >
-                  <SparklesIcon size={14} style={{ color: 'var(--accent)' }} />
+                  <SparklesIcon size={15} />
                   <span>Effects</span>
                 </button>
 
@@ -3863,7 +3863,7 @@ export function MeetingRoomView({
                   title="Audio intelligence and noise suppression"
                   data-testid="lobby-audio-fx-btn"
                 >
-                  <Volume2Icon size={14} style={{ color: 'var(--accent)' }} />
+                  <Volume2Icon size={15} />
                   <span>Audio FX</span>
                 </button>
               </div>
@@ -3926,6 +3926,37 @@ export function MeetingRoomView({
                   </select>
                 </label>
               )}
+            </div>
+
+            {/* Quick Media Controls: Visual Effects & Audio FX */}
+            <div className="lobby-enhancements-row">
+              <button
+                type="button"
+                className="btn btn-sm secondary"
+                onClick={() => setShowVideoEffectsModal(true)}
+                title="Configure virtual backgrounds and visual filters"
+                data-testid="lobby-open-video-effects"
+              >
+                <SparklesIcon size={14} />
+                <span>Visual Effects</span>
+                {videoEffectsConfig.effect !== 'none' && (
+                  <span className="enhancement-pill-badge">On</span>
+                )}
+              </button>
+
+              <button
+                type="button"
+                className="btn btn-sm secondary"
+                onClick={() => setShowAudioEffectsModal(true)}
+                title="Configure AI noise suppression and voice boost"
+                data-testid="lobby-open-audio-effects"
+              >
+                <Volume2Icon size={14} />
+                <span>Audio FX</span>
+                {audioEffectsConfig.noiseSuppression !== 'off' && (
+                  <span className="enhancement-pill-badge">AI</span>
+                )}
+              </button>
             </div>
 
             {/* Pre-Call Network & Device Diagnostics Probe (WebRTC Loopback + Bandwidth) */}
@@ -4253,6 +4284,23 @@ export function MeetingRoomView({
             </div>
           </div>
         </main>
+
+        {/* Modals available in lobby pre-join */}
+        <VideoEffectsModal
+          isOpen={showVideoEffectsModal}
+          onClose={() => setShowVideoEffectsModal(false)}
+          currentConfig={videoEffectsConfig}
+          onApplyConfig={(cfg) => void handleApplyVideoEffects(cfg)}
+          activeMediaStream={localStream}
+        />
+
+        <AudioEffectsModal
+          isOpen={showAudioEffectsModal}
+          onClose={() => setShowAudioEffectsModal(false)}
+          currentConfig={audioEffectsConfig}
+          onApplyConfig={(cfg) => void handleApplyAudioEffects(cfg)}
+          liveAudioLevel={audioProcessorRef.current?.getAudioLevel() ?? 0}
+        />
       </div>
     );
   }
