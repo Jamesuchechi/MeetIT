@@ -100,6 +100,7 @@ import {
   Languages as LanguagesIcon,
   LayoutGrid as LayoutGridIcon,
   Shapes as ShapesIcon,
+  FlipHorizontal as FlipHorizontalIcon,
 } from 'lucide-react';
 import {
   loadLocalRecordings,
@@ -3801,6 +3802,7 @@ export function MeetingRoomView({
                   aria-label={
                     audioMuted ? 'Unmute microphone' : 'Mute microphone'
                   }
+                  title={audioMuted ? 'Unmute microphone' : 'Mute microphone'}
                   data-testid="lobby-mic-toggle"
                 >
                   <MicIcon />
@@ -3815,6 +3817,7 @@ export function MeetingRoomView({
                   aria-label={
                     videoEnabled ? 'Turn camera off' : 'Turn camera on'
                   }
+                  title={videoEnabled ? 'Turn camera off' : 'Turn camera on'}
                   data-testid="lobby-cam-toggle"
                 >
                   <VidIcon />
@@ -3823,12 +3826,14 @@ export function MeetingRoomView({
 
                 <button
                   type="button"
-                  className="ctrl-btn"
+                  className={`ctrl-btn ${mirrorSelfView ? 'active' : ''}`}
                   onClick={handleToggleMirror}
                   aria-pressed={mirrorSelfView}
                   aria-label="Toggle mirror self-view"
                   title="Flip local camera preview"
+                  data-testid="lobby-mirror-toggle"
                 >
+                  <FlipHorizontalIcon size={15} />
                   <span>{mirrorSelfView ? 'Mirrored' : 'Normal'}</span>
                 </button>
 
@@ -3839,7 +3844,6 @@ export function MeetingRoomView({
                   aria-label="Visual effects and virtual backgrounds"
                   title="Visual effects and virtual backgrounds"
                   data-testid="lobby-effects-btn"
-                  style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
                 >
                   <SparklesIcon size={14} style={{ color: 'var(--accent)' }} />
                   <span>Effects</span>
@@ -3852,7 +3856,6 @@ export function MeetingRoomView({
                   aria-label="Audio intelligence and noise suppression"
                   title="Audio intelligence and noise suppression"
                   data-testid="lobby-audio-fx-btn"
-                  style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
                 >
                   <Volume2Icon size={14} style={{ color: 'var(--accent)' }} />
                   <span>Audio FX</span>

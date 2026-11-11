@@ -162,29 +162,37 @@ export function ApiKeysModal({ isOpen, onClose, onToast }: ApiKeysModalProps) {
 
   return (
     <div
-      className="shortcuts-modal-backdrop"
+      className="api-keys-modal-backdrop"
       onClick={onClose}
       role="dialog"
       aria-modal="true"
       aria-labelledby="api-keys-title"
       data-testid="api-keys-modal"
     >
-      <div
-        className="shortcuts-modal-card"
-        style={{
-          maxWidth: 660,
-          maxHeight: '88vh',
-          display: 'flex',
-          flexDirection: 'column',
-        }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="shortcuts-modal-head">
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <Key size={20} style={{ color: 'var(--accent)' }} />
+      <div className="api-keys-modal-card" onClick={(e) => e.stopPropagation()}>
+        <div
+          className="shortcuts-modal-head"
+          style={{ marginBottom: 12, gap: 10 }}
+        >
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              minWidth: 0,
+              flex: 1,
+            }}
+          >
+            <Key size={18} style={{ color: 'var(--accent)', flexShrink: 0 }} />
             <h3
               id="api-keys-title"
-              style={{ margin: 0, fontSize: '1.05rem', fontWeight: 700 }}
+              style={{
+                margin: 0,
+                fontSize: '1rem',
+                fontWeight: 700,
+                lineHeight: 1.3,
+                wordBreak: 'break-word',
+              }}
             >
               API Keys &amp; Webhooks (Developer Platform)
             </h3>
@@ -194,6 +202,7 @@ export function ApiKeysModal({ isOpen, onClose, onToast }: ApiKeysModalProps) {
             className="btn-icon-subtle"
             onClick={onClose}
             aria-label="Close API settings"
+            style={{ flexShrink: 0 }}
           >
             <X size={16} />
           </button>
@@ -205,7 +214,8 @@ export function ApiKeysModal({ isOpen, onClose, onToast }: ApiKeysModalProps) {
             display: 'flex',
             gap: '8px',
             borderBottom: '1px solid var(--line)',
-            padding: '10px 0',
+            padding: '8px 0 12px',
+            flexWrap: 'wrap',
           }}
         >
           <button
@@ -213,6 +223,7 @@ export function ApiKeysModal({ isOpen, onClose, onToast }: ApiKeysModalProps) {
             className={`btn btn-sm ${activeTab === 'keys' ? 'primary' : 'secondary'}`}
             onClick={() => setActiveTab('keys')}
             data-testid="tab-api-keys"
+            style={{ flex: '1 1 120px', justifyContent: 'center' }}
           >
             <Key size={14} style={{ marginRight: 6 }} />
             API Keys ({keys.length})
@@ -222,6 +233,7 @@ export function ApiKeysModal({ isOpen, onClose, onToast }: ApiKeysModalProps) {
             className={`btn btn-sm ${activeTab === 'webhooks' ? 'primary' : 'secondary'}`}
             onClick={() => setActiveTab('webhooks')}
             data-testid="tab-webhooks"
+            style={{ flex: '1 1 160px', justifyContent: 'center' }}
           >
             <Webhook size={14} style={{ marginRight: 6 }} />
             Webhooks &amp; Deliveries ({webhooks.length})
@@ -305,9 +317,18 @@ export function ApiKeysModal({ isOpen, onClose, onToast }: ApiKeysModalProps) {
                   display: 'flex',
                   justifyContent: 'space-between',
                   alignItems: 'center',
+                  flexWrap: 'wrap',
+                  gap: '10px',
                 }}
               >
-                <span style={{ fontSize: '13px', color: 'var(--muted)' }}>
+                <span
+                  style={{
+                    fontSize: '12.5px',
+                    color: 'var(--muted)',
+                    flex: '1 1 180px',
+                    lineHeight: 1.4,
+                  }}
+                >
                   Use API keys to authenticate with the MeetIT REST API and SDK.
                 </span>
                 <button
@@ -315,6 +336,7 @@ export function ApiKeysModal({ isOpen, onClose, onToast }: ApiKeysModalProps) {
                   className="btn btn-sm primary"
                   onClick={() => setShowCreateKeyForm(!showCreateKeyForm)}
                   data-testid="create-key-btn"
+                  style={{ whiteSpace: 'nowrap' }}
                 >
                   <Plus size={14} style={{ marginRight: 4 }} />
                   Create Key
@@ -333,6 +355,7 @@ export function ApiKeysModal({ isOpen, onClose, onToast }: ApiKeysModalProps) {
                     display: 'flex',
                     flexDirection: 'column',
                     gap: '12px',
+                    boxSizing: 'border-box',
                   }}
                   data-testid="create-key-form"
                 >
@@ -377,7 +400,7 @@ export function ApiKeysModal({ isOpen, onClose, onToast }: ApiKeysModalProps) {
                       style={{
                         display: 'grid',
                         gridTemplateColumns:
-                          'repeat(auto-fit, minmax(200px, 1fr))',
+                          'repeat(auto-fit, minmax(150px, 1fr))',
                         gap: '8px',
                       }}
                     >
@@ -485,21 +508,25 @@ export function ApiKeysModal({ isOpen, onClose, onToast }: ApiKeysModalProps) {
                     key={k.id}
                     style={{
                       display: 'flex',
-                      alignItems: 'center',
+                      alignItems: 'flex-start',
                       justifyContent: 'space-between',
                       padding: '12px 14px',
                       borderRadius: '10px',
                       border: '1px solid var(--line)',
                       background: 'var(--surface)',
+                      gap: '10px',
+                      minWidth: 0,
+                      boxSizing: 'border-box',
                     }}
                     data-testid={`key-row-${k.id}`}
                   >
-                    <div>
+                    <div style={{ minWidth: 0, flex: 1 }}>
                       <div
                         style={{
                           fontWeight: 600,
                           fontSize: '13.5px',
                           color: 'var(--ink)',
+                          wordBreak: 'break-word',
                         }}
                       >
                         {k.name}
@@ -509,20 +536,35 @@ export function ApiKeysModal({ isOpen, onClose, onToast }: ApiKeysModalProps) {
                           display: 'flex',
                           alignItems: 'center',
                           gap: '8px',
-                          marginTop: '4px',
+                          marginTop: '6px',
+                          flexWrap: 'wrap',
                         }}
                       >
                         <code
-                          style={{ fontSize: '11px', color: 'var(--muted)' }}
+                          style={{
+                            fontSize: '11px',
+                            color: 'var(--muted)',
+                            wordBreak: 'break-all',
+                          }}
                         >
                           {k.keyPrefix}••••••••
                         </code>
-                        <div style={{ display: 'flex', gap: '4px' }}>
+                        <div
+                          style={{
+                            display: 'flex',
+                            gap: '4px',
+                            flexWrap: 'wrap',
+                          }}
+                        >
                           {k.scopes.map((s) => (
                             <span
                               key={s}
                               className="panel-badge"
-                              style={{ fontSize: '10px', padding: '1px 6px' }}
+                              style={{
+                                fontSize: '10px',
+                                padding: '1px 6px',
+                                textTransform: 'uppercase',
+                              }}
                             >
                               {s}
                             </span>
@@ -537,7 +579,7 @@ export function ApiKeysModal({ isOpen, onClose, onToast }: ApiKeysModalProps) {
                       onClick={() => handleRevokeKey(k.id)}
                       title="Revoke key"
                       aria-label="Revoke key"
-                      style={{ color: 'var(--danger)' }}
+                      style={{ color: 'var(--danger)', flexShrink: 0 }}
                       data-testid={`revoke-key-${k.id}`}
                     >
                       <Trash2 size={15} />
@@ -558,9 +600,18 @@ export function ApiKeysModal({ isOpen, onClose, onToast }: ApiKeysModalProps) {
                   display: 'flex',
                   justifyContent: 'space-between',
                   alignItems: 'center',
+                  flexWrap: 'wrap',
+                  gap: '10px',
                 }}
               >
-                <span style={{ fontSize: '13px', color: 'var(--muted)' }}>
+                <span
+                  style={{
+                    fontSize: '12.5px',
+                    color: 'var(--muted)',
+                    flex: '1 1 180px',
+                    lineHeight: 1.4,
+                  }}
+                >
                   Deliver signed HMAC-SHA256 payloads on meeting lifecycle
                   events.
                 </span>
@@ -571,6 +622,7 @@ export function ApiKeysModal({ isOpen, onClose, onToast }: ApiKeysModalProps) {
                     setShowCreateWebhookForm(!showCreateWebhookForm)
                   }
                   data-testid="add-webhook-btn"
+                  style={{ whiteSpace: 'nowrap' }}
                 >
                   <Plus size={14} style={{ marginRight: 4 }} />
                   Add Webhook
@@ -588,6 +640,7 @@ export function ApiKeysModal({ isOpen, onClose, onToast }: ApiKeysModalProps) {
                     display: 'flex',
                     flexDirection: 'column',
                     gap: '10px',
+                    boxSizing: 'border-box',
                   }}
                   data-testid="create-webhook-form"
                 >
@@ -600,6 +653,7 @@ export function ApiKeysModal({ isOpen, onClose, onToast }: ApiKeysModalProps) {
                     value={newWebhookUrl}
                     onChange={(e) => setNewWebhookUrl(e.target.value)}
                     className="panel-input"
+                    style={{ width: '100%', boxSizing: 'border-box' }}
                     required
                     data-testid="webhook-url-input"
                   />
@@ -650,21 +704,25 @@ export function ApiKeysModal({ isOpen, onClose, onToast }: ApiKeysModalProps) {
                     key={sub.id}
                     style={{
                       display: 'flex',
-                      alignItems: 'center',
+                      alignItems: 'flex-start',
                       justifyContent: 'space-between',
                       padding: '10px 14px',
                       borderRadius: '10px',
                       border: '1px solid var(--line)',
                       background: 'var(--surface)',
+                      gap: '10px',
+                      minWidth: 0,
+                      boxSizing: 'border-box',
                     }}
                     data-testid={`webhook-row-${sub.id}`}
                   >
-                    <div>
+                    <div style={{ minWidth: 0, flex: 1 }}>
                       <div
                         style={{
                           fontSize: '13px',
                           fontWeight: 600,
                           fontFamily: 'monospace',
+                          wordBreak: 'break-all',
                         }}
                       >
                         {sub.url}
@@ -673,7 +731,8 @@ export function ApiKeysModal({ isOpen, onClose, onToast }: ApiKeysModalProps) {
                         style={{
                           fontSize: '11px',
                           color: 'var(--muted)',
-                          marginTop: '2px',
+                          marginTop: '4px',
+                          wordBreak: 'break-word',
                         }}
                       >
                         Secret: <code>{sub.secret.slice(0, 10)}••••••••</code> ·
@@ -686,7 +745,7 @@ export function ApiKeysModal({ isOpen, onClose, onToast }: ApiKeysModalProps) {
                       onClick={() => handleDeleteWebhook(sub.id)}
                       title="Delete webhook"
                       aria-label="Delete webhook"
-                      style={{ color: 'var(--danger)' }}
+                      style={{ color: 'var(--danger)', flexShrink: 0 }}
                     >
                       <Trash2 size={15} />
                     </button>
@@ -735,6 +794,10 @@ export function ApiKeysModal({ isOpen, onClose, onToast }: ApiKeysModalProps) {
                           borderRadius: '8px',
                           background: 'var(--bg)',
                           fontSize: '11.5px',
+                          gap: '8px',
+                          minWidth: 0,
+                          boxSizing: 'border-box',
+                          flexWrap: 'wrap',
                         }}
                       >
                         <div
@@ -742,6 +805,8 @@ export function ApiKeysModal({ isOpen, onClose, onToast }: ApiKeysModalProps) {
                             display: 'flex',
                             alignItems: 'center',
                             gap: '8px',
+                            minWidth: 0,
+                            flex: 1,
                           }}
                         >
                           <span
@@ -749,17 +814,27 @@ export function ApiKeysModal({ isOpen, onClose, onToast }: ApiKeysModalProps) {
                               width: '8px',
                               height: '8px',
                               borderRadius: '50%',
+                              flexShrink: 0,
                               background:
                                 d.status === 'success' ? '#10b981' : '#ef4444',
                             }}
                           />
-                          <code>{d.event}</code>
-                          <span style={{ color: 'var(--muted)' }}>{d.url}</span>
+                          <code style={{ flexShrink: 0 }}>{d.event}</code>
+                          <span
+                            style={{
+                              color: 'var(--muted)',
+                              wordBreak: 'break-all',
+                              minWidth: 0,
+                            }}
+                          >
+                            {d.url}
+                          </span>
                         </div>
                         <span
                           style={{
                             color: 'var(--muted)',
                             fontFamily: 'monospace',
+                            flexShrink: 0,
                           }}
                         >
                           {d.httpStatus
