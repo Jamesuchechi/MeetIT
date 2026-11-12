@@ -8585,4 +8585,52 @@ aside.context-bar {
   box-shadow: 0 0 0 2px var(--surface);
 }
 
+/* Phase 10 Security & Compliance Modals */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(8, 12, 22, 0.76);
+  backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1100;
+  padding: 16px;
+  overflow-y: auto;
+  animation: fadeInBackdrop 0.18s ease-out;
+}
+
+.modal-card {
+  position: relative;
+  background: var(--surface);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  box-shadow: 0 25px 60px rgba(0, 0, 0, 0.45);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 20px;
+  box-sizing: border-box;
+  animation: appModalIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  margin: auto;
+}
+
+@media (max-width: 640px) {
+  .modal-backdrop {
+    padding: 10px 10px 0;
+    align-items: flex-end;
+  }
+
+  .modal-card {
+    padding: 18px 16px calc(18px + env(safe-area-inset-bottom, 0px));
+    max-height: 90vh;
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
+    border-radius: 20px 20px 0 0;
+    width: 100% !important;
+  }
+}
+
+
 

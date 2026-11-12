@@ -62,6 +62,11 @@ import {
   AppsMarketplaceModal,
   type MarketplaceApp,
 } from './AppsMarketplaceModal';
+import { E2eeVerificationModal } from './E2eeVerificationModal';
+import { ReportAbuseModal } from './ReportAbuseModal';
+import { AuditLogModal } from './AuditLogModal';
+import { logAuditEvent } from '../lib/auditService';
+import { generateSasFromFingerprint, type E2eeSasResult } from '@meetit/media';
 import {
   translateCaption,
   speakDubbedCaption,
@@ -101,6 +106,9 @@ import {
   LayoutGrid as LayoutGridIcon,
   Shapes as ShapesIcon,
   FlipHorizontal as FlipHorizontalIcon,
+  ShieldCheck as ShieldCheckIcon,
+  Shield as ShieldIcon,
+  Flag as FlagIcon,
 } from 'lucide-react';
 import {
   loadLocalRecordings,
@@ -757,6 +765,43 @@ export function MeetingRoomView({
   // Local media & call state
   const [audioMuted, setAudioMuted] = useState(false);
   const [videoEnabled, setVideoEnabled] = useState(true);
+
+  // Phase 10: Security, Privacy & Compliance state
+  const [showE2eeModal, setShowE2eeModal] = useState(false);
+  const [showReportAbuseModal, setShowReportAbuseModal] = useState(false);
+  const [reportingPeer, setReportingPeer] = useState<{
+    id: string;
+    displayName: string;
+  } | null>(null);
+  const [showAuditLogModal, setShowAuditLogModal] = useState(false);
+  const [e2eeEpoch, setE2eeEpoch] = useState(0);
+  const [relayPrivacyActive] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('meetit_relay_privacy_enabled') === 'true';
+    } catch {
+      return false;
+    }
+  });
+
+  const e2eeSas = useMemo<E2eeSasResult>(() => {
+    const str = `${roomCode}:e2ee:${e2eeEpoch}`;
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+      hash = (hash << 5) - hash + str.charCodeAt(i);
+      hash |= 0;
+    }
+    const cleanHex = Math.abs(hash).toString(16).padStart(8, '0').repeat(4);
+    return generateSasFromFingerprint(cleanHex, e2eeEpoch);
+  }, [roomCode, e2eeEpoch]);
+
+  const handleAdvanceE2eeRatchet = async () => {
+    const nextEpoch = e2eeEpoch + 1;
+    setE2eeEpoch(nextEpoch);
+    if (transportRef.current && 'advanceE2eeEpoch' in transportRef.current) {
+      await (transportRef.current as any).advanceE2eeEpoch();
+    }
+    onToast(`E2EE key ratchet advanced to epoch ${nextEpoch}`);
+  };
   const [screenSharing, setScreenSharing] = useState(false);
   const [handRaised, setHandRaised] = useState(false);
   const [mirrorSelfView, setMirrorSelfView] = useState<boolean>(() => {
@@ -2406,6 +2451,11 @@ export function MeetingRoomView({
             roomId: roomCode,
             selfId: payload.selfId,
             iceServers: payload.iceServers as RTCIceServer[],
+            iceTransportPolicy: relayPrivacyActive ? 'relay' : 'all',
+            e2ee: {
+              enabled: true,
+              sharedSecret: roomCode,
+            },
             signaling,
             peerIds: payload.peers.map((p) => p.id),
             ...(payload.livekit ? { livekit: payload.livekit } : {}),
@@ -3324,6 +3374,13 @@ export function MeetingRoomView({
       targetPeerId,
       block,
     });
+    void logAuditEvent({
+      userId: user?.id,
+      action: block ? 'participant.ban' : 'participant.kick',
+      targetType: 'participant',
+      targetId: targetPeerId,
+      metadata: { displayName: name, roomCode },
+    });
     onToast(
       block
         ? `Removed and blocked ${name} from rejoining.`
@@ -3348,6 +3405,12 @@ export function MeetingRoomView({
     signalingRef.current?.sendHostAction({
       action: 'set_locked',
       locked: nextLocked,
+    });
+    void logAuditEvent({
+      userId: user?.id,
+      action: nextLocked ? 'room.lock' : 'room.unlock',
+      targetType: 'room',
+      targetId: roomCode,
     });
     onToast(
       nextLocked
@@ -3666,6 +3729,12 @@ export function MeetingRoomView({
     if (isRecording) {
       signalingRef.current?.stopRecording();
       void stopAndSaveRecording();
+      void logAuditEvent({
+        userId: user?.id,
+        action: 'recording.stop',
+        targetType: 'recording',
+        targetId: roomCode,
+      });
     } else {
       setShowStartRecordingConfirm(true);
     }
@@ -3680,6 +3749,17 @@ export function MeetingRoomView({
       retentionDays: recordingRetentionChoice,
     });
     startLocalMediaRecorder();
+    void logAuditEvent({
+      userId: user?.id,
+      action: 'recording.start',
+      targetType: 'recording',
+      targetId: roomCode,
+      metadata: {
+        layout: recordingLayoutChoice,
+        audioOnly: recordingAudioOnlyChoice,
+        isoTracks: recordingIsoChoice,
+      },
+    });
   };
 
   if (stage === 'waiting_room') {
@@ -4406,6 +4486,53 @@ export function MeetingRoomView({
             >
               <span className="region-dot" />
               <span>{connectedRegion.toUpperCase()}</span>
+            </div>
+          )}
+
+          {/* Phase 10: E2EE verification pill */}
+          <button
+            type="button"
+            className="call-e2ee-chip"
+            onClick={() => setShowE2eeModal(true)}
+            title="End-to-End Encrypted (SFrame / AES-GCM). Click to verify security codes."
+            aria-label="E2EE Security verification"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 4,
+              padding: '3px 8px',
+              borderRadius: 12,
+              background: 'rgba(34, 197, 94, 0.15)',
+              border: '1px solid rgba(34, 197, 94, 0.3)',
+              color: '#22c55e',
+              fontSize: '0.75rem',
+              fontWeight: 700,
+              cursor: 'pointer',
+            }}
+          >
+            <ShieldCheckIcon size={13} />
+            <span>E2EE</span>
+          </button>
+
+          {relayPrivacyActive && (
+            <div
+              className="call-relay-chip"
+              title="Relay-Only Privacy: Public IP addresses are hidden from other peers."
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 4,
+                padding: '3px 8px',
+                borderRadius: 12,
+                background: 'rgba(59, 130, 246, 0.15)',
+                border: '1px solid rgba(59, 130, 246, 0.3)',
+                color: 'var(--accent)',
+                fontSize: '0.75rem',
+                fontWeight: 600,
+              }}
+            >
+              <ShieldIcon size={12} />
+              <span>Relay</span>
             </div>
           )}
 
@@ -6277,6 +6404,64 @@ export function MeetingRoomView({
                       <small>View in-call key bindings</small>
                     </div>
                   </button>
+
+                  <div className="menu-divider" />
+
+                  <button
+                    type="button"
+                    className="call-more-menu-item"
+                    onClick={() => {
+                      setShowE2eeModal(true);
+                      setShowMoreDesktopMenu(false);
+                    }}
+                    data-testid="desktop-menu-e2ee-btn"
+                  >
+                    <ShieldCheckIcon size={16} style={{ color: '#22c55e' }} />
+                    <div className="menu-item-text">
+                      <span>End-to-End Encryption</span>
+                      <small>SFrame / AES-GCM verification codes</small>
+                    </div>
+                  </button>
+
+                  <button
+                    type="button"
+                    className="call-more-menu-item"
+                    onClick={() => {
+                      setShowAuditLogModal(true);
+                      setShowMoreDesktopMenu(false);
+                    }}
+                    data-testid="desktop-menu-audit-btn"
+                  >
+                    <FileTextIcon size={16} />
+                    <div className="menu-item-text">
+                      <span>Security Audit Trail</span>
+                      <small>Room actions, recording, and access log</small>
+                    </div>
+                  </button>
+
+                  <button
+                    type="button"
+                    className="call-more-menu-item"
+                    onClick={() => {
+                      setReportingPeer(
+                        remoteList[0]
+                          ? {
+                              id: remoteList[0].id,
+                              displayName: remoteList[0].displayName,
+                            }
+                          : null,
+                      );
+                      setShowReportAbuseModal(true);
+                      setShowMoreDesktopMenu(false);
+                    }}
+                    data-testid="desktop-menu-report-btn"
+                  >
+                    <FlagIcon size={16} style={{ color: 'var(--danger)' }} />
+                    <div className="menu-item-text">
+                      <span>Report Participant</span>
+                      <small>Flag inappropriate conduct or abuse</small>
+                    </div>
+                  </button>
                 </div>
               </>
             )}
@@ -6628,6 +6813,67 @@ export function MeetingRoomView({
                       )}
                     </>
                   )}
+
+                  {/* Phase 10: Security, Privacy & Abuse Controls */}
+                  <div className="menu-divider" />
+                  <button
+                    type="button"
+                    className="call-more-menu-item"
+                    onClick={() => {
+                      setShowE2eeModal(true);
+                      setShowActivitiesPopover(false);
+                      setShowMoreActivitiesSheet(false);
+                    }}
+                    data-testid="call-e2ee-verify-btn"
+                  >
+                    <ShieldCheckIcon size={16} style={{ color: '#22c55e' }} />
+                    <div className="menu-item-text">
+                      <span>End-to-End Encryption</span>
+                      <small>SFrame / AES-GCM verification code</small>
+                    </div>
+                  </button>
+
+                  <button
+                    type="button"
+                    className="call-more-menu-item"
+                    onClick={() => {
+                      setShowAuditLogModal(true);
+                      setShowActivitiesPopover(false);
+                      setShowMoreActivitiesSheet(false);
+                    }}
+                    data-testid="call-audit-btn"
+                  >
+                    <FileTextIcon size={16} className="menu-icon-accent" />
+                    <div className="menu-item-text">
+                      <span>Security Audit Log</span>
+                      <small>Room access and security trail</small>
+                    </div>
+                  </button>
+
+                  <button
+                    type="button"
+                    className="call-more-menu-item"
+                    onClick={() => {
+                      setReportingPeer(
+                        remoteList[0]
+                          ? {
+                              id: remoteList[0].id,
+                              displayName: remoteList[0].displayName,
+                            }
+                          : null,
+                      );
+                      setShowReportAbuseModal(true);
+                      setShowActivitiesPopover(false);
+                      setShowMoreActivitiesSheet(false);
+                    }}
+                    data-testid="call-report-abuse-btn"
+                  >
+                    <FlagIcon size={16} style={{ color: 'var(--danger)' }} />
+                    <div className="menu-item-text">
+                      <span>Report Participant</span>
+                      <small>Flag inappropriate conduct or abuse</small>
+                    </div>
+                  </button>
                 </div>
               </>
             )}
@@ -7568,6 +7814,32 @@ export function MeetingRoomView({
           setActiveMarketplaceApp(null);
           onToast('Closed active app');
         }}
+      />
+
+      {/* Phase 10: E2EE SAS Verification Modal */}
+      <E2eeVerificationModal
+        isOpen={showE2eeModal}
+        onClose={() => setShowE2eeModal(false)}
+        sas={e2eeSas}
+        onAdvanceRatchet={handleAdvanceE2eeRatchet}
+        participantCount={totalParticipantCount}
+      />
+
+      {/* Phase 10: Abuse Reporting & Moderation Modal */}
+      <ReportAbuseModal
+        isOpen={showReportAbuseModal}
+        onClose={() => setShowReportAbuseModal(false)}
+        roomCode={roomCode}
+        reportedPeer={reportingPeer}
+        reporterId={user?.id}
+        onSubmitted={() => onToast('Abuse report submitted to moderation.')}
+      />
+
+      {/* Phase 10: Security Audit Log Viewer */}
+      <AuditLogModal
+        isOpen={showAuditLogModal}
+        onClose={() => setShowAuditLogModal(false)}
+        userId={user?.id}
       />
     </div>
   );

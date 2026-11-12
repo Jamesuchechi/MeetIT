@@ -1113,3 +1113,158 @@ export const webhookPayloadSchema = z.object({
   attempt: z.number().int().min(1).default(1),
 });
 export type WebhookPayload = z.infer<typeof webhookPayloadSchema>;
+
+// ============================================================================
+// Phase 10: Security, Privacy, and Compliance Protocols
+// ============================================================================
+
+export const e2eeSasVerificationSchema = z.object({
+  sasWords: z.array(z.string()).length(4),
+  sasEmoji: z.array(z.string()).length(4),
+  fingerprint: z.string().min(8),
+  epoch: z.number().int().min(0),
+  keyId: z.string().optional(),
+});
+export type E2eeSasVerification = z.infer<typeof e2eeSasVerificationSchema>;
+
+export const e2eeKeyExchangePayloadSchema = z.object({
+  peerId: z.string(),
+  epoch: z.number().int().min(0),
+  publicKey: z.string(),
+  algorithm: z.enum(['AES-GCM', 'SFrame', 'ECDH-P256']).default('AES-GCM'),
+  ivPrefix: z.string().optional(),
+});
+export type E2eeKeyExchangePayload = z.infer<
+  typeof e2eeKeyExchangePayloadSchema
+>;
+
+export const e2eeStateSchema = z.object({
+  enabled: z.boolean(),
+  verified: z.boolean(),
+  epoch: z.number().int().min(0),
+  sas: e2eeSasVerificationSchema.optional(),
+  peerFingerprints: z.record(z.string(), z.string()).default({}),
+});
+export type E2eeState = z.infer<typeof e2eeStateSchema>;
+
+export const auditActionSchema = z.enum([
+  'room.create',
+  'room.destroy',
+  'room.lock',
+  'room.unlock',
+  'recording.start',
+  'recording.stop',
+  'participant.kick',
+  'participant.ban',
+  'participant.mute_all',
+  'apikey.create',
+  'apikey.revoke',
+  'compliance.export',
+  'compliance.delete',
+  'security.2fa_enable',
+  'security.2fa_disable',
+  'security.passkey_add',
+  'security.passkey_remove',
+  'security.session_revoke',
+  'privacy.relay_mode_toggle',
+  'settings.update',
+]);
+export type AuditAction = z.infer<typeof auditActionSchema>;
+
+export const auditLogEntrySchema = z.object({
+  id: z.string(),
+  userId: z.string().nullable().optional(),
+  action: auditActionSchema,
+  targetType: z.string(),
+  targetId: z.string().nullable().optional(),
+  metadata: z.record(z.string(), z.unknown()).default({}),
+  ipAddress: z.string().optional(),
+  userAgent: z.string().optional(),
+  createdAt: z.number().int(),
+});
+export type AuditLogEntry = z.infer<typeof auditLogEntrySchema>;
+
+export const dataResidencyRegionSchema = z.enum([
+  'eu-central-1', // Frankfurt, Germany (EU GDPR)
+  'af-south-1', // Cape Town / Johannesburg, South Africa (NDPR/POPIA)
+  'us-east-1', // N. Virginia, United States (CCPA/SOC2)
+]);
+export type DataResidencyRegion = z.infer<typeof dataResidencyRegionSchema>;
+
+export const abuseReportCategorySchema = z.enum([
+  'harassment',
+  'hate_speech',
+  'inappropriate_video',
+  'spam_impersonation',
+  'other',
+]);
+export type AbuseReportCategory = z.infer<typeof abuseReportCategorySchema>;
+
+export const abuseReportPayloadSchema = z.object({
+  reportedPeerId: z.string().min(1),
+  roomCode: z.string().regex(ROOM_CODE_REGEX),
+  category: abuseReportCategorySchema,
+  details: z.string().max(2000).optional(),
+  timestamp: z.number().int(),
+});
+export type AbuseReportPayload = z.infer<typeof abuseReportPayloadSchema>;
+
+export const passkeyCredentialSchema = z.object({
+  id: z.string(),
+  name: z.string().min(1).max(100),
+  credentialId: z.string(),
+  publicKey: z.string(),
+  algorithm: z.number(),
+  createdAt: z.number().int(),
+  lastUsedAt: z.number().int().optional(),
+});
+export type PasskeyCredential = z.infer<typeof passkeyCredentialSchema>;
+
+export const userSessionSchema = z.object({
+  id: z.string(),
+  current: z.boolean(),
+  browser: z.string(),
+  os: z.string(),
+  ipAddress: z.string(),
+  location: z.string(),
+  lastActiveAt: z.number().int(),
+  createdAt: z.number().int(),
+});
+export type UserSession = z.infer<typeof userSessionSchema>;
+
+export const twoFactorConfigSchema = z.object({
+  enabled: z.boolean(),
+  secret: z.string().optional(),
+  qrCodeUrl: z.string().optional(),
+  backupCodesCount: z.number().int().default(0),
+  updatedAt: z.number().int(),
+});
+export type TwoFactorConfig = z.infer<typeof twoFactorConfigSchema>;
+
+export const soc2CategorySchema = z.enum([
+  'security',
+  'availability',
+  'processing_integrity',
+  'confidentiality',
+  'privacy',
+]);
+export type Soc2Category = z.infer<typeof soc2CategorySchema>;
+
+export const soc2ControlSchema = z.object({
+  id: z.string(),
+  category: soc2CategorySchema,
+  title: z.string(),
+  description: z.string(),
+  status: z.enum(['implemented', 'in_progress', 'planned']),
+  evidence: z.string().optional(),
+});
+export type Soc2Control = z.infer<typeof soc2ControlSchema>;
+
+export const subprocessorInfoSchema = z.object({
+  name: z.string(),
+  purpose: z.string(),
+  dataLocation: z.string(),
+  privacyUrl: z.string().url(),
+  dpaSigned: z.boolean(),
+});
+export type SubprocessorInfo = z.infer<typeof subprocessorInfoSchema>;

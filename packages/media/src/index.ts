@@ -3,6 +3,19 @@ import type {
   SdpPayload,
   SignalingChannel,
 } from '@meetit/protocol';
+import { E2eeKeyManager } from './e2eeKeyManager.js';
+import { attachReceiverE2ee, attachSenderE2ee } from './e2eeTransform.js';
+import {
+  generateSasFromFingerprint,
+  type E2eeSasResult,
+} from './e2eeVerification.js';
+
+export * from './audioEffects.js';
+export * from './videoEffects.js';
+export * from './livekit.js';
+export * from './e2eeKeyManager.js';
+export * from './e2eeVerification.js';
+export * from './e2eeTransform.js';
 
 export type TrackSource = 'camera' | 'microphone' | 'screen' | 'screen_audio';
 export type ConnectionState =
@@ -32,6 +45,11 @@ export interface ConnectOptions {
   iceServers: RTCIceServer[];
   signaling?: SignalingChannel;
   peerIds?: string[];
+  iceTransportPolicy?: 'all' | 'relay';
+  e2ee?: {
+    enabled: boolean;
+    sharedSecret?: string;
+  };
   livekit?: {
     url: string;
     token: string;
@@ -277,9 +295,12 @@ export class MeshTransport implements MediaTransport {
 
   private selfId = '';
   private iceServers: RTCIceServer[] = [];
+  private iceTransportPolicy: 'all' | 'relay' = 'all';
   private signaling: SignalingChannel | null = null;
   private connected = false;
   private bandwidthMode: BandwidthMode = 'standard';
+  private e2eeKeyManager: E2eeKeyManager | null = null;
+  private e2eeEnabled = false;
 
   private readonly PeerConnectionCtor: typeof RTCPeerConnection | undefined;
   private readonly iceRestartGraceMs: number;
@@ -303,8 +324,17 @@ export class MeshTransport implements MediaTransport {
   async connect(options: ConnectOptions): Promise<void> {
     this.selfId = options.selfId;
     this.iceServers = options.iceServers;
+    this.iceTransportPolicy = options.iceTransportPolicy ?? 'all';
     this.signaling = options.signaling ?? null;
     this.connected = true;
+
+    if (options.e2ee?.enabled) {
+      this.e2eeEnabled = true;
+      this.e2eeKeyManager = new E2eeKeyManager(options.e2ee.sharedSecret);
+    } else {
+      this.e2eeEnabled = false;
+      this.e2eeKeyManager = null;
+    }
 
     if (this.signaling) {
       this.unsubscribers.push(
@@ -622,7 +652,10 @@ export class MeshTransport implements MediaTransport {
       throw new Error('RTCPeerConnection is not available in this environment');
     }
 
-    const pc = new this.PeerConnectionCtor({ iceServers: this.iceServers });
+    const pc = new this.PeerConnectionCtor({
+      iceServers: this.iceServers,
+      iceTransportPolicy: this.iceTransportPolicy,
+    });
     const session: PeerSession = {
       peerId,
       pc,
@@ -706,6 +739,10 @@ export class MeshTransport implements MediaTransport {
         ...(stream ? { stream } : {}),
       });
 
+      if (this.e2eeEnabled && this.e2eeKeyManager && event.receiver) {
+        attachReceiverE2ee(event.receiver, this.e2eeKeyManager);
+      }
+
       track.onended = () => {
         session.receivedVideoTrackIds.delete(track.id);
         session.receivedVideoTracks.delete(track);
@@ -741,6 +778,9 @@ export class MeshTransport implements MediaTransport {
     const streams = stream ? [stream] : [];
     const sender = session.pc.addTrack(track, ...streams);
     session.senders.set(source, sender);
+    if (this.e2eeEnabled && this.e2eeKeyManager) {
+      attachSenderE2ee(sender, this.e2eeKeyManager);
+    }
     void this.applyBitrateCap(sender, track.kind);
   }
 
@@ -1040,6 +1080,30 @@ export class MeshTransport implements MediaTransport {
     if (emitClosed) {
       this.emit('connectionStateChanged', { peerId, state: 'closed' });
     }
+  }
+
+  getE2eeKeyManager(): E2eeKeyManager | null {
+    return this.e2eeKeyManager;
+  }
+
+  async setE2eeMasterSecret(secret: string): Promise<void> {
+    if (!this.e2eeKeyManager) {
+      this.e2eeKeyManager = new E2eeKeyManager(secret);
+      this.e2eeEnabled = true;
+    } else {
+      await this.e2eeKeyManager.setMasterSecret(secret);
+    }
+  }
+
+  async advanceE2eeEpoch(): Promise<number> {
+    if (!this.e2eeKeyManager) return 0;
+    return this.e2eeKeyManager.advanceEpoch();
+  }
+
+  async getE2eeSas(): Promise<E2eeSasResult | null> {
+    if (!this.e2eeKeyManager) return null;
+    const fp = await this.e2eeKeyManager.getFingerprint();
+    return generateSasFromFingerprint(fp, this.e2eeKeyManager.getEpoch());
   }
 
   private assertConnected(): void {

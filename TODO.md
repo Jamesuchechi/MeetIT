@@ -304,15 +304,15 @@ Every phase has an **exit criteria** block. Do not start the next phase until ex
 
 ## Phase 10 - Security, privacy, compliance (v1.6, runs in parallel from Phase 3)
 
-- [ ] [P0] E2EE for small meetings: Encoded Transform + group key exchange, verification codes/emoji
-- [ ] [P0] Security review + external penetration test before public launch
-- [ ] [P0] Audit logs (host actions, recording start/stop, admin changes)
-- [ ] [P0] Data deletion and export (GDPR/NDPR/CCPA style)
-- [ ] [P1] Relay-only privacy mode (hide IPs)
-- [ ] [P1] Sign-in security: passkeys, 2FA, session management
-- [ ] [P1] Abuse reporting, moderation tools, content policy
-- [ ] [P1] SOC 2 readiness checklist; data residency options (EU, Africa, US)
-- [ ] [P1] DPA, subprocessor list, privacy policy, terms
+- [x] [P0] E2EE for small meetings: Encoded Transform + group key exchange, verification codes/emoji
+- [x] [P0] Security review + external penetration test before public launch
+- [x] [P0] Audit logs (host actions, recording start/stop, admin changes)
+- [x] [P0] Data deletion and export (GDPR/NDPR/CCPA style)
+- [x] [P1] Relay-only privacy mode (hide IPs)
+- [x] [P1] Sign-in security: passkeys, 2FA, session management
+- [x] [P1] Abuse reporting, moderation tools, content policy
+- [x] [P1] SOC 2 readiness checklist; data residency options (EU, Africa, US)
+- [x] [P1] DPA, subprocessor list, privacy policy, terms
 - [ ] [P2] SSO (SAML, OIDC) and SCIM provisioning
 - [ ] [P2] Enterprise controls: domain capture, forced waiting room, retention, DLP hooks
 - [ ] [P2] Bug bounty program

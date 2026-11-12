@@ -290,4 +290,140 @@ describe('protocol schemas and utilities', () => {
       }).success,
     ).toBe(true);
   });
+
+  it('validates Phase 10 security, privacy, and compliance schemas', async () => {
+    const {
+      e2eeSasVerificationSchema,
+      e2eeKeyExchangePayloadSchema,
+      e2eeStateSchema,
+      auditLogEntrySchema,
+      dataResidencyRegionSchema,
+      abuseReportPayloadSchema,
+      passkeyCredentialSchema,
+      userSessionSchema,
+      twoFactorConfigSchema,
+      soc2ControlSchema,
+    } = await import('./index.js');
+
+    // E2EE SAS verification
+    expect(
+      e2eeSasVerificationSchema.safeParse({
+        sasWords: ['ALPHA', 'FALCON', 'RIVER', 'SHIELD'],
+        sasEmoji: ['🛡️', '⚡', '🌊', '🔑'],
+        fingerprint: 'e3b0c44298fc1c149afbf4c8996fb924',
+        epoch: 1,
+      }).success,
+    ).toBe(true);
+
+    // E2EE Key exchange
+    expect(
+      e2eeKeyExchangePayloadSchema.safeParse({
+        peerId: 'peer_123',
+        epoch: 0,
+        publicKey: 'pub_base64_encoded_key_material',
+        algorithm: 'AES-GCM',
+      }).success,
+    ).toBe(true);
+
+    // E2EE State
+    expect(
+      e2eeStateSchema.safeParse({
+        enabled: true,
+        verified: true,
+        epoch: 2,
+        sas: {
+          sasWords: ['BRAVO', 'TIGER', 'SUMMIT', 'FLAME'],
+          sasEmoji: ['💎', '🚀', '🔥', '🌟'],
+          fingerprint: '4a8a08f09d37b73795649038408b5f33',
+          epoch: 2,
+        },
+        peerFingerprints: { peer_123: '4a8a08f09d37b73795649038408b5f33' },
+      }).success,
+    ).toBe(true);
+
+    // Audit Log Entry
+    expect(
+      auditLogEntrySchema.safeParse({
+        id: 'audit_01',
+        userId: 'user_456',
+        action: 'room.lock',
+        targetType: 'room',
+        targetId: 'abc-defg-hij',
+        metadata: { reason: 'Host locked meeting' },
+        createdAt: Date.now(),
+      }).success,
+    ).toBe(true);
+
+    // Data residency regions
+    expect(dataResidencyRegionSchema.safeParse('eu-central-1').success).toBe(
+      true,
+    );
+    expect(dataResidencyRegionSchema.safeParse('af-south-1').success).toBe(
+      true,
+    );
+    expect(dataResidencyRegionSchema.safeParse('us-east-1').success).toBe(true);
+    expect(dataResidencyRegionSchema.safeParse('ap-southeast-1').success).toBe(
+      false,
+    );
+
+    // Abuse Report
+    expect(
+      abuseReportPayloadSchema.safeParse({
+        reportedPeerId: 'troll_999',
+        roomCode: 'abc-defg-hij',
+        category: 'harassment',
+        details: 'Disruptive audio behavior and offensive chat',
+        timestamp: Date.now(),
+      }).success,
+    ).toBe(true);
+
+    // Passkey Credential
+    expect(
+      passkeyCredentialSchema.safeParse({
+        id: 'pk_123',
+        name: 'MacBook Touch ID',
+        credentialId: 'cred_id_base64',
+        publicKey: 'pub_key_base64',
+        algorithm: -7, // ES256
+        createdAt: Date.now(),
+      }).success,
+    ).toBe(true);
+
+    // User Session
+    expect(
+      userSessionSchema.safeParse({
+        id: 'sess_1',
+        current: true,
+        browser: 'Chrome 126',
+        os: 'macOS Sonoma',
+        ipAddress: '197.210.54.12',
+        location: 'Lagos, Nigeria',
+        lastActiveAt: Date.now(),
+        createdAt: Date.now() - 3600000,
+      }).success,
+    ).toBe(true);
+
+    // 2FA Config
+    expect(
+      twoFactorConfigSchema.safeParse({
+        enabled: true,
+        secret: 'JBSWY3DPEHPK3PXP',
+        backupCodesCount: 8,
+        updatedAt: Date.now(),
+      }).success,
+    ).toBe(true);
+
+    // SOC 2 Control
+    expect(
+      soc2ControlSchema.safeParse({
+        id: 'CC6.1',
+        category: 'security',
+        title: 'Logical Access Controls',
+        description:
+          'Role-based access control and MFA enforced on critical services',
+        status: 'implemented',
+        evidence: 'Supabase RLS & WebAuthn 2FA',
+      }).success,
+    ).toBe(true);
+  });
 });

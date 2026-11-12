@@ -18,6 +18,18 @@ import {
 } from '../lib/integrationsService';
 import { Avatar } from './Avatar';
 import { SunIcon, MoonIcon } from './Icons';
+import {
+  Shield,
+  Fingerprint,
+  FileCheck,
+  FileText,
+  Trash2,
+  Globe,
+} from 'lucide-react';
+import { SecuritySettingsModal } from './SecuritySettingsModal';
+import { ComplianceCenterModal } from './ComplianceCenterModal';
+import { AuditLogModal } from './AuditLogModal';
+import { AccountDeletionModal } from './AccountDeletionModal';
 import type { AuthUser } from '../types';
 
 const APP_SETTINGS_KEY = 'meetit_app_settings_v1';
@@ -94,6 +106,20 @@ export function SettingsView({
   const [testResult, setTestResult] = useState<string | null>(null);
   const [integrationsConfig, setIntegrationsConfig] =
     useState<IntegrationConfig>(() => loadIntegrationsConfig());
+
+  // Phase 10: Security, Privacy & Compliance state
+  const [showSecurityModal, setShowSecurityModal] = useState(false);
+  const [showComplianceModal, setShowComplianceModal] = useState(false);
+  const [showAuditModal, setShowAuditModal] = useState(false);
+  const [showAccountDeletionModal, setShowAccountDeletionModal] =
+    useState(false);
+  const [relayPrivacy, setRelayPrivacy] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('meetit_relay_privacy_enabled') === 'true';
+    } catch {
+      return false;
+    }
+  });
 
   useEffect(() => {
     let mounted = true;
@@ -596,7 +622,124 @@ export function SettingsView({
             </div>
           </div>
         )}
+
+        {/* 5. Phase 10: Security, Privacy & Compliance Hub */}
+        <div
+          className="profile-section-card settings-security-card"
+          style={{ gridColumn: '1 / -1' }}
+        >
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 10,
+              marginBottom: 6,
+            }}
+          >
+            <Shield size={20} style={{ color: 'var(--accent)' }} />
+            <h3 style={{ margin: 0 }}>
+              Security, Privacy &amp; Compliance (v1.6)
+            </h3>
+          </div>
+          <p className="profile-card-sub" style={{ marginBottom: 16 }}>
+            Manage biometric passkeys, two-factor authentication, active device
+            sessions, SOC 2 Type II trust checklist, and GDPR / NDPR data
+            portability rights.
+          </p>
+
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+            <button
+              type="button"
+              className="btn secondary"
+              onClick={() => setShowSecurityModal(true)}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
+            >
+              <Fingerprint size={16} />
+              Passkeys, 2FA &amp; Sessions
+            </button>
+
+            <button
+              type="button"
+              className="btn secondary"
+              onClick={() => setShowComplianceModal(true)}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
+            >
+              <FileCheck size={16} />
+              Compliance Center &amp; Data Residency
+            </button>
+
+            <button
+              type="button"
+              className="btn secondary"
+              onClick={() => setShowAuditModal(true)}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
+            >
+              <FileText size={16} />
+              Security Audit Trail
+            </button>
+
+            <button
+              type="button"
+              className="btn danger-outline"
+              onClick={() => setShowAccountDeletionModal(true)}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+                marginLeft: 'auto',
+              }}
+            >
+              <Trash2 size={16} />
+              Erase Account &amp; Data
+            </button>
+          </div>
+        </div>
       </div>
+
+      {/* Security Modals */}
+      <SecuritySettingsModal
+        isOpen={showSecurityModal}
+        onClose={() => setShowSecurityModal(false)}
+        user={
+          user
+            ? { id: user.id, email: user.email, displayName: user.displayName }
+            : null
+        }
+        relayPrivacyEnabled={relayPrivacy}
+        onToggleRelayPrivacy={(val) => {
+          setRelayPrivacy(val);
+          onToast(
+            val
+              ? 'Relay-only privacy mode enabled'
+              : 'Standard direct WebRTC mode active',
+          );
+        }}
+      />
+
+      <ComplianceCenterModal
+        isOpen={showComplianceModal}
+        onClose={() => setShowComplianceModal(false)}
+        userId={user?.id}
+        onRequestDeleteAccount={() => {
+          setShowComplianceModal(false);
+          setShowAccountDeletionModal(true);
+        }}
+      />
+
+      <AuditLogModal
+        isOpen={showAuditModal}
+        onClose={() => setShowAuditModal(false)}
+        userId={user?.id}
+      />
+
+      <AccountDeletionModal
+        isOpen={showAccountDeletionModal}
+        onClose={() => setShowAccountDeletionModal(false)}
+        userId={user?.id}
+        onDeleted={() =>
+          onToast('Account and all associated records permanently purged.')
+        }
+      />
     </section>
   );
 }
