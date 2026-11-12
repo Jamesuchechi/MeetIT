@@ -3,6 +3,7 @@ import {
   Radio as RadioIcon,
   MessageSquare as MessageSquareIcon,
   Code2 as Code2Icon,
+  DollarSign as DollarSignIcon,
 } from 'lucide-react';
 import { Logo } from './Logo';
 import {
@@ -60,6 +61,7 @@ import { NotesView } from './NotesView';
 import { RecordingsView } from './RecordingsView';
 import { TranscriptsView } from './TranscriptsView';
 import { DeveloperHubView } from './DeveloperHubView';
+import { CostDashboardView } from './CostDashboardView';
 import { BackendStatusIndicator } from './BackendStatusIndicator';
 
 interface DashboardViewProps {
@@ -81,6 +83,7 @@ const TAB_LABELS: Record<DashboardTab, string> = {
   recordings: 'Recordings',
   transcripts: 'Transcripts & Captions',
   developer: 'Developer Platform',
+  cost: 'Cost & Scale Telemetry',
   settings: 'Settings',
   profile: 'Public Profile',
   'profile-edit': 'Edit Profile',
@@ -402,6 +405,20 @@ export function DashboardView({
           </button>
           <button
             type="button"
+            aria-current={activeTab === 'cost' ? 'page' : undefined}
+            onClick={() => {
+              selectTab('cost');
+              setIsNavDrawerOpen(false);
+            }}
+            data-testid="sidebar-cost-btn"
+          >
+            <span>
+              <DollarSignIcon size={16} />
+            </span>
+            <span>Cost &amp; Scale</span>
+          </button>
+          <button
+            type="button"
             aria-current={activeTab === 'settings' ? 'page' : undefined}
             onClick={() => {
               selectTab('settings');
@@ -686,6 +703,8 @@ export function DashboardView({
             />
           ) : activeTab === 'developer' ? (
             <DeveloperHubView onToast={onToast} />
+          ) : activeTab === 'cost' ? (
+            <CostDashboardView onToast={onToast} />
           ) : activeTab === 'settings' ? (
             <SettingsView
               user={user ?? null}
