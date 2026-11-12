@@ -1,11 +1,9 @@
 import React, { useState, useMemo } from 'react';
 import {
-  BarChart3,
   Clock,
   Users,
   CheckCircle2,
   Zap,
-  TrendingUp,
   Download,
   ShieldCheck,
   Calendar,
@@ -75,58 +73,44 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
   );
 
   return (
-    <div className="space-y-8 animate-in fade-in pb-12">
+    <div className="analytics-view-container">
       {/* Header & Controls */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-800 pb-5">
-        <div>
-          <div className="flex items-center gap-2">
-            <h1 className="text-xl sm:text-2xl font-bold text-white tracking-tight">
+      <div className="analytics-view-header">
+        <div className="analytics-view-header-left">
+          <div className="analytics-view-title-row">
+            <h1 className="analytics-view-title">
               Meeting Analytics &amp; Insights
             </h1>
-            <span className="px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
-              Privacy-First
-            </span>
+            <span className="analytics-view-badge">Privacy-First</span>
           </div>
-          <p className="text-xs sm:text-sm text-slate-400 mt-1">
+          <p className="analytics-view-subtitle">
             Personal and team meeting load, collaboration balance, and
             productivity metrics.
           </p>
         </div>
 
         {/* Action Controls */}
-        <div className="flex items-center gap-3 self-start sm:self-auto">
+        <div className="analytics-view-controls">
           {/* Time Range Selector */}
-          <div className="flex items-center bg-slate-900 border border-slate-800 rounded-xl p-1 shadow-sm">
+          <div className="analytics-view-time-filters">
             <button
               type="button"
               onClick={() => setTimeRange('week')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${
-                timeRange === 'week'
-                  ? 'bg-slate-800 text-white shadow'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
+              className={`analytics-view-time-btn ${timeRange === 'week' ? 'active' : ''}`}
             >
               This Week
             </button>
             <button
               type="button"
               onClick={() => setTimeRange('month')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${
-                timeRange === 'month'
-                  ? 'bg-slate-800 text-white shadow'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
+              className={`analytics-view-time-btn ${timeRange === 'month' ? 'active' : ''}`}
             >
               Last 30 Days
             </button>
             <button
               type="button"
               onClick={() => setTimeRange('quarter')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${
-                timeRange === 'quarter'
-                  ? 'bg-slate-800 text-white shadow'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
+              className={`analytics-view-time-btn ${timeRange === 'quarter' ? 'active' : ''}`}
             >
               Quarter
             </button>
@@ -136,183 +120,205 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
           <button
             type="button"
             onClick={handleExportCsv}
-            className="flex items-center gap-1.5 px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium rounded-xl border border-slate-700/80 transition shadow-sm"
+            className="btn secondary"
+            style={{
+              fontSize: '12px',
+              padding: '6px 12px',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
+            }}
             aria-label="Export analytics report as CSV"
           >
-            <Download className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Export CSV</span>
+            <Download size={14} />
+            <span>Export CSV</span>
           </button>
         </div>
       </div>
 
       {/* Top 4 KPI Metric Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="analytics-view-kpi-grid">
         {/* KPI 1: Meeting Time */}
-        <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-5 shadow-lg relative overflow-hidden">
-          <div className="flex items-center justify-between text-slate-400 mb-2">
-            <span className="text-xs font-medium">Total Meeting Time</span>
-            <div className="p-2 rounded-xl bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
-              <Clock className="w-4 h-4" />
+        <div className="analytics-view-kpi-card">
+          <div className="analytics-view-kpi-top">
+            <span>Total Meeting Time</span>
+            <div className="analytics-view-kpi-icon indigo">
+              <Clock size={16} />
             </div>
           </div>
-          <div className="flex items-baseline gap-1.5">
-            <span className="text-2xl sm:text-3xl font-bold text-white tracking-tight">
+          <div className="analytics-view-kpi-value-row">
+            <span className="analytics-view-kpi-value">
               {summary.totalHours}
             </span>
-            <span className="text-sm text-slate-400 font-medium">hours</span>
+            <span className="analytics-view-kpi-unit">hours</span>
           </div>
-          <div className="flex items-center gap-1.5 mt-2 text-[11px] text-slate-400">
-            <span className="font-semibold text-indigo-400">
+          <div className="analytics-view-kpi-sub">
+            <span
+              style={{
+                fontWeight: 600,
+                color: 'var(--accent)',
+              }}
+            >
               {summary.totalMeetings} meetings
-            </span>
+            </span>{' '}
             <span>total in period</span>
           </div>
         </div>
 
         {/* KPI 2: Focus Time Ratio */}
-        <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-5 shadow-lg relative overflow-hidden">
-          <div className="flex items-center justify-between text-slate-400 mb-2">
-            <span className="text-xs font-medium">Focus Time Ratio</span>
-            <div className="p-2 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-              <Zap className="w-4 h-4" />
+        <div className="analytics-view-kpi-card">
+          <div className="analytics-view-kpi-top">
+            <span>Focus Time Ratio</span>
+            <div className="analytics-view-kpi-icon green">
+              <Zap size={16} />
             </div>
           </div>
-          <div className="flex items-baseline gap-2">
-            <span className="text-2xl sm:text-3xl font-bold text-white tracking-tight">
+          <div className="analytics-view-kpi-value-row">
+            <span className="analytics-view-kpi-value">
               {summary.focusTimeRatioPct}%
             </span>
-            <span className="text-xs font-medium text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
+            <span
+              className="analytics-view-badge"
+              style={{
+                background:
+                  summary.focusTimeRatioPct >= 65
+                    ? 'rgba(34, 197, 94, 0.12)'
+                    : 'rgba(245, 158, 11, 0.12)',
+                color: summary.focusTimeRatioPct >= 65 ? '#22c55e' : '#f59e0b',
+                borderColor:
+                  summary.focusTimeRatioPct >= 65
+                    ? 'rgba(34, 197, 94, 0.25)'
+                    : 'rgba(245, 158, 11, 0.25)',
+              }}
+            >
               {summary.focusTimeRatioPct >= 65 ? 'Healthy' : 'Heavy Load'}
             </span>
           </div>
-          <div className="flex items-center gap-1.5 mt-2 text-[11px] text-slate-400">
+          <div className="analytics-view-kpi-sub">
             <span>Outside of scheduled call hours</span>
           </div>
         </div>
 
         {/* KPI 3: Meeting Efficiency Score */}
-        <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-5 shadow-lg relative overflow-hidden">
-          <div className="flex items-center justify-between text-slate-400 mb-2">
-            <span className="text-xs font-medium">Meeting Health Score</span>
-            <div className="p-2 rounded-xl bg-sky-500/10 text-sky-400 border border-sky-500/20">
-              <CheckCircle2 className="w-4 h-4" />
+        <div className="analytics-view-kpi-card">
+          <div className="analytics-view-kpi-top">
+            <span>Meeting Health Score</span>
+            <div className="analytics-view-kpi-icon sky">
+              <CheckCircle2 size={16} />
             </div>
           </div>
-          <div className="flex items-baseline gap-1.5">
-            <span className="text-2xl sm:text-3xl font-bold text-sky-400 tracking-tight">
+          <div className="analytics-view-kpi-value-row">
+            <span
+              className="analytics-view-kpi-value"
+              style={{ color: '#0284c7' }}
+            >
               {summary.efficiencyScore}
             </span>
-            <span className="text-sm text-slate-400 font-medium">/ 100</span>
+            <span className="analytics-view-kpi-unit">/ 100</span>
           </div>
-          <div className="flex items-center gap-1.5 mt-2 text-[11px] text-slate-400">
+          <div className="analytics-view-kpi-sub">
             <span>Punctuality &amp; group size rating</span>
           </div>
         </div>
 
         {/* KPI 4: Average Duration & Size */}
-        <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-5 shadow-lg relative overflow-hidden">
-          <div className="flex items-center justify-between text-slate-400 mb-2">
-            <span className="text-xs font-medium">Average Meeting</span>
-            <div className="p-2 rounded-xl bg-amber-500/10 text-amber-400 border border-amber-500/20">
-              <Users className="w-4 h-4" />
+        <div className="analytics-view-kpi-card">
+          <div className="analytics-view-kpi-top">
+            <span>Average Meeting</span>
+            <div className="analytics-view-kpi-icon amber">
+              <Users size={16} />
             </div>
           </div>
-          <div className="flex items-baseline gap-1.5">
-            <span className="text-2xl sm:text-3xl font-bold text-white tracking-tight">
+          <div className="analytics-view-kpi-value-row">
+            <span className="analytics-view-kpi-value">
               {summary.averageMinutes}
             </span>
-            <span className="text-sm text-slate-400 font-medium">mins</span>
+            <span className="analytics-view-kpi-unit">mins</span>
           </div>
-          <div className="flex items-center gap-1.5 mt-2 text-[11px] text-slate-400">
-            <span className="font-semibold text-amber-400">
+          <div className="analytics-view-kpi-sub">
+            <span style={{ fontWeight: 600, color: '#f59e0b' }}>
               {summary.averageParticipants} attendees
-            </span>
+            </span>{' '}
             <span>on average</span>
           </div>
         </div>
       </div>
 
       {/* Main Charts Grid: Day-of-Week Load & Meeting Types */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left 2 Cols: Day of Week Load Chart */}
-        <section className="bg-slate-900/50 border border-slate-800 rounded-2xl p-6 shadow-xl lg:col-span-2 space-y-6">
-          <div className="flex items-center justify-between border-b border-slate-800 pb-4">
-            <div className="flex items-center gap-2.5">
-              <div className="p-2 rounded-xl bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
-                <Calendar className="w-4 h-4" />
-              </div>
-              <div>
-                <h2 className="text-base font-semibold text-white">
-                  Meeting Hours by Day of Week
-                </h2>
-                <p className="text-xs text-slate-400">
-                  Track daily meeting density to identify meeting-heavy days and
-                  protect focus time.
-                </p>
-              </div>
+      <div className="analytics-view-charts-grid">
+        {/* Left: Day of Week Load Chart */}
+        <section className="analytics-view-card">
+          <div className="analytics-view-card-header">
+            <div className="analytics-view-kpi-icon indigo">
+              <Calendar size={16} />
+            </div>
+            <div>
+              <h2 className="analytics-view-card-title">
+                Meeting Hours by Day of Week
+              </h2>
+              <p className="analytics-view-card-desc">
+                Track daily meeting density to identify meeting-heavy days and
+                protect focus time.
+              </p>
             </div>
           </div>
 
           {/* Bar Chart Visualization */}
-          <div className="space-y-4 pt-2">
-            <div className="grid grid-cols-7 gap-2 sm:gap-4 h-44 items-end px-2">
-              {summary.dayOfWeekDistribution.map((d) => {
-                const heightPct = Math.round((d.minutes / maxDayMinutes) * 100);
-                const hours = (d.minutes / 60).toFixed(1);
-                return (
-                  <div
-                    key={d.day}
-                    className="flex flex-col items-center gap-2 h-full justify-end group"
-                  >
-                    <span className="text-[10px] font-mono text-slate-400 opacity-0 group-hover:opacity-100 transition">
-                      {hours}h
-                    </span>
+          <div className="analytics-view-barchart">
+            {summary.dayOfWeekDistribution.map((d) => {
+              const heightPct = Math.round((d.minutes / maxDayMinutes) * 100);
+              const hours = (d.minutes / 60).toFixed(1);
+              return (
+                <div key={d.day} className="analytics-view-bar-col">
+                  <span className="analytics-view-bar-hours">{hours}h</span>
+                  <div className="analytics-view-bar-track">
                     <div
-                      className="w-full max-w-[40px] bg-indigo-600/80 hover:bg-indigo-500 rounded-t-lg transition-all duration-300 relative"
+                      className="analytics-view-bar-fill"
                       style={{ height: `${Math.max(6, heightPct)}%` }}
                     />
-                    <span className="text-xs font-medium text-slate-400">
-                      {d.day}
-                    </span>
                   </div>
-                );
-              })}
-            </div>
+                  <span className="analytics-view-bar-day">{d.day}</span>
+                </div>
+              );
+            })}
+          </div>
 
-            <div className="flex items-center justify-between text-xs text-slate-500 pt-2 border-t border-slate-800/80">
-              <span>Mon – Sun distribution</span>
-              <span>Values in scheduled hours</span>
-            </div>
+          <div className="analytics-view-barchart-footer">
+            <span>Mon – Sun distribution</span>
+            <span>Values in scheduled hours</span>
           </div>
         </section>
 
-        {/* Right 1 Col: Meeting Type Breakdown */}
-        <section className="bg-slate-900/50 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-6">
-          <div className="flex items-center gap-2.5 border-b border-slate-800 pb-4">
-            <div className="p-2 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-              <Users className="w-4 h-4" />
+        {/* Right: Meeting Type Breakdown */}
+        <section className="analytics-view-card">
+          <div className="analytics-view-card-header">
+            <div className="analytics-view-kpi-icon green">
+              <Users size={16} />
             </div>
             <div>
-              <h2 className="text-base font-semibold text-white">
+              <h2 className="analytics-view-card-title">
                 Meeting Size Breakdown
               </h2>
-              <p className="text-xs text-slate-400">
+              <p className="analytics-view-card-desc">
                 1:1 syncs vs multi-party team meetings.
               </p>
             </div>
           </div>
 
-          <div className="space-y-4">
-            <div>
-              <div className="flex justify-between text-xs text-slate-300 mb-1.5">
+          <div className="analytics-view-size-list">
+            <div className="analytics-view-size-row">
+              <div className="analytics-view-size-header">
                 <span>1:1 Direct Syncs (2 people)</span>
-                <span className="font-mono text-emerald-400 font-semibold">
+                <span
+                  className="analytics-view-size-count"
+                  style={{ color: '#22c55e' }}
+                >
                   {summary.typeBreakdown.oneOnOne}
                 </span>
               </div>
-              <div className="w-full h-2 bg-slate-800 rounded-full overflow-hidden">
+              <div className="analytics-view-progress-track">
                 <div
-                  className="h-full bg-emerald-500 rounded-full"
+                  className="analytics-view-progress-fill green"
                   style={{
                     width: `${
                       summary.totalMeetings > 0
@@ -326,16 +332,19 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
               </div>
             </div>
 
-            <div>
-              <div className="flex justify-between text-xs text-slate-300 mb-1.5">
+            <div className="analytics-view-size-row">
+              <div className="analytics-view-size-header">
                 <span>Small Group (3–5 people)</span>
-                <span className="font-mono text-indigo-400 font-semibold">
+                <span
+                  className="analytics-view-size-count"
+                  style={{ color: 'var(--accent)' }}
+                >
                   {summary.typeBreakdown.smallGroup}
                 </span>
               </div>
-              <div className="w-full h-2 bg-slate-800 rounded-full overflow-hidden">
+              <div className="analytics-view-progress-track">
                 <div
-                  className="h-full bg-indigo-500 rounded-full"
+                  className="analytics-view-progress-fill indigo"
                   style={{
                     width: `${
                       summary.totalMeetings > 0
@@ -349,16 +358,19 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
               </div>
             </div>
 
-            <div>
-              <div className="flex justify-between text-xs text-slate-300 mb-1.5">
+            <div className="analytics-view-size-row">
+              <div className="analytics-view-size-header">
                 <span>Large Group (6+ attendees)</span>
-                <span className="font-mono text-amber-400 font-semibold">
+                <span
+                  className="analytics-view-size-count"
+                  style={{ color: '#f59e0b' }}
+                >
                   {summary.typeBreakdown.largeGroup}
                 </span>
               </div>
-              <div className="w-full h-2 bg-slate-800 rounded-full overflow-hidden">
+              <div className="analytics-view-progress-track">
                 <div
-                  className="h-full bg-amber-500 rounded-full"
+                  className="analytics-view-progress-fill amber"
                   style={{
                     width: `${
                       summary.totalMeetings > 0
@@ -376,60 +388,60 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
       </div>
 
       {/* Feature Engagement & Productivity Recommendations */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="analytics-view-grid-2col">
         {/* Left: In-Call Collaboration Feature Adoption */}
-        <section className="bg-slate-900/50 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-4">
-          <div className="flex items-center gap-2.5">
-            <div className="p-2 rounded-xl bg-slate-800 text-slate-300 border border-slate-700">
-              <Zap className="w-4 h-4 text-amber-400" />
+        <section className="analytics-view-card">
+          <div className="analytics-view-card-header">
+            <div className="analytics-view-kpi-icon amber">
+              <Zap size={16} />
             </div>
             <div>
-              <h3 className="text-base font-semibold text-white">
+              <h3 className="analytics-view-card-title">
                 In-Call Feature Engagement
               </h3>
-              <p className="text-xs text-slate-400">
+              <p className="analytics-view-card-desc">
                 Percentage of calls utilizing interactive collaboration tools.
               </p>
             </div>
           </div>
 
-          <div className="space-y-3.5 pt-2">
-            <div className="flex items-center justify-between text-xs">
-              <div className="flex items-center gap-2 text-slate-300">
-                <FileText className="w-4 h-4 text-indigo-400" />
+          <div className="analytics-view-feature-list">
+            <div className="analytics-view-feature-row">
+              <div className="analytics-view-feature-label">
+                <FileText size={15} style={{ color: 'var(--accent)' }} />
                 <span>Shared Notes &amp; Action Items</span>
               </div>
-              <span className="font-mono text-slate-200">
+              <span className="analytics-view-feature-val">
                 {summary.featureEngagement.notesLinkedPct}%
               </span>
             </div>
 
-            <div className="flex items-center justify-between text-xs">
-              <div className="flex items-center gap-2 text-slate-300">
-                <MessageSquare className="w-4 h-4 text-emerald-400" />
+            <div className="analytics-view-feature-row">
+              <div className="analytics-view-feature-label">
+                <MessageSquare size={15} style={{ color: '#22c55e' }} />
                 <span>In-Call Chat &amp; Reactions</span>
               </div>
-              <span className="font-mono text-slate-200">
+              <span className="analytics-view-feature-val">
                 {summary.featureEngagement.chatUsedPct}%
               </span>
             </div>
 
-            <div className="flex items-center justify-between text-xs">
-              <div className="flex items-center gap-2 text-slate-300">
-                <Paintbrush className="w-4 h-4 text-sky-400" />
+            <div className="analytics-view-feature-row">
+              <div className="analytics-view-feature-label">
+                <Paintbrush size={15} style={{ color: '#0284c7' }} />
                 <span>Collaborative Whiteboard</span>
               </div>
-              <span className="font-mono text-slate-200">
+              <span className="analytics-view-feature-val">
                 {summary.featureEngagement.whiteboardUsedPct}%
               </span>
             </div>
 
-            <div className="flex items-center justify-between text-xs">
-              <div className="flex items-center gap-2 text-slate-300">
-                <ScreenShare className="w-4 h-4 text-purple-400" />
+            <div className="analytics-view-feature-row">
+              <div className="analytics-view-feature-label">
+                <ScreenShare size={15} style={{ color: '#a855f7' }} />
                 <span>Screen Sharing &amp; Demos</span>
               </div>
-              <span className="font-mono text-slate-200">
+              <span className="analytics-view-feature-val">
                 {summary.featureEngagement.screenShareUsedPct}%
               </span>
             </div>
@@ -437,29 +449,33 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
         </section>
 
         {/* Right: Smart Productivity Recommendations */}
-        <section className="bg-slate-900/50 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-4">
-          <div className="flex items-center gap-2.5">
-            <div className="p-2 rounded-xl bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
-              <Sparkles className="w-4 h-4" />
+        <section className="analytics-view-card">
+          <div className="analytics-view-card-header">
+            <div className="analytics-view-kpi-icon indigo">
+              <Sparkles size={16} />
             </div>
             <div>
-              <h3 className="text-base font-semibold text-white">
+              <h3 className="analytics-view-card-title">
                 Productivity Recommendations
               </h3>
-              <p className="text-xs text-slate-400">
+              <p className="analytics-view-card-desc">
                 Actionable tips derived from your meeting patterns.
               </p>
             </div>
           </div>
 
-          <div className="space-y-3 pt-2">
+          <div className="analytics-view-recs-list">
             {summary.recommendations.map((rec, i) => (
-              <div
-                key={i}
-                className="bg-slate-800/40 border border-slate-700/40 rounded-xl p-3.5 flex items-start gap-3"
-              >
-                <Info className="w-4 h-4 text-indigo-400 shrink-0 mt-0.5" />
-                <p className="text-xs text-slate-300 leading-relaxed">{rec}</p>
+              <div key={i} className="analytics-view-rec-card">
+                <Info
+                  size={15}
+                  style={{
+                    color: 'var(--accent)',
+                    flexShrink: 0,
+                    marginTop: '2px',
+                  }}
+                />
+                <p>{rec}</p>
               </div>
             ))}
           </div>
@@ -467,15 +483,13 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
       </div>
 
       {/* Privacy Guarantee Footer Pill */}
-      <div className="bg-slate-900/40 border border-slate-800 rounded-xl p-4 flex items-center justify-between text-xs text-slate-400">
-        <div className="flex items-center gap-2">
-          <ShieldCheck className="w-4 h-4 text-emerald-400" />
-          <span>
-            <strong>Privacy Guarantee:</strong> All meeting analytics are
-            aggregated locally on-device. MeetIT never inspects audio, sells
-            meeting data, or embeds third-party trackers.
-          </span>
-        </div>
+      <div className="analytics-view-privacy-card">
+        <ShieldCheck size={18} />
+        <span>
+          <strong>Privacy Guarantee:</strong> All meeting analytics are
+          aggregated locally on-device. MeetIT never inspects audio, sells
+          meeting data, or embeds third-party trackers.
+        </span>
       </div>
     </div>
   );

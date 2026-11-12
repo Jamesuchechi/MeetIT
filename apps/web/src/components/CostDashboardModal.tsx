@@ -98,26 +98,23 @@ export const CostDashboardModal: React.FC<CostDashboardModalProps> = ({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in"
+      className="cost-modal-backdrop"
       role="dialog"
       aria-modal="true"
       aria-labelledby="cost-dashboard-title"
     >
-      <div className="bg-slate-900 border border-slate-700/80 rounded-2xl w-full max-w-2xl max-h-[90vh] flex flex-col shadow-2xl text-slate-100 overflow-hidden">
+      <div className="cost-modal-card">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800 bg-slate-900/50">
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-              <DollarSign className="w-5 h-5" />
+        <div className="cost-modal-header">
+          <div className="cost-modal-title-group">
+            <div className="cost-modal-icon-badge">
+              <DollarSign size={18} />
             </div>
             <div>
-              <h2
-                id="cost-dashboard-title"
-                className="text-lg font-semibold text-white"
-              >
-                Cost, Scale & Carbon Telemetry
+              <h2 id="cost-dashboard-title" className="cost-modal-title">
+                Cost, Scale &amp; Carbon Telemetry
               </h2>
-              <p className="text-xs text-slate-400">
+              <p className="cost-modal-subtitle">
                 Real-time meeting efficiency, relay ratio, and environmental
                 impact
               </p>
@@ -125,69 +122,81 @@ export const CostDashboardModal: React.FC<CostDashboardModalProps> = ({
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition"
+            className="cost-modal-close-btn"
             aria-label="Close cost telemetry"
           >
-            <X className="w-5 h-5" />
+            <X size={18} />
           </button>
         </div>
 
         {/* Content Body */}
-        <div className="p-6 overflow-y-auto space-y-6">
+        <div className="cost-modal-body">
           {/* Key Metrics Grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div className="bg-slate-800/60 border border-slate-700/50 rounded-xl p-4">
-              <span className="text-xs font-medium text-slate-400 block mb-1">
-                Estimated Total Cost
+          <div className="cost-modal-kpi-grid">
+            <div className="cost-modal-kpi-card">
+              <span className="cost-modal-kpi-label">Estimated Total Cost</span>
+              <span className="cost-modal-kpi-val" style={{ color: '#22c55e' }}>
+                {formatUsd(cost.totalCostUsd)}
               </span>
-              <div className="flex items-baseline gap-1">
-                <span className="text-2xl font-bold text-emerald-400">
-                  {formatUsd(cost.totalCostUsd)}
-                </span>
-              </div>
-              <span className="text-[11px] text-slate-500 block mt-1">
+              <span className="cost-modal-kpi-sub">
                 {cost.costPerParticipantMinuteUsd > 0
                   ? `${(cost.costPerParticipantMinuteUsd * 100).toFixed(3)}¢ / part-min`
                   : 'Free tier / Direct P2P'}
               </span>
             </div>
 
-            <div className="bg-slate-800/60 border border-slate-700/50 rounded-xl p-4">
-              <div className="flex items-center justify-between mb-1">
-                <span className="text-xs font-medium text-slate-400">
-                  TURN Relay Ratio
-                </span>
+            <div className="cost-modal-kpi-card">
+              <div className="cost-modal-kpi-label">
+                <span>TURN Relay Ratio</span>
                 {relayHealth.status === 'optimal' ? (
-                  <span className="flex items-center gap-1 text-[10px] text-emerald-400 font-medium">
-                    <ShieldCheck className="w-3 h-3" /> Optimal
+                  <span
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '4px',
+                      color: '#22c55e',
+                      fontSize: '10px',
+                      fontWeight: 600,
+                    }}
+                  >
+                    <ShieldCheck size={12} /> Optimal
                   </span>
                 ) : (
-                  <span className="flex items-center gap-1 text-[10px] text-amber-400 font-medium">
-                    <AlertTriangle className="w-3 h-3" /> Elevated
+                  <span
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '4px',
+                      color: '#f59e0b',
+                      fontSize: '10px',
+                      fontWeight: 600,
+                    }}
+                  >
+                    <AlertTriangle size={12} /> Elevated
                   </span>
                 )}
               </div>
-              <div className="flex items-baseline gap-1">
-                <span className="text-2xl font-bold text-white">
-                  {cost.relayRatioPct}%
-                </span>
-              </div>
-              <span className="text-[11px] text-slate-500 block mt-1">
+              <span className="cost-modal-kpi-val">{cost.relayRatioPct}%</span>
+              <span className="cost-modal-kpi-sub">
                 {relayMb} MB relay / {totalMb} MB total
               </span>
             </div>
 
-            <div className="bg-slate-800/60 border border-slate-700/50 rounded-xl p-4">
-              <span className="text-xs font-medium text-slate-400 block mb-1">
-                Carbon Footprint
-              </span>
-              <div className="flex items-baseline gap-1">
-                <span className="text-2xl font-bold text-emerald-400">
-                  {carbon.totalCarbonGrams}
+            <div className="cost-modal-kpi-card">
+              <span className="cost-modal-kpi-label">Carbon Footprint</span>
+              <span className="cost-modal-kpi-val" style={{ color: '#22c55e' }}>
+                {carbon.totalCarbonGrams}{' '}
+                <span
+                  style={{
+                    fontSize: '12px',
+                    fontWeight: 500,
+                    color: 'var(--muted)',
+                  }}
+                >
+                  g CO₂e
                 </span>
-                <span className="text-xs text-slate-400">g CO₂e</span>
-              </div>
-              <span className="text-[11px] text-slate-500 block mt-1">
+              </span>
+              <span className="cost-modal-kpi-sub">
                 ~{carbon.carMilesEquivalent} car-miles equiv
               </span>
             </div>
@@ -195,91 +204,181 @@ export const CostDashboardModal: React.FC<CostDashboardModalProps> = ({
 
           {/* 1:1 P2P Direct Bypass Alert / Status */}
           {cost.isP2PBypassEligible ? (
-            <div className="bg-indigo-500/10 border border-indigo-500/20 rounded-xl p-4 flex items-start gap-3">
-              <div className="p-2 rounded-lg bg-indigo-500/20 text-indigo-400 shrink-0">
-                <TrendingDown className="w-5 h-5" />
+            <div
+              className="cost-modal-alert optimal"
+              style={{
+                background: 'rgba(99, 102, 241, 0.1)',
+                borderColor: 'rgba(99, 102, 241, 0.25)',
+              }}
+            >
+              <div
+                style={{
+                  padding: '6px',
+                  borderRadius: '6px',
+                  background: 'rgba(99, 102, 241, 0.2)',
+                  color: 'var(--accent)',
+                  flexShrink: 0,
+                }}
+              >
+                <TrendingDown size={18} />
               </div>
               <div>
-                <h4 className="text-sm font-semibold text-indigo-300">
+                <h4
+                  style={{
+                    margin: 0,
+                    fontSize: '13px',
+                    fontWeight: 600,
+                    color: 'var(--ink)',
+                  }}
+                >
                   1:1 P2P Direct Bypass Active
                 </h4>
-                <p className="text-xs text-indigo-200/80 mt-1">
+                <p
+                  style={{
+                    margin: '3px 0 0',
+                    fontSize: '11.5px',
+                    color: 'var(--muted)',
+                  }}
+                >
                   Because this call has exactly 2 participants, media streams
                   are routed directly peer-to-peer (bypassing the SFU),
                   eliminating 100% of cloud SFU egress costs.
                 </p>
                 {cost.estimatedP2PSavingsUsd > 0 && (
-                  <span className="inline-block mt-2 text-xs font-medium text-indigo-300 bg-indigo-500/20 px-2 py-0.5 rounded-full">
+                  <span
+                    style={{
+                      display: 'inline-block',
+                      marginTop: '6px',
+                      fontSize: '11px',
+                      fontWeight: 600,
+                      color: 'var(--accent)',
+                      background: 'var(--soft)',
+                      padding: '2px 8px',
+                      borderRadius: '9999px',
+                    }}
+                  >
                     Estimated savings: {formatUsd(cost.estimatedP2PSavingsUsd)}
                   </span>
                 )}
               </div>
             </div>
           ) : (
-            <div className="bg-slate-800/40 border border-slate-700/40 rounded-xl p-4 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <Server className="w-5 h-5 text-slate-400" />
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: '12px 14px',
+                background: 'var(--bg)',
+                border: '1px solid var(--line)',
+                borderRadius: '10px',
+              }}
+            >
+              <div
+                style={{ display: 'flex', alignItems: 'center', gap: '10px' }}
+              >
+                <Server size={18} style={{ color: 'var(--muted)' }} />
                 <div>
-                  <h4 className="text-xs font-semibold text-slate-300">
+                  <h4
+                    style={{
+                      margin: 0,
+                      fontSize: '12px',
+                      fontWeight: 600,
+                      color: 'var(--ink)',
+                    }}
+                  >
                     Multi-Party SFU Cascaded Mesh
                   </h4>
-                  <p className="text-[11px] text-slate-500">
+                  <p
+                    style={{
+                      margin: '2px 0 0',
+                      fontSize: '11px',
+                      color: 'var(--muted)',
+                    }}
+                  >
                     {participantCount} participants connected via regional media
                     SFU
                   </p>
                 </div>
               </div>
-              <span className="text-xs px-2.5 py-1 bg-slate-700/50 rounded-md text-slate-300 font-mono">
+              <span
+                style={{
+                  fontSize: '11px',
+                  padding: '3px 8px',
+                  background: 'var(--surface)',
+                  borderRadius: '6px',
+                  border: '1px solid var(--line)',
+                  color: 'var(--ink)',
+                  fontFamily: 'monospace',
+                }}
+              >
                 {cost.participantMinutes} part-mins
               </span>
             </div>
           )}
 
           {/* Cost Allocation Breakdown */}
-          <div className="space-y-3">
-            <h4 className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            <h4
+              style={{
+                margin: 0,
+                fontSize: '11.5px',
+                fontWeight: 600,
+                color: 'var(--muted)',
+                textTransform: 'uppercase',
+                letterSpacing: '0.04em',
+              }}
+            >
               Expense Itemization
             </h4>
-            <div className="bg-slate-800/40 border border-slate-700/40 rounded-xl divide-y divide-slate-800 text-xs">
-              <div className="flex items-center justify-between p-3">
-                <div className="flex items-center gap-2 text-slate-300">
-                  <Server className="w-4 h-4 text-slate-500" />
+            <div className="cost-modal-table-box">
+              <div className="cost-modal-table-row">
+                <div
+                  style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
+                >
+                  <Server size={14} style={{ color: 'var(--muted)' }} />
                   <span>
-                    SFU Compute & Forwarding ({cost.participantMinutes}{' '}
+                    SFU Compute &amp; Forwarding ({cost.participantMinutes}{' '}
                     part-mins)
                   </span>
                 </div>
-                <span className="font-mono text-slate-200">
+                <span style={{ fontFamily: 'monospace', fontWeight: 600 }}>
                   {formatUsd(cost.sfuComputeCostUsd)}
                 </span>
               </div>
 
-              <div className="flex items-center justify-between p-3">
-                <div className="flex items-center gap-2 text-slate-300">
-                  <Globe className="w-4 h-4 text-slate-500" />
+              <div className="cost-modal-table-row">
+                <div
+                  style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
+                >
+                  <Globe size={14} style={{ color: 'var(--muted)' }} />
                   <span>Direct SFU Egress ({directMb} MB @ $0.05/GB)</span>
                 </div>
-                <span className="font-mono text-slate-200">
+                <span style={{ fontFamily: 'monospace', fontWeight: 600 }}>
                   {formatUsd(cost.sfuEgressCostUsd)}
                 </span>
               </div>
 
-              <div className="flex items-center justify-between p-3">
-                <div className="flex items-center gap-2 text-slate-300">
-                  <Radio className="w-4 h-4 text-slate-500" />
+              <div className="cost-modal-table-row">
+                <div
+                  style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
+                >
+                  <Radio size={14} style={{ color: 'var(--muted)' }} />
                   <span>TURN Relay Egress ({relayMb} MB @ $0.15/GB)</span>
                 </div>
-                <span className="font-mono text-slate-200">
+                <span style={{ fontFamily: 'monospace', fontWeight: 600 }}>
                   {formatUsd(cost.turnRelayCostUsd)}
                 </span>
               </div>
 
-              <div className="flex items-center justify-between p-3">
-                <div className="flex items-center gap-2 text-slate-300">
-                  <Zap className="w-4 h-4 text-slate-500" />
+              <div className="cost-modal-table-row">
+                <div
+                  style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
+                >
+                  <Zap size={14} style={{ color: 'var(--muted)' }} />
                   <span>Signaling WebSocket State</span>
                 </div>
-                <span className="font-mono text-slate-200">
+                <span style={{ fontFamily: 'monospace', fontWeight: 600 }}>
                   {formatUsd(cost.signalingCostUsd)}
                 </span>
               </div>
@@ -287,35 +386,103 @@ export const CostDashboardModal: React.FC<CostDashboardModalProps> = ({
           </div>
 
           {/* Environmental Carbon Savings */}
-          <div className="bg-emerald-950/20 border border-emerald-500/20 rounded-xl p-4 space-y-3">
-            <div className="flex items-center gap-2 text-emerald-400">
-              <Leaf className="w-4 h-4" />
-              <h4 className="text-xs font-semibold uppercase tracking-wider">
+          <div
+            style={{
+              background: 'rgba(34, 197, 94, 0.08)',
+              border: '1px solid rgba(34, 197, 94, 0.22)',
+              borderRadius: '12px',
+              padding: '14px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '10px',
+            }}
+          >
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                color: '#22c55e',
+              }}
+            >
+              <Leaf size={16} />
+              <h4
+                style={{
+                  margin: 0,
+                  fontSize: '11.5px',
+                  fontWeight: 600,
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.04em',
+                }}
+              >
                 Green Meeting Impact
               </h4>
             </div>
-            <p className="text-xs text-slate-300">
+            <p style={{ margin: 0, fontSize: '12px', color: 'var(--ink)' }}>
               Active Region:{' '}
-              <span className="font-semibold text-emerald-300">
-                {currentRegionId}
-              </span>{' '}
-              ({gridIntensity} g CO₂/kWh grid intensity). By meeting remotely
+              <strong style={{ color: '#22c55e' }}>{currentRegionId}</strong> (
+              {gridIntensity} g CO₂/kWh grid intensity). By meeting remotely
               instead of commuting, this group avoided an estimated:
             </p>
-            <div className="grid grid-cols-2 gap-3 pt-1">
-              <div className="bg-slate-900/60 p-2.5 rounded-lg border border-slate-800">
-                <span className="text-[11px] text-slate-400 block">
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: '1fr 1fr',
+                gap: '10px',
+                paddingTop: '2px',
+              }}
+            >
+              <div
+                style={{
+                  background: 'var(--surface)',
+                  padding: '10px 12px',
+                  borderRadius: '8px',
+                  border: '1px solid var(--line)',
+                }}
+              >
+                <span
+                  style={{
+                    fontSize: '11px',
+                    color: 'var(--muted)',
+                    display: 'block',
+                  }}
+                >
                   Commute Emissions Avoided
                 </span>
-                <span className="text-base font-bold text-emerald-400">
+                <span
+                  style={{
+                    fontSize: '15px',
+                    fontWeight: 700,
+                    color: '#22c55e',
+                  }}
+                >
                   {(carbon.commuteSavedGrams / 1000).toFixed(2)} kg CO₂e
                 </span>
               </div>
-              <div className="bg-slate-900/60 p-2.5 rounded-lg border border-slate-800">
-                <span className="text-[11px] text-slate-400 block">
+              <div
+                style={{
+                  background: 'var(--surface)',
+                  padding: '10px 12px',
+                  borderRadius: '8px',
+                  border: '1px solid var(--line)',
+                }}
+              >
+                <span
+                  style={{
+                    fontSize: '11px',
+                    color: 'var(--muted)',
+                    display: 'block',
+                  }}
+                >
                   Urban Trees Absorbed Equiv
                 </span>
-                <span className="text-base font-bold text-emerald-400">
+                <span
+                  style={{
+                    fontSize: '15px',
+                    fontWeight: 700,
+                    color: '#22c55e',
+                  }}
+                >
                   {carbon.treesOffsetEquivalent} trees/year
                 </span>
               </div>
@@ -324,14 +491,33 @@ export const CostDashboardModal: React.FC<CostDashboardModalProps> = ({
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-4 border-t border-slate-800 bg-slate-900/80 flex items-center justify-between">
-          <div className="flex items-center gap-2 text-xs text-slate-400">
-            <Activity className="w-4 h-4 text-emerald-400 animate-pulse" />
+        <div
+          style={{
+            padding: '14px 20px',
+            borderTop: '1px solid var(--line)',
+            background: 'var(--surface)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+          }}
+        >
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              fontSize: '12px',
+              color: 'var(--muted)',
+            }}
+          >
+            <Activity size={15} style={{ color: '#22c55e' }} />
             <span>Updated live from WebRTC transport telemetry</span>
           </div>
           <button
+            type="button"
             onClick={onClose}
-            className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium rounded-lg transition"
+            className="btn secondary"
+            style={{ fontSize: '12px', padding: '6px 14px' }}
           >
             Dismiss
           </button>
