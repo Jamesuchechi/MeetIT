@@ -23,6 +23,23 @@ describe('DashboardView Component & Cost Tab', () => {
 
     expect(html).toContain('data-testid="sidebar-cost-btn"');
     expect(html).toContain('Cost &amp; Scale');
+    expect(html).toContain('data-testid="sidebar-analytics-btn"');
+    expect(html).toContain('Analytics');
+  });
+
+  it('renders Analytics view when activeTab is analytics', () => {
+    const html = renderToStaticMarkup(
+      <DashboardView
+        user={mockUser}
+        initialTab="analytics"
+        onEnterRoom={vi.fn()}
+        onToast={vi.fn()}
+      />,
+    );
+
+    expect(html).toContain('Meeting Analytics &amp; Insights');
+    expect(html).toContain('Total Meeting Time');
+    expect(html).toContain('Focus Time Ratio');
   });
 
   it('renders Cost & Scale Telemetry view when activeTab is cost', () => {

@@ -97,6 +97,14 @@ function parseLocationRoute(
     return { view: 'dashboard', roomCode: null, dashTab: 'settings' };
   }
   if (
+    target === 'analytics' ||
+    target === 'dashboard/analytics' ||
+    target === 'insights' ||
+    target === 'dashboard/insights'
+  ) {
+    return { view: 'dashboard', roomCode: null, dashTab: 'analytics' };
+  }
+  if (
     target === 'cost' ||
     target === 'telemetry' ||
     target === 'dashboard/cost' ||

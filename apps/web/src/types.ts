@@ -22,6 +22,7 @@ export type DashboardTab =
   | 'recordings'
   | 'transcripts'
   | 'developer'
+  | 'analytics'
   | 'cost'
   | 'settings'
   | 'profile'

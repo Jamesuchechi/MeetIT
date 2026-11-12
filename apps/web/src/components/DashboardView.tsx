@@ -4,6 +4,7 @@ import {
   MessageSquare as MessageSquareIcon,
   Code2 as Code2Icon,
   DollarSign as DollarSignIcon,
+  BarChart3 as BarChartIcon,
 } from 'lucide-react';
 import { Logo } from './Logo';
 import {
@@ -61,6 +62,7 @@ import { NotesView } from './NotesView';
 import { RecordingsView } from './RecordingsView';
 import { TranscriptsView } from './TranscriptsView';
 import { DeveloperHubView } from './DeveloperHubView';
+import { AnalyticsView } from './AnalyticsView';
 import { CostDashboardView } from './CostDashboardView';
 import { BackendStatusIndicator } from './BackendStatusIndicator';
 
@@ -83,6 +85,7 @@ const TAB_LABELS: Record<DashboardTab, string> = {
   recordings: 'Recordings',
   transcripts: 'Transcripts & Captions',
   developer: 'Developer Platform',
+  analytics: 'Meeting Analytics',
   cost: 'Cost & Scale Telemetry',
   settings: 'Settings',
   profile: 'Public Profile',
@@ -405,6 +408,20 @@ export function DashboardView({
           </button>
           <button
             type="button"
+            aria-current={activeTab === 'analytics' ? 'page' : undefined}
+            onClick={() => {
+              selectTab('analytics');
+              setIsNavDrawerOpen(false);
+            }}
+            data-testid="sidebar-analytics-btn"
+          >
+            <span>
+              <BarChartIcon size={16} />
+            </span>
+            <span>Analytics</span>
+          </button>
+          <button
+            type="button"
             aria-current={activeTab === 'cost' ? 'page' : undefined}
             onClick={() => {
               selectTab('cost');
@@ -703,6 +720,8 @@ export function DashboardView({
             />
           ) : activeTab === 'developer' ? (
             <DeveloperHubView onToast={onToast} />
+          ) : activeTab === 'analytics' ? (
+            <AnalyticsView onToast={onToast} />
           ) : activeTab === 'cost' ? (
             <CostDashboardView onToast={onToast} />
           ) : activeTab === 'settings' ? (
