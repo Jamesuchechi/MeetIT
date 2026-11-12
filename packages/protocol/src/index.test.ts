@@ -303,6 +303,10 @@ describe('protocol schemas and utilities', () => {
       userSessionSchema,
       twoFactorConfigSchema,
       soc2ControlSchema,
+      enterpriseSsoConfigSchema,
+      scimUserSchema,
+      enterpriseControlsSchema,
+      vulnerabilityReportSchema,
     } = await import('./index.js');
 
     // E2EE SAS verification
@@ -423,6 +427,84 @@ describe('protocol schemas and utilities', () => {
           'Role-based access control and MFA enforced on critical services',
         status: 'implemented',
         evidence: 'Supabase RLS & WebAuthn 2FA',
+      }).success,
+    ).toBe(true);
+
+    // Enterprise SSO
+    expect(
+      enterpriseSsoConfigSchema.safeParse({
+        id: 'sso_okta_1',
+        organizationId: 'org_acme',
+        providerType: 'saml',
+        idpEntityId: 'http://www.okta.com/exk123456',
+        idpSsoUrl: 'https://acme.okta.com/app/meetit/sso/saml',
+        idpCertificate:
+          '-----BEGIN CERTIFICATE-----\nMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAz...\n-----END CERTIFICATE-----',
+        enforcedDomains: ['acme.com', 'acme.org'],
+        isActive: true,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      }).success,
+    ).toBe(true);
+
+    // SCIM User
+    expect(
+      scimUserSchema.safeParse({
+        id: 'user_scim_1',
+        userName: 'ada.lovelace@acme.com',
+        name: {
+          givenName: 'Ada',
+          familyName: 'Lovelace',
+          formatted: 'Ada Lovelace',
+        },
+        emails: [{ value: 'ada.lovelace@acme.com', primary: true }],
+        active: true,
+        roles: ['member'],
+      }).success,
+    ).toBe(true);
+
+    // Enterprise Controls
+    expect(
+      enterpriseControlsSchema.safeParse({
+        organizationId: 'org_acme',
+        capturedDomains: ['acme.com'],
+        forcedWaitingRoom: true,
+        requireHostPresent: true,
+        preventGuestScreenshare: true,
+        watermarkVideo: false,
+        retentionDaysRecordings: 90,
+        retentionDaysChat: 30,
+        retentionDaysTranscripts: 90,
+        dlpEnabled: true,
+        dlpRules: [
+          {
+            id: 'dlp_1',
+            name: 'Block Payment Cards',
+            category: 'financial_cards',
+            pattern: '\\b(?:4[0-9]{12}(?:[0-9]{3})?|5[1-5][0-9]{14})\\b',
+            action: 'block',
+            enabled: true,
+          },
+        ],
+        updatedAt: Date.now(),
+      }).success,
+    ).toBe(true);
+
+    // Vulnerability Report (Bug Bounty)
+    expect(
+      vulnerabilityReportSchema.safeParse({
+        reporterEmail: 'researcher@sec.io',
+        reporterName: 'Alex Whitehat',
+        targetComponent: 'signaling',
+        severity: 'high',
+        title: 'Improper room leave validation allows ghost participants',
+        vulnerabilityDescription:
+          'When socket disconnects abruptly without leave packet, participant heartbeat timer was not terminating correctly under race conditions.',
+        stepsToReproduce:
+          '1. Connect 2 peers. 2. Terminate socket without TCP close. 3. Observe presence status.',
+        status: 'new',
+        bountyAmountUsd: 1000,
+        createdAt: Date.now(),
       }).success,
     ).toBe(true);
   });

@@ -313,9 +313,9 @@ Every phase has an **exit criteria** block. Do not start the next phase until ex
 - [x] [P1] Abuse reporting, moderation tools, content policy
 - [x] [P1] SOC 2 readiness checklist; data residency options (EU, Africa, US)
 - [x] [P1] DPA, subprocessor list, privacy policy, terms
-- [ ] [P2] SSO (SAML, OIDC) and SCIM provisioning
-- [ ] [P2] Enterprise controls: domain capture, forced waiting room, retention, DLP hooks
-- [ ] [P2] Bug bounty program
+- [x] [P2] SSO (SAML, OIDC) and SCIM provisioning
+- [x] [P2] Enterprise controls: domain capture, forced waiting room, retention, DLP hooks
+- [x] [P2] Bug bounty program
 
 **Exit criteria:** Pen test with zero criticals/highs open; E2EE interoperability tested across Chrome, Firefox, Safari.
 

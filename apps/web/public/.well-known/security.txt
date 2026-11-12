@@ -1,0 +1,11 @@
+# MeetIT Security & Vulnerability Disclosure Policy
+# RFC 9116 Coordinated Vulnerability Disclosure
+Contact: mailto:security@meetit.app
+Contact: https://meetit.app/security/report
+Encryption: https://meetit.app/.well-known/pgp-key.txt
+Acknowledgments: https://meetit.app/security/hall-of-fame
+Policy: https://meetit.app/security/policy
+Preferred-Languages: en
+Canonical: https://meetit.app/.well-known/security.txt
+Hiring: https://meetit.app/careers
+Expires: 2027-12-31T23:59:59.000Z

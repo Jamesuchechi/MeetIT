@@ -1303,6 +1303,14 @@ export function MeetingRoomView({
       }
 
       if (res.stream) {
+        const rawV = res.stream.getVideoTracks()[0];
+        if (rawV) {
+          rawCameraTrackRef.current = rawV;
+        }
+        const rawA = res.stream.getAudioTracks()[0];
+        if (rawA) {
+          rawAudioTrackRef.current = rawA;
+        }
         for (const aTrack of res.stream.getAudioTracks()) {
           aTrack.enabled = !audioMuted;
         }
@@ -1871,6 +1879,27 @@ export function MeetingRoomView({
           videoProcessorRef.current.stop();
           videoProcessorRef.current = null;
         }
+        if (localStreamRef.current && rawCameraTrackRef.current) {
+          const stream = localStreamRef.current;
+          const currentTrack = stream.getVideoTracks()[0];
+          if (currentTrack && currentTrack !== rawCameraTrackRef.current) {
+            stream.removeTrack(currentTrack);
+            stream.addTrack(rawCameraTrackRef.current);
+            const nextStream = new MediaStream(stream.getTracks());
+            localStreamRef.current = nextStream;
+            setLocalStream(nextStream);
+            if (lobbyVideoRef.current) {
+              attachSafeMediaElement(lobbyVideoRef.current, nextStream, {
+                muted: true,
+              });
+            }
+            if (callLocalVideoRef.current) {
+              attachSafeMediaElement(callLocalVideoRef.current, nextStream, {
+                muted: true,
+              });
+            }
+          }
+        }
         if (transportRef.current && rawCameraTrackRef.current) {
           await transportRef.current.replaceTrack(
             'camera',
@@ -1882,6 +1911,7 @@ export function MeetingRoomView({
       }
 
       try {
+        let trackToUse: MediaStreamTrack | null = null;
         if (!videoProcessorRef.current) {
           const processor = new VideoEffectProcessor(newConfig);
           processor.onGesture((gesture) => {
@@ -1894,14 +1924,37 @@ export function MeetingRoomView({
             }
           });
           videoProcessorRef.current = processor;
-          const processedTrack = await processor.processTrack(
-            rawCameraTrackRef.current,
-          );
-          if (transportRef.current) {
-            await transportRef.current.replaceTrack('camera', processedTrack);
-          }
+          trackToUse = await processor.processTrack(rawCameraTrackRef.current);
         } else {
           videoProcessorRef.current.updateConfig(newConfig);
+        }
+
+        if (localStreamRef.current) {
+          const stream = localStreamRef.current;
+          const currentTrack = stream.getVideoTracks()[0];
+          if (trackToUse && currentTrack !== trackToUse) {
+            if (currentTrack) {
+              stream.removeTrack(currentTrack);
+            }
+            stream.addTrack(trackToUse);
+            const nextStream = new MediaStream(stream.getTracks());
+            localStreamRef.current = nextStream;
+            setLocalStream(nextStream);
+            if (lobbyVideoRef.current) {
+              attachSafeMediaElement(lobbyVideoRef.current, nextStream, {
+                muted: true,
+              });
+            }
+            if (callLocalVideoRef.current) {
+              attachSafeMediaElement(callLocalVideoRef.current, nextStream, {
+                muted: true,
+              });
+            }
+          }
+        }
+
+        if (transportRef.current && trackToUse) {
+          await transportRef.current.replaceTrack('camera', trackToUse);
         }
         onToast('Visual effects updated.');
       } catch (err) {
@@ -1951,6 +2004,17 @@ export function MeetingRoomView({
           audioProcessorRef.current.stop();
           audioProcessorRef.current = null;
         }
+        if (localStreamRef.current && rawAudioTrackRef.current) {
+          const stream = localStreamRef.current;
+          const currentTrack = stream.getAudioTracks()[0];
+          if (currentTrack && currentTrack !== rawAudioTrackRef.current) {
+            stream.removeTrack(currentTrack);
+            stream.addTrack(rawAudioTrackRef.current);
+            const nextStream = new MediaStream(stream.getTracks());
+            localStreamRef.current = nextStream;
+            setLocalStream(nextStream);
+          }
+        }
         if (transportRef.current && rawAudioTrackRef.current) {
           await transportRef.current.replaceTrack(
             'microphone',
@@ -1962,6 +2026,7 @@ export function MeetingRoomView({
       }
 
       try {
+        let trackToUse: MediaStreamTrack | null = null;
         if (!audioProcessorRef.current) {
           const processor = new AudioEffectProcessor(newConfig);
           processor.onFeedbackDetected(() => {
@@ -1971,14 +2036,27 @@ export function MeetingRoomView({
             );
           });
           audioProcessorRef.current = processor;
-          const cleanedTrack = await processor.processTrack(
-            rawAudioTrackRef.current,
-          );
-          if (transportRef.current) {
-            await transportRef.current.replaceTrack('microphone', cleanedTrack);
-          }
+          trackToUse = await processor.processTrack(rawAudioTrackRef.current);
         } else {
           audioProcessorRef.current.updateConfig(newConfig);
+        }
+
+        if (localStreamRef.current && trackToUse) {
+          const stream = localStreamRef.current;
+          const currentTrack = stream.getAudioTracks()[0];
+          if (currentTrack !== trackToUse) {
+            if (currentTrack) {
+              stream.removeTrack(currentTrack);
+            }
+            stream.addTrack(trackToUse);
+            const nextStream = new MediaStream(stream.getTracks());
+            localStreamRef.current = nextStream;
+            setLocalStream(nextStream);
+          }
+        }
+
+        if (transportRef.current && trackToUse) {
+          await transportRef.current.replaceTrack('microphone', trackToUse);
         }
         onToast('Audio intelligence settings updated.');
       } catch (err) {
@@ -4039,6 +4117,45 @@ export function MeetingRoomView({
               </div>
             </div>
 
+            {/* Quick Media Controls: Visual Effects & Audio FX */}
+            <div className="lobby-enhancements-row">
+              <button
+                type="button"
+                className="btn btn-sm secondary"
+                onClick={() => setShowVideoEffectsModal(true)}
+                title="Configure virtual backgrounds and visual filters"
+                data-testid="lobby-open-video-effects"
+              >
+                <SparklesIcon size={14} />
+                <span>Visual Effects</span>
+                <span className="enhancement-pill-badge">
+                  {videoEffectsConfig.effect !== 'none'
+                    ? videoEffectsConfig.effect === 'blur-slight'
+                      ? 'Slight Blur'
+                      : videoEffectsConfig.effect === 'blur-heavy'
+                        ? 'Heavy Blur'
+                        : 'Virtual BG'
+                    : 'Off'}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                className="btn btn-sm secondary"
+                onClick={() => setShowAudioEffectsModal(true)}
+                title="Configure AI noise suppression and voice boost"
+                data-testid="lobby-open-audio-effects"
+              >
+                <Volume2Icon size={14} />
+                <span>Audio FX</span>
+                <span className="enhancement-pill-badge">
+                  {audioEffectsConfig.noiseSuppression !== 'off'
+                    ? 'AI Filter'
+                    : 'Standard'}
+                </span>
+              </button>
+            </div>
+
             {/* Device selectors */}
             <div className="lobby-device-selectors">
               <label className="device-select-group">
@@ -4096,37 +4213,6 @@ export function MeetingRoomView({
                   </select>
                 </label>
               )}
-            </div>
-
-            {/* Quick Media Controls: Visual Effects & Audio FX */}
-            <div className="lobby-enhancements-row">
-              <button
-                type="button"
-                className="btn btn-sm secondary"
-                onClick={() => setShowVideoEffectsModal(true)}
-                title="Configure virtual backgrounds and visual filters"
-                data-testid="lobby-open-video-effects"
-              >
-                <SparklesIcon size={14} />
-                <span>Visual Effects</span>
-                {videoEffectsConfig.effect !== 'none' && (
-                  <span className="enhancement-pill-badge">On</span>
-                )}
-              </button>
-
-              <button
-                type="button"
-                className="btn btn-sm secondary"
-                onClick={() => setShowAudioEffectsModal(true)}
-                title="Configure AI noise suppression and voice boost"
-                data-testid="lobby-open-audio-effects"
-              >
-                <Volume2Icon size={14} />
-                <span>Audio FX</span>
-                {audioEffectsConfig.noiseSuppression !== 'off' && (
-                  <span className="enhancement-pill-badge">AI</span>
-                )}
-              </button>
             </div>
 
             {/* Pre-Call Network & Device Diagnostics Probe (WebRTC Loopback + Bandwidth) */}
@@ -4499,7 +4585,11 @@ export function MeetingRoomView({
           onClose={() => setShowVideoEffectsModal(false)}
           currentConfig={videoEffectsConfig}
           onApplyConfig={(cfg) => void handleApplyVideoEffects(cfg)}
-          activeMediaStream={localStream}
+          activeMediaStream={
+            rawCameraTrackRef.current
+              ? new MediaStream([rawCameraTrackRef.current])
+              : localStream
+          }
         />
 
         <AudioEffectsModal
@@ -7994,7 +8084,11 @@ export function MeetingRoomView({
         onClose={() => setShowVideoEffectsModal(false)}
         currentConfig={videoEffectsConfig}
         onApplyConfig={(cfg) => void handleApplyVideoEffects(cfg)}
-        activeMediaStream={localStream}
+        activeMediaStream={
+          rawCameraTrackRef.current
+            ? new MediaStream([rawCameraTrackRef.current])
+            : localStream
+        }
       />
 
       {/* Phase 8 Audio Intelligence & Effects Modal */}

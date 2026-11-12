@@ -27,11 +27,16 @@ import {
   Globe,
   Check,
   Zap,
+  KeyRound,
+  Award,
 } from 'lucide-react';
 import { SecuritySettingsModal } from './SecuritySettingsModal';
 import { ComplianceCenterModal } from './ComplianceCenterModal';
 import { AuditLogModal } from './AuditLogModal';
 import { AccountDeletionModal } from './AccountDeletionModal';
+import { EnterpriseSsoModal } from './EnterpriseSsoModal';
+import { EnterpriseControlsModal } from './EnterpriseControlsModal';
+import { BugBountyModal } from './BugBountyModal';
 import type { AuthUser } from '../types';
 
 const APP_SETTINGS_KEY = 'meetit_app_settings_v1';
@@ -115,6 +120,10 @@ export function SettingsView({
   const [showAuditModal, setShowAuditModal] = useState(false);
   const [showAccountDeletionModal, setShowAccountDeletionModal] =
     useState(false);
+  const [showEnterpriseSsoModal, setShowEnterpriseSsoModal] = useState(false);
+  const [showEnterpriseControlsModal, setShowEnterpriseControlsModal] =
+    useState(false);
+  const [showBugBountyModal, setShowBugBountyModal] = useState(false);
   const [relayPrivacy, setRelayPrivacy] = useState<boolean>(() => {
     try {
       return localStorage.getItem('meetit_relay_privacy_enabled') === 'true';
@@ -716,6 +725,36 @@ export function SettingsView({
 
             <button
               type="button"
+              className="btn secondary"
+              onClick={() => setShowEnterpriseSsoModal(true)}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
+            >
+              <KeyRound size={16} />
+              SSO &amp; SCIM
+            </button>
+
+            <button
+              type="button"
+              className="btn secondary"
+              onClick={() => setShowEnterpriseControlsModal(true)}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
+            >
+              <Globe size={16} />
+              Enterprise Controls &amp; DLP
+            </button>
+
+            <button
+              type="button"
+              className="btn secondary"
+              onClick={() => setShowBugBountyModal(true)}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
+            >
+              <Award size={16} />
+              Bug Bounty Program
+            </button>
+
+            <button
+              type="button"
               className="btn danger-outline"
               onClick={() => setShowAccountDeletionModal(true)}
               style={{
@@ -775,6 +814,24 @@ export function SettingsView({
         onDeleted={() =>
           onToast('Account and all associated records permanently purged.')
         }
+      />
+
+      <EnterpriseSsoModal
+        isOpen={showEnterpriseSsoModal}
+        onClose={() => setShowEnterpriseSsoModal(false)}
+        onToast={onToast}
+      />
+
+      <EnterpriseControlsModal
+        isOpen={showEnterpriseControlsModal}
+        onClose={() => setShowEnterpriseControlsModal(false)}
+        onToast={onToast}
+      />
+
+      <BugBountyModal
+        isOpen={showBugBountyModal}
+        onClose={() => setShowBugBountyModal(false)}
+        onToast={onToast}
       />
     </section>
   );

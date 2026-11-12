@@ -1269,3 +1269,112 @@ export const subprocessorInfoSchema = z.object({
   dpaSigned: z.boolean(),
 });
 export type SubprocessorInfo = z.infer<typeof subprocessorInfoSchema>;
+
+// ============================================================================
+// Phase 10 (Enterprise & Security P2): SSO (SAML/OIDC), SCIM, Controls & Bug Bounty
+// ============================================================================
+
+export const ssoProviderTypeSchema = z.enum(['saml', 'oidc']);
+export type SsoProviderType = z.infer<typeof ssoProviderTypeSchema>;
+
+export const enterpriseSsoConfigSchema = z.object({
+  id: z.string(),
+  organizationId: z.string(),
+  providerType: ssoProviderTypeSchema,
+  idpEntityId: z.string().min(1),
+  idpSsoUrl: z.string().url(),
+  idpCertificate: z.string().optional(),
+  metadataUrl: z.string().url().optional(),
+  enforcedDomains: z.array(z.string()),
+  isActive: z.boolean(),
+  createdAt: z.number().int(),
+  updatedAt: z.number().int(),
+});
+export type EnterpriseSsoConfig = z.infer<typeof enterpriseSsoConfigSchema>;
+
+export const scimUserSchema = z.object({
+  schemas: z
+    .array(z.string())
+    .default(['urn:ietf:params:scim:schemas:core:2.0:User']),
+  id: z.string(),
+  userName: z.string().email(),
+  name: z
+    .object({
+      formatted: z.string().optional(),
+      familyName: z.string().optional(),
+      givenName: z.string().optional(),
+    })
+    .optional(),
+  emails: z.array(
+    z.object({
+      value: z.string().email(),
+      primary: z.boolean().optional(),
+      type: z.string().optional(),
+    }),
+  ),
+  active: z.boolean(),
+  roles: z.array(z.string()).optional(),
+});
+export type ScimUser = z.infer<typeof scimUserSchema>;
+
+export const dlpActionSchema = z.enum(['flag', 'redact', 'block']);
+export type DlpAction = z.infer<typeof dlpActionSchema>;
+
+export const dlpRuleSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  category: z.enum([
+    'financial_cards',
+    'national_id',
+    'api_secrets',
+    'confidential_keywords',
+  ]),
+  pattern: z.string(),
+  action: dlpActionSchema,
+  enabled: z.boolean(),
+});
+export type DlpRule = z.infer<typeof dlpRuleSchema>;
+
+export const enterpriseControlsSchema = z.object({
+  organizationId: z.string(),
+  capturedDomains: z.array(z.string()),
+  domainVerificationTokens: z.record(z.string(), z.string()).optional(),
+  forcedWaitingRoom: z.boolean(),
+  requireHostPresent: z.boolean(),
+  preventGuestScreenshare: z.boolean(),
+  watermarkVideo: z.boolean(),
+  retentionDaysRecordings: z.number().int().min(1).max(3650).nullable(),
+  retentionDaysChat: z.number().int().min(1).max(3650).nullable(),
+  retentionDaysTranscripts: z.number().int().min(1).max(3650).nullable(),
+  dlpEnabled: z.boolean(),
+  dlpRules: z.array(dlpRuleSchema),
+  updatedAt: z.number().int(),
+});
+export type EnterpriseControls = z.infer<typeof enterpriseControlsSchema>;
+
+export const vulnerabilityReportSchema = z.object({
+  id: z.string().optional(),
+  reporterEmail: z.string().email(),
+  reporterName: z.string().optional(),
+  pgpKeyFingerprint: z.string().optional(),
+  targetComponent: z.enum([
+    'signaling',
+    'e2ee',
+    'media',
+    'auth',
+    'api',
+    'web',
+    'other',
+  ]),
+  severity: z.enum(['critical', 'high', 'medium', 'low']),
+  title: z.string().min(5).max(200),
+  vulnerabilityDescription: z.string().min(20).max(5000),
+  stepsToReproduce: z.string().min(20).max(5000),
+  impactAssessment: z.string().max(2000).optional(),
+  status: z
+    .enum(['new', 'triaged', 'bounty_awarded', 'resolved', 'closed'])
+    .default('new'),
+  bountyAmountUsd: z.number().int().min(0).default(0),
+  createdAt: z.number().int(),
+});
+export type VulnerabilityReport = z.infer<typeof vulnerabilityReportSchema>;
