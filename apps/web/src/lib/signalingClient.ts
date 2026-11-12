@@ -7,6 +7,7 @@ import {
   type BreakoutState,
   type ChatAttachment,
   type ClientMessage,
+  type DeviceHandoffState,
   type FormItSession,
   type HandRaiseItem,
   type HostActionPayload,
@@ -286,6 +287,9 @@ export class SignalingClient implements SignalingChannel {
     'webinar.stream_updated': new Set(),
     'webinar.simulive_updated': new Set(),
     'webinar.analytics_updated': new Set(),
+    'handoff.offered': new Set(),
+    'handoff.claimed': new Set(),
+    'handoff.transferred': new Set(),
     error: new Set(),
     pong: new Set(),
   };
@@ -1348,6 +1352,37 @@ export class SignalingClient implements SignalingChannel {
       v: 1,
       type: 'state.update',
       payload: this.currentState,
+    });
+  }
+
+  sendHandoffInitiate(payload: {
+    token: string;
+    handoffState: DeviceHandoffState;
+  }): void {
+    this.send({
+      v: 1,
+      type: 'handoff.initiate',
+      payload,
+    });
+  }
+
+  sendHandoffClaim(payload: { token: string; targetDevice: string }): void {
+    this.send({
+      v: 1,
+      type: 'handoff.claim',
+      payload,
+    });
+  }
+
+  sendHandoffComplete(payload: {
+    token: string;
+    targetDevice: string;
+    completedBy?: string;
+  }): void {
+    this.send({
+      v: 1,
+      type: 'handoff.complete',
+      payload,
     });
   }
 

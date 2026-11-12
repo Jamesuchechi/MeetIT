@@ -65,6 +65,11 @@ import {
 import { E2eeVerificationModal } from './E2eeVerificationModal';
 import { ReportAbuseModal } from './ReportAbuseModal';
 import { AuditLogModal } from './AuditLogModal';
+import { DeviceHandoffModal } from './DeviceHandoffModal';
+import {
+  extractHandoffToken,
+  getDeviceDescriptor,
+} from '../lib/deviceHandoffService';
 import { logAuditEvent } from '../lib/auditService';
 import { generateSasFromFingerprint, type E2eeSasResult } from '@meetit/media';
 import {
@@ -106,6 +111,7 @@ import {
   LayoutGrid as LayoutGridIcon,
   Shapes as ShapesIcon,
   FlipHorizontal as FlipHorizontalIcon,
+  ArrowRightLeft as ArrowRightLeftIcon,
   ShieldCheck as ShieldCheckIcon,
   Shield as ShieldIcon,
   Flag as FlagIcon,
@@ -872,6 +878,12 @@ export function MeetingRoomView({
     displayName: string;
   } | null>(null);
   const [showAuditLogModal, setShowAuditLogModal] = useState(false);
+  // Phase 11: Seamless Device Handoff state
+  const [showDeviceHandoffModal, setShowDeviceHandoffModal] = useState(false);
+  const incomingHandoffToken = useMemo(() => {
+    if (typeof window === 'undefined') return null;
+    return extractHandoffToken(window.location.search);
+  }, []);
   const [e2eeEpoch, setE2eeEpoch] = useState(0);
   const [relayPrivacyActive] = useState<boolean>(() => {
     try {
@@ -1254,6 +1266,7 @@ export function MeetingRoomView({
   const seenAttendeesRef = useRef<Map<string, MeetingAttendeeRecord>>(
     new Map(),
   );
+  const handleHangUpRef = useRef<() => void>(() => {});
 
   useEffect(() => {
     showChatPanelRef.current = showChatPanel;
@@ -2609,6 +2622,17 @@ export function MeetingRoomView({
         playCallChime('join');
       }
 
+      if (incomingHandoffToken) {
+        signaling.sendHandoffComplete({
+          token: incomingHandoffToken,
+          targetDevice: getDeviceDescriptor(),
+        });
+        if (typeof window !== 'undefined' && window.history?.replaceState) {
+          window.history.replaceState({}, '', window.location.pathname);
+        }
+        onToast('Seamlessly switched to this device!');
+      }
+
       recordCallJoinSuccess(roomCode);
 
       const isSfu = payload.transport === 'sfu' && Boolean(payload.livekit);
@@ -3075,6 +3099,14 @@ export function MeetingRoomView({
       },
     );
 
+    signaling.on('handoff.transferred', (evt) => {
+      onToast(
+        `Call transferred to ${evt.targetDevice}. Leaving this device...`,
+      );
+      announce(`Call transferred to ${evt.targetDevice}`);
+      handleHangUpRef.current();
+    });
+
     signaling.on('error', (err) => {
       if (err.code === 'ROOM_FULL') {
         recordCallJoinFailure(roomCode, err.code);
@@ -3214,6 +3246,7 @@ export function MeetingRoomView({
 
     onLeaveCall(roomCode);
   };
+  handleHangUpRef.current = handleHangUp;
 
   // Phase 11: Screen Wake Lock & Media Session API during active calls
   useEffect(() => {
@@ -4518,6 +4551,46 @@ export function MeetingRoomView({
               </div>
             )}
 
+            {incomingHandoffToken && (
+              <div
+                className="lobby-handoff-banner"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 10,
+                  padding: '12px 14px',
+                  borderRadius: 12,
+                  background: 'rgba(37, 99, 235, 0.15)',
+                  border: '1px solid rgba(37, 99, 235, 0.35)',
+                  color: 'var(--ink)',
+                  marginBottom: 16,
+                }}
+              >
+                <ArrowRightLeftIcon
+                  size={18}
+                  style={{ color: 'var(--accent)', flexShrink: 0 }}
+                />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontWeight: 600, fontSize: 13 }}>
+                    Seamless Handoff Detected
+                  </div>
+                  <div style={{ fontSize: 11.5, color: 'var(--muted)' }}>
+                    Switching your call to this device without re-entering
+                    details.
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  className="btn btn-primary btn-sm"
+                  onClick={() => void handleJoinCall()}
+                  disabled={isAcquiringMedia}
+                  style={{ flexShrink: 0 }}
+                >
+                  <span>Switch &amp; Join</span>
+                </button>
+              </div>
+            )}
+
             <div className="lobby-field">
               <label htmlFor="lobbyNameInput">
                 Your display name{' '}
@@ -4824,6 +4897,31 @@ export function MeetingRoomView({
               <span>Relay</span>
             </div>
           )}
+
+          {/* Phase 11: Seamless Device Handoff Quick Pill */}
+          <button
+            type="button"
+            className="call-handoff-chip"
+            onClick={() => setShowDeviceHandoffModal(true)}
+            title="Switch meeting to phone or another computer with QR code"
+            aria-label="Switch Device (Seamless Handoff)"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 4,
+              padding: '3px 8px',
+              borderRadius: 12,
+              background: 'rgba(37, 99, 235, 0.15)',
+              border: '1px solid rgba(37, 99, 235, 0.3)',
+              color: 'var(--accent)',
+              fontSize: '0.75rem',
+              fontWeight: 600,
+              cursor: 'pointer',
+            }}
+          >
+            <ArrowRightLeftIcon size={12} />
+            <span>Switch Device</span>
+          </button>
 
           {totalParticipantCount > 2 && (
             <button
@@ -6802,6 +6900,25 @@ export function MeetingRoomView({
                     type="button"
                     className="call-more-menu-item"
                     onClick={() => {
+                      setShowDeviceHandoffModal(true);
+                      setShowMoreDesktopMenu(false);
+                    }}
+                    data-testid="desktop-menu-handoff-btn"
+                  >
+                    <ArrowRightLeftIcon
+                      size={16}
+                      style={{ color: 'var(--accent)' }}
+                    />
+                    <div className="menu-item-text">
+                      <span>Switch Device (Handoff)</span>
+                      <small>Transfer meeting to phone or another device</small>
+                    </div>
+                  </button>
+
+                  <button
+                    type="button"
+                    className="call-more-menu-item"
+                    onClick={() => {
                       setReportingPeer(
                         remoteList[0]
                           ? {
@@ -7206,6 +7323,28 @@ export function MeetingRoomView({
                     <div className="menu-item-text">
                       <span>Security Audit Log</span>
                       <small>Room access and security trail</small>
+                    </div>
+                  </button>
+
+                  <button
+                    type="button"
+                    className="call-more-menu-item"
+                    onClick={() => {
+                      setShowDeviceHandoffModal(true);
+                      setShowActivitiesPopover(false);
+                      setShowMoreActivitiesSheet(false);
+                    }}
+                    data-testid="call-handoff-btn"
+                  >
+                    <ArrowRightLeftIcon
+                      size={16}
+                      style={{ color: 'var(--accent)' }}
+                    />
+                    <div className="menu-item-text">
+                      <span>Switch Device (Handoff)</span>
+                      <small>
+                        Transfer meeting seamlessly to phone or laptop
+                      </small>
                     </div>
                   </button>
 
@@ -8211,6 +8350,28 @@ export function MeetingRoomView({
         isOpen={showAuditLogModal}
         onClose={() => setShowAuditLogModal(false)}
         userId={user?.id}
+      />
+
+      {/* Phase 11: Seamless Device Handoff Modal */}
+      <DeviceHandoffModal
+        isOpen={showDeviceHandoffModal}
+        onClose={() => setShowDeviceHandoffModal(false)}
+        roomCode={roomCode}
+        userId={user?.id || 'guest-user'}
+        displayName={displayName}
+        role={selfRole}
+        mediaState={{
+          audio: !audioMuted,
+          video: videoEnabled,
+          screen: screenSharing,
+          handRaised: handRaised,
+        }}
+        signalingClient={signalingRef.current}
+        onHandoffComplete={(targetDevice) => {
+          setShowDeviceHandoffModal(false);
+          onToast(`Call transferred to ${targetDevice}. Goodbye!`);
+          handleHangUp();
+        }}
       />
     </div>
   );

@@ -1085,4 +1085,130 @@ describe('Signaling server integration tests', () => {
     guestWs.close();
     lateWs.close();
   });
+
+  it('coordinates seamless device handoff (initiate -> claim -> transferred)', async () => {
+    instance = buildSignalingApp({ logger: false });
+    const address = await instance.app.listen({ port: 0, host: '127.0.0.1' });
+    const wsUrl = address.replace(/^http/, 'ws');
+
+    const roomRes = await fetch(`${address}/rooms`, { method: 'POST' });
+    const room = (await roomRes.json()) as { code: string };
+
+    const phoneWs = new WebSocket(`${wsUrl}/ws?traceId=handoff-phone`);
+    await new Promise((r) => phoneWs.once('open', r));
+
+    const phoneJoinedP = waitForMessage(phoneWs, (m) => m.type === 'joined');
+    phoneWs.send(
+      JSON.stringify({
+        v: 1,
+        type: 'join',
+        payload: {
+          roomCode: room.code,
+          displayName: 'Ada Phone',
+          token: 'guest-token',
+        },
+      }),
+    );
+    await phoneJoinedP;
+
+    const laptopWs = new WebSocket(`${wsUrl}/ws?traceId=handoff-laptop`);
+    await new Promise((r) => laptopWs.once('open', r));
+
+    const laptopJoinedP = waitForMessage(laptopWs, (m) => m.type === 'joined');
+    laptopWs.send(
+      JSON.stringify({
+        v: 1,
+        type: 'join',
+        payload: {
+          roomCode: room.code,
+          displayName: 'Ada Laptop',
+          token: 'guest-token',
+        },
+      }),
+    );
+    await laptopJoinedP;
+
+    // 1. Phone initiates handoff
+    const handoffToken = `mkt_handoff_test_${Date.now()}`;
+    const offeredP = waitForMessage(
+      laptopWs,
+      (m) => m.type === 'handoff.offered',
+    );
+    phoneWs.send(
+      JSON.stringify({
+        v: 1,
+        type: 'handoff.initiate',
+        payload: {
+          token: handoffToken,
+          handoffState: {
+            handoffToken,
+            roomCode: room.code,
+            userId: 'user-ada-1',
+            displayName: 'Ada Lovelace',
+            role: 'host',
+            sourceDevice: 'iPhone 15 Pro',
+            targetDevice: 'MacBook Pro M3',
+            mediaState: {
+              audio: true,
+              video: true,
+              screen: false,
+              handRaised: false,
+            },
+            nonce: 'test-nonce-1234',
+            createdAt: Date.now(),
+            expiresAt: Date.now() + 180000,
+            status: 'pending',
+          },
+        },
+      }),
+    );
+
+    const offered = await offeredP;
+    expect((offered.payload as { token: string }).token).toBe(handoffToken);
+
+    // 2. Laptop claims handoff
+    const claimedP = waitForMessage(
+      phoneWs,
+      (m) => m.type === 'handoff.claimed',
+    );
+    laptopWs.send(
+      JSON.stringify({
+        v: 1,
+        type: 'handoff.claim',
+        payload: {
+          token: handoffToken,
+          targetDevice: 'MacBook Pro M3',
+        },
+      }),
+    );
+
+    const claimed = await claimedP;
+    expect((claimed.payload as { targetDevice: string }).targetDevice).toBe(
+      'MacBook Pro M3',
+    );
+
+    // 3. Laptop completes handoff -> phone receives handoff.transferred
+    const transferredP = waitForMessage(
+      phoneWs,
+      (m) => m.type === 'handoff.transferred',
+    );
+    laptopWs.send(
+      JSON.stringify({
+        v: 1,
+        type: 'handoff.complete',
+        payload: {
+          token: handoffToken,
+          targetDevice: 'MacBook Pro M3',
+        },
+      }),
+    );
+
+    const transferred = await transferredP;
+    expect((transferred.payload as { message: string }).message).toContain(
+      'MacBook Pro M3',
+    );
+
+    phoneWs.close();
+    laptopWs.close();
+  });
 });

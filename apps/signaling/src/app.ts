@@ -2065,6 +2065,46 @@ export function buildSignalingApp(
           }
           break;
         }
+
+        case 'handoff.initiate': {
+          room.broadcast({
+            v: 1,
+            ts: Date.now(),
+            type: 'handoff.offered',
+            payload: {
+              token: msg.payload.token,
+              handoffState: msg.payload.handoffState,
+            },
+          });
+          break;
+        }
+
+        case 'handoff.claim': {
+          room.broadcast({
+            v: 1,
+            ts: Date.now(),
+            type: 'handoff.claimed',
+            payload: {
+              token: msg.payload.token,
+              targetDevice: msg.payload.targetDevice,
+            },
+          });
+          break;
+        }
+
+        case 'handoff.complete': {
+          room.broadcast({
+            v: 1,
+            ts: Date.now(),
+            type: 'handoff.transferred',
+            payload: {
+              token: msg.payload.token,
+              targetDevice: msg.payload.targetDevice,
+              message: `Call seamlessly transferred to ${msg.payload.targetDevice}`,
+            },
+          });
+          break;
+        }
       }
     });
 

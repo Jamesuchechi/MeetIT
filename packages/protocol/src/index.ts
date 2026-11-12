@@ -532,6 +532,35 @@ export const hostActionPayloadSchema = z.discriminatedUnion('action', [
 ]);
 export type HostActionPayload = z.infer<typeof hostActionPayloadSchema>;
 
+export const deviceHandoffStatusSchema = z.enum([
+  'pending',
+  'claimed',
+  'completed',
+  'expired',
+]);
+
+export const deviceHandoffStateSchema = z.object({
+  handoffToken: z.string().min(1),
+  roomCode: z.string().regex(ROOM_CODE_REGEX),
+  userId: z.string().min(1),
+  displayName: z.string().min(1).max(80),
+  role: peerRoleSchema.default('guest'),
+  sourceDevice: z.string().min(1).max(120),
+  targetDevice: z.string().max(120).optional(),
+  mediaState: z.object({
+    audio: z.boolean(),
+    video: z.boolean(),
+    screen: z.boolean().optional(),
+  }),
+  nonce: z.string().min(1),
+  createdAt: z.number().int().positive(),
+  expiresAt: z.number().int().positive(),
+  status: deviceHandoffStatusSchema.default('pending'),
+});
+
+export type DeviceHandoffStatus = z.infer<typeof deviceHandoffStatusSchema>;
+export type DeviceHandoffState = z.infer<typeof deviceHandoffStateSchema>;
+
 export const clientMessageSchema = z.discriminatedUnion('type', [
   z.object({
     v: z.literal(1),
@@ -832,6 +861,37 @@ export const clientMessageSchema = z.discriminatedUnion('type', [
     v: z.literal(1),
     id: z.string().uuid().optional(),
     ts: z.number().optional(),
+    type: z.literal('handoff.initiate'),
+    payload: z.object({
+      token: z.string().min(1),
+      handoffState: deviceHandoffStateSchema,
+    }),
+  }),
+  z.object({
+    v: z.literal(1),
+    id: z.string().uuid().optional(),
+    ts: z.number().optional(),
+    type: z.literal('handoff.claim'),
+    payload: z.object({
+      token: z.string().min(1),
+      targetDevice: z.string().min(1),
+    }),
+  }),
+  z.object({
+    v: z.literal(1),
+    id: z.string().uuid().optional(),
+    ts: z.number().optional(),
+    type: z.literal('handoff.complete'),
+    payload: z.object({
+      token: z.string().min(1),
+      targetDevice: z.string().min(1),
+      completedBy: z.string().optional(),
+    }),
+  }),
+  z.object({
+    v: z.literal(1),
+    id: z.string().uuid().optional(),
+    ts: z.number().optional(),
     type: z.literal('ping'),
     payload: z.object({}),
   }),
@@ -1017,6 +1077,19 @@ export interface SignalingEvents {
   'webinar.analytics_updated': {
     viewerCount: number;
     peakViewers: number;
+  };
+  'handoff.offered': {
+    token: string;
+    handoffState: DeviceHandoffState;
+  };
+  'handoff.claimed': {
+    token: string;
+    targetDevice: string;
+  };
+  'handoff.transferred': {
+    token: string;
+    targetDevice: string;
+    message: string;
   };
   error: { code: ErrorCode; message: string };
   pong: Record<string, never>;

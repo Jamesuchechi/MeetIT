@@ -331,7 +331,7 @@ Every phase has an **exit criteria** block. Do not start the next phase until ex
 - [ ] [P2] Car mode: audio-only, voice commands
 - [ ] [P2] Chromecast / AirPlay sharing
 
-**Exit criteria:** Same account, same meeting, seamless handoff between phone and laptop without rejoining (device switching).
+**Exit criteria:** [x] Same account, same meeting, seamless handoff between phone and laptop without rejoining (device switching).
 
 ---
 

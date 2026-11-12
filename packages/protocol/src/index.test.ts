@@ -5,6 +5,7 @@ import {
   computeBackoffMs,
   generateRoomCode,
   normalizeRoomCode,
+  deviceHandoffStateSchema,
 } from './index.js';
 
 describe('protocol schemas and utilities', () => {
@@ -505,6 +506,51 @@ describe('protocol schemas and utilities', () => {
         status: 'new',
         bountyAmountUsd: 1000,
         createdAt: Date.now(),
+      }).success,
+    ).toBe(true);
+  });
+
+  it('validates Phase 11 device handoff schemas and envelopes', () => {
+    const handoffState = {
+      handoffToken: 'mkt_handoff_987654321_abc',
+      roomCode: 'abc-defg-hij',
+      userId: 'user_123',
+      displayName: 'Ada Lovelace',
+      role: 'host' as const,
+      sourceDevice: 'MacBook Pro (Chrome)',
+      targetDevice: 'iPhone 15 Pro (Safari)',
+      mediaState: {
+        audio: true,
+        video: false,
+      },
+      nonce: 'nonce_xyz_789',
+      createdAt: Date.now(),
+      expiresAt: Date.now() + 300000,
+      status: 'pending' as const,
+    };
+
+    expect(deviceHandoffStateSchema.safeParse(handoffState).success).toBe(true);
+
+    expect(
+      clientMessageSchema.safeParse({
+        v: 1,
+        type: 'handoff.initiate',
+        payload: {
+          token: 'mkt_handoff_987654321_abc',
+          handoffState,
+        },
+      }).success,
+    ).toBe(true);
+
+    expect(
+      clientMessageSchema.safeParse({
+        v: 1,
+        type: 'handoff.complete',
+        payload: {
+          token: 'mkt_handoff_987654321_abc',
+          targetDevice: 'iPhone 15 Pro (Safari)',
+          completedBy: 'user_123',
+        },
       }).success,
     ).toBe(true);
   });
