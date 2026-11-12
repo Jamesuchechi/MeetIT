@@ -1,0 +1,146 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: meetit-signaling
+  namespace: meetit
+  labels:
+    app.kubernetes.io/name: meetit-signaling
+    app.kubernetes.io/part-of: meetit
+    app.kubernetes.io/component: signaling
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: meetit-signaling
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 25%
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: meetit-signaling
+      annotations:
+        prometheus.io/scrape: 'true'
+        prometheus.io/port: '8787'
+        prometheus.io/path: '/metrics/prometheus'
+    spec:
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: meetit-signaling
+      containers:
+        - name: signaling
+          image: meetit/signaling:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http-ws
+              containerPort: 8787
+              protocol: TCP
+          env:
+            - name: NODE_ENV
+              value: 'production'
+            - name: PORT
+              value: '8787'
+            - name: HOST
+              value: '0.0.0.0'
+            - name: REDIS_URL
+              valueFrom:
+                secretKeyRef:
+                  name: meetit-secrets
+                  key: redis-url
+            - name: LIVEKIT_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: meetit-secrets
+                  key: livekit-api-key
+            - name: LIVEKIT_API_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: meetit-secrets
+                  key: livekit-api-secret
+          resources:
+            requests:
+              cpu: 500m
+              memory: 512Mi
+            limits:
+              cpu: 2000m
+              memory: 2048Mi
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8787
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: 8787
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 2
+            successThreshold: 1
+            failureThreshold: 2
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: meetit-signaling-hpa
+  namespace: meetit
+  labels:
+    app.kubernetes.io/name: meetit-signaling
+    app.kubernetes.io/component: autoscaler
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: meetit-signaling
+  minReplicas: 3
+  maxReplicas: 30
+  metrics:
+    # 1. Scale on CPU utilization (Target 70%)
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+    # 2. Scale on Memory utilization (Target 80%)
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 80
+    # 3. Custom metric: Active WebSocket connections per pod (Target 1,500 conn/pod)
+    - type: Pods
+      pods:
+        metric:
+          name: meetit_signaling_connections_active
+        target:
+          type: AverageValue
+          averageValue: '1500'
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 0
+      policies:
+        - type: Percent
+          value: 100
+          periodSeconds: 15
+        - type: Pods
+          value: 4
+          periodSeconds: 15
+      selectPolicy: Max
+    scaleDown:
+      stabilizationWindowSeconds: 300 # 5-minute cooldown to prevent flap during brief attendee dips
+      policies:
+        - type: Percent
+          value: 10
+          periodSeconds: 60
+      selectPolicy: Min

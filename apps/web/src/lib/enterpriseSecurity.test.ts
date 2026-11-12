@@ -1,5 +1,10 @@
-import { describe, expect, it, beforeEach } from 'vitest';
+import { describe, expect, it, beforeEach, vi } from 'vitest';
 import { validateLuhn, scanDlpContent, DEFAULT_DLP_RULES } from './dlpScanner';
+
+vi.mock('./supabase', () => ({
+  supabase: null,
+  isSupabaseConfigured: false,
+}));
 import {
   generateDomainVerificationToken,
   isExpiredUnderRetention,

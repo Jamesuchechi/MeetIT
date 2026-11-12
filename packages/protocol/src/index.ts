@@ -902,6 +902,8 @@ export const liveKitRegionSchema = z.object({
   name: z.string().min(1),
   pingUrl: z.string().min(1),
   isDefault: z.boolean().optional(),
+  cascadesTo: z.array(z.string()).optional(),
+  country: z.string().optional(),
 });
 export type LiveKitRegion = z.infer<typeof liveKitRegionSchema>;
 

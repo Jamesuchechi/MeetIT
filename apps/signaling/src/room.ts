@@ -1802,6 +1802,14 @@ export class RoomManager {
     return this.rooms.size;
   }
 
+  values(): IterableIterator<Room> {
+    return this.rooms.values();
+  }
+
+  listRooms(): Room[] {
+    return Array.from(this.rooms.values());
+  }
+
   createRoom(
     options: {
       code?: string;

@@ -138,3 +138,69 @@ export async function selectOptimalRegion(regions: LiveKitRegion[]): Promise<{
     latencies,
   };
 }
+
+/**
+ * Exponential moving average to smooth RTT jitter across consecutive probes
+ */
+export function smoothLatency(
+  previousRtt: number,
+  newRtt: number,
+  alpha = 0.35,
+): number {
+  if (previousRtt === Infinity) return newRtt;
+  if (newRtt === Infinity) return previousRtt;
+  return Math.round(alpha * newRtt + (1 - alpha) * previousRtt);
+}
+
+/**
+ * Determine failover region when current edge degrades or disconnects.
+ * Prioritizes cascadesTo targets, then lowest-latency healthy alternative.
+ */
+export function getFailoverRegion(
+  currentRegionId: string,
+  regions: LiveKitRegion[],
+  latencies?: Record<string, number>,
+): LiveKitRegion {
+  if (regions.length === 0) return DEFAULT_FALLBACK_REGIONS[0]!;
+  if (regions.length === 1) return regions[0]!;
+
+  const current = regions.find((r) => r.id === currentRegionId);
+  const remaining = regions.filter((r) => r.id !== currentRegionId);
+
+  // 1. If current region specifies explicit cascading destinations, check them first
+  if (current?.cascadesTo && current.cascadesTo.length > 0) {
+    const candidates = remaining.filter((r) =>
+      current.cascadesTo!.includes(r.id),
+    );
+    if (candidates.length > 0) {
+      if (!latencies) return candidates[0]!;
+      let best = candidates[0]!;
+      let minRtt = latencies[best.id] ?? Infinity;
+      for (const cand of candidates) {
+        const rtt = latencies[cand.id] ?? Infinity;
+        if (rtt < minRtt) {
+          minRtt = rtt;
+          best = cand;
+        }
+      }
+      if (minRtt < Infinity) return best;
+    }
+  }
+
+  // 2. Fall back to lowest healthy latency among remaining regions
+  if (latencies) {
+    let bestRemaining = remaining[0]!;
+    let minRtt = latencies[bestRemaining.id] ?? Infinity;
+    for (const reg of remaining) {
+      const rtt = latencies[reg.id] ?? Infinity;
+      if (rtt < minRtt) {
+        minRtt = rtt;
+        bestRemaining = reg;
+      }
+    }
+    if (minRtt < Infinity) return bestRemaining;
+  }
+
+  // 3. Fall back to default or first remaining
+  return remaining.find((r) => r.isDefault) ?? remaining[0]!;
+}

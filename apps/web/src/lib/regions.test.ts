@@ -5,6 +5,8 @@ import {
   probeRegionLatency,
   selectOptimalRegion,
   setSavedPreferredRegion,
+  smoothLatency,
+  getFailoverRegion,
   PREFERRED_REGION_STORAGE_KEY,
   DEFAULT_FALLBACK_REGIONS,
 } from './regions';
@@ -140,5 +142,50 @@ describe('regions module', () => {
     setSavedPreferredRegion('us-east');
     const result = await selectOptimalRegion(candidateRegions);
     expect(result.selectedRegion.id).toBe('us-east');
+  });
+
+  it('smooths latency across jittery probe samples', () => {
+    expect(smoothLatency(100, 100)).toBe(100);
+    // 0.35 * 200 + 0.65 * 100 = 70 + 65 = 135
+    expect(smoothLatency(100, 200)).toBe(135);
+    expect(smoothLatency(Infinity, 85)).toBe(85);
+    expect(smoothLatency(85, Infinity)).toBe(85);
+  });
+
+  it('selects appropriate cascading failover edge when current edge drops', () => {
+    const candidateRegions: LiveKitRegion[] = [
+      {
+        id: 'us-east',
+        name: 'US East',
+        pingUrl: 'https://us.livekit/health',
+        isDefault: true,
+        cascadesTo: ['eu-west'],
+      },
+      {
+        id: 'eu-west',
+        name: 'EU West',
+        pingUrl: 'https://eu.livekit/health',
+        cascadesTo: ['us-east'],
+      },
+      {
+        id: 'af-south',
+        name: 'Africa South',
+        pingUrl: 'https://af.livekit/health',
+      },
+    ];
+
+    // When us-east fails, it cascades to eu-west
+    const failover1 = getFailoverRegion('us-east', candidateRegions, {
+      'eu-west': 110,
+      'af-south': 180,
+    });
+    expect(failover1.id).toBe('eu-west');
+
+    // When af-south fails with no explicit cascadesTo, picks lowest latency alternative
+    const failover2 = getFailoverRegion('af-south', candidateRegions, {
+      'us-east': 210,
+      'eu-west': 115,
+    });
+    expect(failover2.id).toBe('eu-west');
   });
 });

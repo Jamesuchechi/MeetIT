@@ -337,9 +337,9 @@ Every phase has an **exit criteria** block. Do not start the next phase until ex
 
 ## Phase 12 - Scale, reliability, cost (continuous)
 
-- [ ] [P0] Multi-region SFU with cascading; client picks nearest by RTT probe
-- [ ] [P0] Autoscaling signaling and SFU on CPU + participant count
-- [ ] [P0] Chaos testing in staging: kill nodes, drop regions, TURN outage
+- [x] [P0] Multi-region SFU with cascading; client picks nearest by RTT probe
+- [x] [P0] Autoscaling signaling and SFU on CPU + participant count
+- [x] [P0] Chaos testing in staging: kill nodes, drop regions, TURN outage
 - [ ] [P0] Runbooks and on-call rotation, incident templates, status page
 - [ ] [P1] Cost dashboards per meeting minute; relay ratio optimization
 - [ ] [P1] Prefer UDP direct paths, TCP/TLS 443 fallback tuning, QUIC/WebTransport evaluation

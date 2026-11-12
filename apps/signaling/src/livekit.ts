@@ -52,6 +52,27 @@ export function formatRegionName(id: string): string {
   return names[id] ?? id.toUpperCase();
 }
 
+export function getCascadingTargetsForRegion(
+  regionId: string,
+  availableRegionIds: string[],
+): string[] {
+  const defaultCascades: Record<string, string[]> = {
+    'us-east': ['us-west', 'eu-west', 'eu-central', 'sa-east'],
+    'us-west': ['us-east', 'ap-southeast', 'ap-northeast'],
+    'eu-west': ['eu-central', 'us-east', 'af-south'],
+    'eu-central': ['eu-west', 'us-east', 'af-south'],
+    'ap-southeast': ['ap-northeast', 'eu-central', 'us-west'],
+    'ap-northeast': ['ap-southeast', 'us-west'],
+    'af-south': ['eu-central', 'eu-west', 'us-east'],
+    'sa-east': ['us-east', 'us-west'],
+  };
+
+  const targets =
+    defaultCascades[regionId] ??
+    availableRegionIds.filter((id) => id !== regionId);
+  return targets.filter((id) => availableRegionIds.includes(id));
+}
+
 export function getSupportedRegions(options?: {
   livekitUrl?: string | undefined;
   regionalUrls?: Record<string, string> | undefined;
@@ -61,6 +82,7 @@ export function getSupportedRegions(options?: {
     options?.regionalUrls ?? parseRegionalUrls(process.env.LIVEKIT_REGIONS);
 
   if (Object.keys(regionalUrls).length > 0) {
+    const availableIds = Object.keys(regionalUrls);
     return Object.entries(regionalUrls).map(([id, url], idx) => {
       const pingUrl =
         url
@@ -72,6 +94,7 @@ export function getSupportedRegions(options?: {
         name: formatRegionName(id),
         pingUrl,
         isDefault: idx === 0,
+        cascadesTo: getCascadingTargetsForRegion(id, availableIds),
       };
     });
   }

@@ -256,6 +256,80 @@ export function buildSignalingApp(
     };
   });
 
+  app.get('/metrics/prometheus', async (request, reply) => {
+    reply.header('Content-Type', 'text/plain; version=0.0.4; charset=utf-8');
+    reply.header('Access-Control-Allow-Origin', '*');
+    const memory = process.memoryUsage();
+    const cpu = process.cpuUsage();
+    const uptime = process.uptime();
+
+    let activeParticipants = 0;
+    for (const room of roomManager.values()) {
+      activeParticipants += room.participantCount;
+    }
+
+    const lines = [
+      '# HELP meetit_signaling_up Process operational status',
+      '# TYPE meetit_signaling_up gauge',
+      'meetit_signaling_up 1',
+      '',
+      '# HELP meetit_signaling_uptime_seconds Process uptime in seconds',
+      '# TYPE meetit_signaling_uptime_seconds gauge',
+      `meetit_signaling_uptime_seconds ${Math.floor(uptime)}`,
+      '',
+      '# HELP meetit_signaling_rooms_active Currently active meeting rooms',
+      '# TYPE meetit_signaling_rooms_active gauge',
+      `meetit_signaling_rooms_active ${roomManager.size}`,
+      '',
+      '# HELP meetit_signaling_rooms_created_total Total meeting rooms created since startup',
+      '# TYPE meetit_signaling_rooms_created_total counter',
+      `meetit_signaling_rooms_created_total ${metrics.roomsCreated}`,
+      '',
+      '# HELP meetit_signaling_connections_active Currently active WebSocket client connections',
+      '# TYPE meetit_signaling_connections_active gauge',
+      `meetit_signaling_connections_active ${metrics.activeConnections}`,
+      '',
+      '# HELP meetit_signaling_connections_total Total WebSocket connections accepted',
+      '# TYPE meetit_signaling_connections_total counter',
+      `meetit_signaling_connections_total ${metrics.totalConnections}`,
+      '',
+      '# HELP meetit_signaling_participants_active Active participants across all rooms',
+      '# TYPE meetit_signaling_participants_active gauge',
+      `meetit_signaling_participants_active ${activeParticipants}`,
+      '',
+      '# HELP meetit_signaling_frames_invalid_total Total signaling frames rejected by schema validation',
+      '# TYPE meetit_signaling_frames_invalid_total counter',
+      `meetit_signaling_frames_invalid_total ${metrics.invalidFrames}`,
+      '',
+      '# HELP meetit_signaling_frames_ratelimited_total Total signaling frames dropped by rate limiting',
+      '# TYPE meetit_signaling_frames_ratelimited_total counter',
+      `meetit_signaling_frames_ratelimited_total ${metrics.rateLimitedFrames}`,
+      '',
+      '# HELP meetit_signaling_process_cpu_user_seconds_total Total user CPU time in seconds',
+      '# TYPE meetit_signaling_process_cpu_user_seconds_total counter',
+      `meetit_signaling_process_cpu_user_seconds_total ${(cpu.user / 1e6).toFixed(4)}`,
+      '',
+      '# HELP meetit_signaling_process_cpu_system_seconds_total Total system CPU time in seconds',
+      '# TYPE meetit_signaling_process_cpu_system_seconds_total counter',
+      `meetit_signaling_process_cpu_system_seconds_total ${(cpu.system / 1e6).toFixed(4)}`,
+      '',
+      '# HELP meetit_signaling_process_memory_rss_bytes Resident memory size in bytes',
+      '# TYPE meetit_signaling_process_memory_rss_bytes gauge',
+      `meetit_signaling_process_memory_rss_bytes ${memory.rss}`,
+      '',
+      '# HELP meetit_signaling_process_memory_heap_used_bytes Used heap memory size in bytes',
+      '# TYPE meetit_signaling_process_memory_heap_used_bytes gauge',
+      `meetit_signaling_process_memory_heap_used_bytes ${memory.heapUsed}`,
+      '',
+      '# HELP meetit_signaling_process_memory_heap_total_bytes Total allocated heap memory size in bytes',
+      '# TYPE meetit_signaling_process_memory_heap_total_bytes gauge',
+      `meetit_signaling_process_memory_heap_total_bytes ${memory.heapTotal}`,
+      '',
+    ];
+
+    return lines.join('\n');
+  });
+
   app.post<{ Body?: { displayName?: string } }>(
     '/auth/guest',
     async (request, reply) => {
