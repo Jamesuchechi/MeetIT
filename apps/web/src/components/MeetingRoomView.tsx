@@ -207,6 +207,14 @@ import {
 } from '../lib/transcriptsStore';
 import { copyToClipboard, type AuthUser } from '../types';
 import { BackendStatusIndicator } from './BackendStatusIndicator';
+import { requestScreenWakeLock, releaseScreenWakeLock } from '../lib/wakeLock';
+import {
+  setupMediaSession,
+  updateMediaSessionSpeaker,
+  updateMediaSessionAudioState,
+  clearMediaSession,
+} from '../lib/mediaSessionService';
+import { showInMeetingNotification } from '../lib/pushNotificationService';
 
 interface MeetingRoomViewProps {
   roomCode: string;
@@ -2503,6 +2511,10 @@ export function MeetingRoomView({
           if (newest) {
             onToast(`${newest.displayName} is waiting in the lobby.`);
             announce(`${newest.displayName} is waiting to be admitted`);
+            showInMeetingNotification('Waiting Room Knock', {
+              body: `${newest.displayName} is waiting to join ${roomTitle || roomCode}`,
+              tag: 'waiting-room-knock',
+            });
           }
         }
         return nextWaiting;
@@ -2932,6 +2944,10 @@ export function MeetingRoomView({
         setUnreadChatCount((c) => c + 1);
       }
       announce(`New message from ${chatMsg.displayName}: ${chatMsg.text}`);
+      showInMeetingNotification(`Message from ${chatMsg.displayName}`, {
+        body: chatMsg.text,
+        tag: `chat-${chatMsg.id}`,
+      });
     });
 
     signaling.on('reaction.received', (rx) => {
@@ -2996,7 +3012,18 @@ export function MeetingRoomView({
     });
 
     signaling.on('handraise.updated', ({ queue }) => {
-      setHandRaiseQueue(queue);
+      setHandRaiseQueue((prev) => {
+        if (queue.length > prev.length) {
+          const newest = queue[queue.length - 1];
+          if (newest && newest.peerId !== signaling.getSelfId()) {
+            showInMeetingNotification('Hand Raised', {
+              body: `${newest.displayName} raised their hand`,
+              tag: `hand-${newest.peerId}`,
+            });
+          }
+        }
+        return queue;
+      });
     });
 
     signaling.on('whiteboard.action', (action) => {
@@ -3187,6 +3214,50 @@ export function MeetingRoomView({
 
     onLeaveCall(roomCode);
   };
+
+  // Phase 11: Screen Wake Lock & Media Session API during active calls
+  useEffect(() => {
+    if (stage !== 'call') {
+      void releaseScreenWakeLock();
+      clearMediaSession();
+      return;
+    }
+
+    void requestScreenWakeLock();
+
+    setupMediaSession({
+      roomTitle: roomTitle || `Meeting ${roomCode}`,
+      roomCode,
+      audioMuted,
+      activeSpeaker: activeSpeakerId
+        ? remotePeers[activeSpeakerId]?.displayName
+        : undefined,
+      onToggleMute: handleToggleMic,
+      onLeaveCall: handleHangUp,
+      onToggleHand: handleToggleHand,
+    });
+
+    return () => {
+      void releaseScreenWakeLock();
+      clearMediaSession();
+    };
+  }, [stage, roomCode, roomTitle, handleToggleMic, handleToggleHand]);
+
+  // Phase 11: Sync Media Session audio state with mic muting
+  useEffect(() => {
+    if (stage === 'call') {
+      updateMediaSessionAudioState(audioMuted);
+    }
+  }, [stage, audioMuted]);
+
+  // Phase 11: Sync Media Session active speaker
+  useEffect(() => {
+    if (stage === 'call' && activeSpeakerId) {
+      updateMediaSessionSpeaker(
+        remotePeers[activeSpeakerId]?.displayName || '',
+      );
+    }
+  }, [stage, activeSpeakerId, remotePeers]);
 
   const handleToggleCaptions = () => {
     if (!isSpeechRecognitionSupported()) {

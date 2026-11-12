@@ -37,6 +37,10 @@ import { AccountDeletionModal } from './AccountDeletionModal';
 import { EnterpriseSsoModal } from './EnterpriseSsoModal';
 import { EnterpriseControlsModal } from './EnterpriseControlsModal';
 import { BugBountyModal } from './BugBountyModal';
+import {
+  getNotificationPermission,
+  requestNotificationPermission,
+} from '../lib/pushNotificationService';
 import type { AuthUser } from '../types';
 
 const APP_SETTINGS_KEY = 'meetit_app_settings_v1';
@@ -131,6 +135,19 @@ export function SettingsView({
       return false;
     }
   });
+
+  const [notifPermission, setNotifPermission] =
+    useState<NotificationPermission>(() => getNotificationPermission());
+
+  const handleTogglePushNotifications = async () => {
+    const result = await requestNotificationPermission();
+    setNotifPermission(result);
+    if (result === 'granted') {
+      onToast('Push & background notifications enabled.');
+    } else {
+      onToast('Notifications were denied in browser permissions.');
+    }
+  };
 
   useEffect(() => {
     let mounted = true;
@@ -430,6 +447,67 @@ export function SettingsView({
             </div>
             <div className="shortcut-pill">
               <kbd>?</kbd> <span>All Shortcuts</span>
+            </div>
+          </div>
+        </div>
+
+        {/* PWA & Native Device Controls */}
+        <div className="profile-section-card">
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <Zap size={18} style={{ color: 'var(--accent)' }} />
+            <h3 style={{ margin: 0 }}>PWA &amp; Native Device Controls</h3>
+          </div>
+          <p className="profile-card-sub">
+            Hardware APIs and background services keeping your meetings alive
+            across desktop and mobile.
+          </p>
+
+          <div className="settings-toggles">
+            <div className="sw">
+              <div>
+                Screen Wake Lock
+                <small>
+                  Keeps your screen awake during meetings to prevent auto-lock
+                  or display dimming
+                </small>
+              </div>
+              <span className="badge-pill accent" style={{ fontSize: 11 }}>
+                Active in calls
+              </span>
+            </div>
+
+            <div className="sw">
+              <div>
+                Lock Screen &amp; Headphone Call Controls
+                <small>
+                  Native MediaSession hooks for Bluetooth earbuds, smartwatches,
+                  and car audio systems
+                </small>
+              </div>
+              <span className="badge-pill accent" style={{ fontSize: 11 }}>
+                MediaSession Ready
+              </span>
+            </div>
+
+            <div className="sw">
+              <div>
+                Background Notifications &amp; Web Push
+                <small>
+                  Receive waiting room knocks, raised hands, and chat mentions
+                  when the meeting tab is hidden
+                </small>
+              </div>
+              <button
+                type="button"
+                className="btn btn-sm secondary"
+                onClick={() => void handleTogglePushNotifications()}
+              >
+                <span>
+                  {notifPermission === 'granted'
+                    ? 'Enabled'
+                    : 'Enable Notifications'}
+                </span>
+              </button>
             </div>
           </div>
         </div>

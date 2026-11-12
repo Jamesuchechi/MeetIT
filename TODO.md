@@ -323,7 +323,7 @@ Every phase has an **exit criteria** block. Do not start the next phase until ex
 
 ## Phase 11 - Clients everywhere (v2.0)
 
-- [ ] [P0] PWA polish: background audio, wake lock, screen share where supported, push notifications
+- [x] [P0] PWA polish: background audio, wake lock, screen share where supported, push notifications
 - [ ] [P1] Desktop app (Tauri): global shortcuts, tray, system audio capture, auto-launch from calendar
 - [ ] [P1] Browser extension: one-click "Start MeetIT" on any page, calendar link detection
 - [ ] [P2] Smart-TV and conference-room mode (kiosk web app, QR join, room booking)

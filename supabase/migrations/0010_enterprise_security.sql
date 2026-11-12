@@ -105,3 +105,4 @@ create policy "Admins can view vulnerability reports"
   on public.vulnerability_reports
   for select
   using (auth.uid() is not null);
+
