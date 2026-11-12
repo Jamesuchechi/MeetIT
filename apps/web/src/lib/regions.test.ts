@@ -7,6 +7,8 @@ import {
   setSavedPreferredRegion,
   smoothLatency,
   getFailoverRegion,
+  getCarbonAwareRegion,
+  estimateMeetingCarbonFootprint,
   PREFERRED_REGION_STORAGE_KEY,
   DEFAULT_FALLBACK_REGIONS,
 } from './regions';
@@ -187,5 +189,44 @@ describe('regions module', () => {
       'eu-west': 115,
     });
     expect(failover2.id).toBe('eu-west');
+  });
+
+  it('selects carbon-aware greener region when latency is within tolerance', () => {
+    const candidateRegions: LiveKitRegion[] = [
+      {
+        id: 'us-east', // 379 gCO2/kWh
+        name: 'US East',
+        pingUrl: 'https://us-east/health',
+      },
+      {
+        id: 'us-west', // 112 gCO2/kWh (much greener)
+        name: 'US West',
+        pingUrl: 'https://us-west/health',
+      },
+    ];
+
+    // us-east is 30ms, us-west is 40ms (+10ms penalty, well within default 25ms threshold)
+    const result = getCarbonAwareRegion(candidateRegions, {
+      'us-east': 30,
+      'us-west': 40,
+    });
+
+    expect(result.region.id).toBe('us-west');
+    expect(result.isGreenRouting).toBe(true);
+    expect(result.carbonSavedGPerKwh).toBeGreaterThan(200);
+  });
+
+  it('estimates meeting carbon footprint and commute savings', () => {
+    // 60-min meeting, 4 attendees, 500MB egress
+    const report = estimateMeetingCarbonFootprint(
+      3600,
+      4,
+      500 * 1024 * 1024,
+      'us-west',
+    );
+    expect(report.totalCarbonGrams).toBeGreaterThan(0);
+    expect(report.commuteSavedGrams).toBeGreaterThan(10000);
+    expect(report.carMilesEquivalent).toBeGreaterThan(0);
+    expect(report.treesOffsetEquivalent).toBeGreaterThan(0);
   });
 });

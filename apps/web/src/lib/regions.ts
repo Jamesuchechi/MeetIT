@@ -204,3 +204,138 @@ export function getFailoverRegion(
   // 3. Fall back to default or first remaining
   return remaining.find((r) => r.isDefault) ?? remaining[0]!;
 }
+
+/**
+ * Grid carbon intensity in grams of CO2e per kilowatt-hour (gCO2/kWh) by cloud region.
+ */
+export const REGION_CARBON_INTENSITY: Record<string, number> = {
+  'us-east': 379, // PJM Interconnection (gas/coal/nuclear)
+  'us-west': 112, // Pacific Northwest (hydro-dominant)
+  'eu-central': 285, // Central Europe (Germany/Frankfurt)
+  'eu-north': 24, // Nordic grid (Sweden/Norway 95%+ hydro/wind/nuclear)
+  'ap-southeast': 415, // Singapore (gas-dominant)
+  default: 250, // Global average
+};
+
+export interface CarbonAwareSelection {
+  region: LiveKitRegion;
+  isGreenRouting: boolean;
+  carbonSavedGPerKwh: number;
+}
+
+/**
+ * Carbon-aware region selection:
+ * Picks a greener datacenter region when latency is within `maxLatencyPenaltyMs` (default 25ms)
+ * of the lowest-latency region. Reduces meeting carbon footprint without perceptible delay.
+ */
+export function getCarbonAwareRegion(
+  regions: LiveKitRegion[],
+  latencies: Record<string, number>,
+  maxLatencyPenaltyMs = 25,
+): CarbonAwareSelection {
+  if (regions.length === 0) {
+    return {
+      region: DEFAULT_FALLBACK_REGIONS[0]!,
+      isGreenRouting: false,
+      carbonSavedGPerKwh: 0,
+    };
+  }
+
+  // Find lowest latency region
+  let fastestRegion = regions[0]!;
+  let minLatency = latencies[fastestRegion.id] ?? Infinity;
+
+  for (const reg of regions) {
+    const lat = latencies[reg.id] ?? Infinity;
+    if (lat < minLatency) {
+      minLatency = lat;
+      fastestRegion = reg;
+    }
+  }
+
+  if (minLatency === Infinity) {
+    return {
+      region: fastestRegion,
+      isGreenRouting: false,
+      carbonSavedGPerKwh: 0,
+    };
+  }
+
+  // Eligible regions are those within the latency penalty threshold
+  const eligible = regions.filter((reg) => {
+    const lat = latencies[reg.id] ?? Infinity;
+    return lat <= minLatency + maxLatencyPenaltyMs;
+  });
+
+  const fastestIntensity =
+    REGION_CARBON_INTENSITY[fastestRegion.id] ??
+    REGION_CARBON_INTENSITY['default']!;
+
+  let greenestRegion = fastestRegion;
+  let lowestIntensity = fastestIntensity;
+
+  for (const reg of eligible) {
+    const intensity =
+      REGION_CARBON_INTENSITY[reg.id] ?? REGION_CARBON_INTENSITY['default']!;
+    if (intensity < lowestIntensity) {
+      lowestIntensity = intensity;
+      greenestRegion = reg;
+    }
+  }
+
+  const isGreenRouting = greenestRegion.id !== fastestRegion.id;
+  const carbonSavedGPerKwh = Math.max(0, fastestIntensity - lowestIntensity);
+
+  return {
+    region: greenestRegion,
+    isGreenRouting,
+    carbonSavedGPerKwh,
+  };
+}
+
+export interface CarbonFootprintReport {
+  totalCarbonGrams: number;
+  carMilesEquivalent: number;
+  commuteSavedGrams: number;
+  treesOffsetEquivalent: number;
+}
+
+/**
+ * Estimates meeting carbon footprint vs in-person commuting:
+ * Video streaming emits ~0.2-0.5 g CO2e per MB transferred + SFU server slice.
+ * A typical 15-mile round-trip vehicle commute produces ~6,000 g CO2e.
+ */
+export function estimateMeetingCarbonFootprint(
+  durationSeconds: number,
+  participantCount: number,
+  egressBytes: number,
+  regionId = 'default',
+): CarbonFootprintReport {
+  const intensity =
+    REGION_CARBON_INTENSITY[regionId] ?? REGION_CARBON_INTENSITY['default']!;
+
+  const egressMb = egressBytes / (1024 * 1024);
+  // Average edge network energy consumption: ~0.0006 kWh per MB transferred
+  const kwhFromData = egressMb * 0.0006;
+
+  // Server slice energy: ~0.0002 kWh per participant-minute
+  const participantMinutes =
+    (durationSeconds / 60) * Math.max(1, participantCount);
+  const kwhFromServer = participantMinutes * 0.0002;
+
+  const totalKwh = kwhFromData + kwhFromServer;
+  const totalCarbonGrams = Math.round(totalKwh * intensity * 10) / 10;
+
+  // In-person commute savings: assume avoiding a 10-mile car trip per remote attendee (~404g/mile)
+  const commuteSavedGrams = Math.max(1, participantCount - 1) * 4040; // 10 miles * 404 g/mile
+  const carMilesEquivalent = Math.round((totalCarbonGrams / 404) * 100) / 100;
+  const treesOffsetEquivalent =
+    Math.round((commuteSavedGrams / 21770) * 1000) / 1000; // 1 urban tree absorbs ~21.77 kg/year
+
+  return {
+    totalCarbonGrams,
+    carMilesEquivalent,
+    commuteSavedGrams,
+    treesOffsetEquivalent,
+  };
+}

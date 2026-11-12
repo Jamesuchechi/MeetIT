@@ -10,6 +10,8 @@ import {
   computeMaxVideoBitrate,
   normalizeRtcStats,
   tuneOpusSdp,
+  prioritizeIceCandidates,
+  configureSenderScalabilityMode,
 } from './index.js';
 
 class MockSignalingPair {
@@ -181,7 +183,7 @@ describe('FakeTransport', () => {
   });
 });
 
-describe('Media utilities (Opus SDP, bitrate caps, stats normalizer)', () => {
+describe('Media utilities (Opus SDP, FEC/RED, bitrate caps, candidate prioritization)', () => {
   it('injects useinbandfec=1 and usedtx=1 into Opus SDP', () => {
     const raw =
       'v=0\r\na=rtpmap:111 opus/48000/2\r\na=fmtp:111 minptime=10\r\n';
@@ -190,28 +192,121 @@ describe('Media utilities (Opus SDP, bitrate caps, stats normalizer)', () => {
     expect(tuned).toContain('usedtx=1');
   });
 
+  it('injects RFC 2198 RED format and stereo when enabled', () => {
+    const raw =
+      'v=0\r\nm=audio 9 UDP/TLS/RTP/SAVPF 111\r\na=rtpmap:111 opus/48000/2\r\na=fmtp:111 minptime=10\r\n';
+    const tuned = tuneOpusSdp(raw, {
+      enableRed: true,
+      stereo: true,
+      maxAverageBitrate: 96000,
+    });
+    expect(tuned).toContain('red/48000/2');
+    expect(tuned).toContain('maxaveragebitrate=96000');
+    expect(tuned).toContain('stereo=1');
+  });
+
   it('caps video bitrate by participant count', () => {
     expect(computeMaxVideoBitrate(2)).toBe(1_500_000);
     expect(computeMaxVideoBitrate(4)).toBe(800_000);
     expect(computeMaxVideoBitrate(6)).toBe(300_000);
   });
 
-  it('normalizes WebRTC stats reports', () => {
+  it('prioritizes direct UDP host and srflx candidates before relay paths', () => {
+    const candidates = [
+      {
+        candidate:
+          'candidate:1 1 UDP 100 198.51.100.1 3478 typ relay raddr 0.0.0.0 rport 0',
+      },
+      {
+        candidate:
+          'candidate:2 1 TCP 90 198.51.100.1 443 typ relay tcptype passive',
+      },
+      {
+        candidate: 'candidate:3 1 UDP 200 203.0.113.5 50000 typ srflx',
+      },
+      {
+        candidate: 'candidate:4 1 UDP 2130706431 192.168.1.10 50000 typ host',
+      },
+    ];
+
+    const sorted = prioritizeIceCandidates(candidates);
+    expect(sorted[0]?.candidate).toContain('typ host');
+    expect(sorted[1]?.candidate).toContain('typ srflx');
+    expect(sorted[2]?.candidate).toContain('typ relay');
+    expect(sorted[2]?.candidate).toContain('UDP');
+    expect(sorted[3]?.candidate).toContain('typ relay');
+    expect(sorted[3]?.candidate).toContain('TCP');
+  });
+
+  it('configures sender scalability mode for AV1/VP9 SVC', async () => {
+    const encodings = [{ rid: 'f' }];
+    const sender = {
+      getParameters: () => ({ encodings }),
+      setParameters: vi.fn().mockResolvedValue(undefined),
+    } as unknown as RTCRtpSender;
+
+    const result = await configureSenderScalabilityMode(sender, 'L3T3_KEY');
+    expect(result).toBe(true);
+    expect(encodings[0]).toHaveProperty('scalabilityMode', 'L3T3_KEY');
+  });
+
+  it('normalizes WebRTC stats reports with relay ratio calculation', () => {
     const stats = normalizeRtcStats([
+      {
+        type: 'local-candidate',
+        id: 'lc-1',
+        candidateType: 'host',
+        protocol: 'udp',
+      },
+      {
+        type: 'remote-candidate',
+        id: 'rc-1',
+        candidateType: 'host',
+        protocol: 'udp',
+      },
       { type: 'inbound-rtp', bytesReceived: 1200, packetsLost: 3 },
       { type: 'outbound-rtp', bytesSent: 3400 },
       {
         type: 'candidate-pair',
         state: 'succeeded',
+        localCandidateId: 'lc-1',
+        remoteCandidateId: 'rc-1',
         currentRoundTripTime: 0.035,
       },
     ]);
-    expect(stats).toEqual({
-      bytesReceived: 1200,
-      bytesSent: 3400,
-      packetsLost: 3,
-      roundTripTimeMs: 35,
-    });
+    expect(stats.bytesReceived).toBe(1200);
+    expect(stats.bytesSent).toBe(3400);
+    expect(stats.packetsLost).toBe(3);
+    expect(stats.roundTripTimeMs).toBe(35);
+    expect(stats.activeCandidatePairType).toBe('host');
+    expect(stats.relayRatio).toBe(0);
+
+    // Relayed connection test
+    const relayStats = normalizeRtcStats([
+      {
+        type: 'local-candidate',
+        id: 'lc-2',
+        candidateType: 'relay',
+        protocol: 'udp',
+      },
+      {
+        type: 'remote-candidate',
+        id: 'rc-2',
+        candidateType: 'host',
+        protocol: 'udp',
+      },
+      { type: 'inbound-rtp', bytesReceived: 5000 },
+      { type: 'outbound-rtp', bytesSent: 5000 },
+      {
+        type: 'candidate-pair',
+        state: 'succeeded',
+        localCandidateId: 'lc-2',
+        remoteCandidateId: 'rc-2',
+      },
+    ]);
+    expect(relayStats.activeCandidatePairType).toBe('relay');
+    expect(relayStats.relayRatio).toBe(1);
+    expect(relayStats.relayBytesReceived).toBe(5000);
   });
 });
 

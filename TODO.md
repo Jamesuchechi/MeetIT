@@ -340,13 +340,13 @@ Every phase has an **exit criteria** block. Do not start the next phase until ex
 - [x] [P0] Multi-region SFU with cascading; client picks nearest by RTT probe
 - [x] [P0] Autoscaling signaling and SFU on CPU + participant count
 - [x] [P0] Chaos testing in staging: kill nodes, drop regions, TURN outage
-- [ ] [P0] Runbooks and on-call rotation, incident templates, status page
-- [ ] [P1] Cost dashboards per meeting minute; relay ratio optimization
-- [ ] [P1] Prefer UDP direct paths, TCP/TLS 443 fallback tuning, QUIC/WebTransport evaluation
-- [ ] [P1] Congestion control tuning, FEC and RED for audio, SVC (AV1/VP9) rollout
-- [ ] [P1] Edge-hosted lightweight signaling (Cloudflare Durable Objects) evaluation
-- [ ] [P2] P2P direct for 1:1 even in SFU rooms to cut cost, automatic fallback
-- [ ] [P2] Carbon-aware routing and reporting
+- [x] [P0] Runbooks and on-call rotation, incident templates, status page
+- [x] [P1] Cost dashboards per meeting minute; relay ratio optimization
+- [x] [P1] Prefer UDP direct paths, TCP/TLS 443 fallback tuning, QUIC/WebTransport evaluation
+- [x] [P1] Congestion control tuning, FEC and RED for audio, SVC (AV1/VP9) rollout
+- [x] [P1] Edge-hosted lightweight signaling (Cloudflare Durable Objects) evaluation
+- [x] [P2] P2P direct for 1:1 even in SFU rooms to cut cost, automatic fallback
+- [x] [P2] Carbon-aware routing and reporting
 
 **Exit criteria:** 99.95% monthly availability; incident detection under 2 minutes; cost per participant-minute below target set in PRODUCT.md.
 

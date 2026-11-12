@@ -11,7 +11,8 @@ export type ViewMode =
   | 'room'
   | 'ended'
   | '404'
-  | 'webinar-register';
+  | 'webinar-register'
+  | 'status';
 
 export type DashboardTab =
   | 'home'

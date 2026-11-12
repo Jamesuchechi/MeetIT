@@ -14,6 +14,7 @@ import {
   type NetworkQualityBars,
   type NetworkQualityLevel,
   type PeerNetworkStats,
+  type TransportStats,
 } from '@meetit/media';
 import type {
   AgendaItem,
@@ -66,6 +67,7 @@ import { E2eeVerificationModal } from './E2eeVerificationModal';
 import { ReportAbuseModal } from './ReportAbuseModal';
 import { AuditLogModal } from './AuditLogModal';
 import { DeviceHandoffModal } from './DeviceHandoffModal';
+import { CostDashboardModal } from './CostDashboardModal';
 import {
   extractHandoffToken,
   getDeviceDescriptor,
@@ -114,6 +116,8 @@ import {
   ArrowRightLeft as ArrowRightLeftIcon,
   ShieldCheck as ShieldCheckIcon,
   Shield as ShieldIcon,
+  DollarSign as DollarSignIcon,
+  Leaf as LeafIcon,
   Flag as FlagIcon,
   ThumbsUp as ThumbsUpIcon,
   Heart as HeartIcon,
@@ -880,6 +884,10 @@ export function MeetingRoomView({
   const [showAuditLogModal, setShowAuditLogModal] = useState(false);
   // Phase 11: Seamless Device Handoff state
   const [showDeviceHandoffModal, setShowDeviceHandoffModal] = useState(false);
+  // Phase 12: Cost, Scale & Carbon Telemetry state
+  const [showCostDashboardModal, setShowCostDashboardModal] = useState(false);
+  const [liveTransportStats, setLiveTransportStats] =
+    useState<TransportStats | null>(null);
   const incomingHandoffToken = useMemo(() => {
     if (typeof window === 'undefined') return null;
     return extractHandoffToken(window.location.search);
@@ -1429,6 +1437,12 @@ export function MeetingRoomView({
           const stats = await transport.getPeerStats();
           if (!cancelled) {
             setPeerStatsMap(stats);
+          }
+        }
+        if (typeof transport.getStats === 'function') {
+          const tStats = await transport.getStats();
+          if (!cancelled) {
+            setLiveTransportStats(tStats);
           }
         }
       } catch {
@@ -4876,6 +4890,32 @@ export function MeetingRoomView({
             <span>E2EE</span>
           </button>
 
+          {/* Phase 12: Scale, Cost & Carbon Telemetry pill */}
+          <button
+            type="button"
+            className="call-telemetry-chip"
+            onClick={() => setShowCostDashboardModal(true)}
+            title="Scale, Relay & Carbon Telemetry. Click to view cost per participant-minute."
+            aria-label="Cost and Carbon Telemetry"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 4,
+              padding: '3px 8px',
+              borderRadius: 12,
+              background: 'rgba(16, 185, 129, 0.15)',
+              border: '1px solid rgba(16, 185, 129, 0.3)',
+              color: '#10b981',
+              fontSize: '0.75rem',
+              fontWeight: 700,
+              cursor: 'pointer',
+            }}
+            data-testid="telemetry-chip-btn"
+          >
+            <LeafIcon size={13} />
+            <span>Telemetry</span>
+          </button>
+
           {relayPrivacyActive && (
             <div
               className="call-relay-chip"
@@ -6915,6 +6955,25 @@ export function MeetingRoomView({
                     </div>
                   </button>
 
+                  {/* Phase 12: Cost & Carbon Telemetry */}
+                  <button
+                    type="button"
+                    className="call-more-menu-item"
+                    onClick={() => {
+                      setShowCostDashboardModal(true);
+                      setShowMoreDesktopMenu(false);
+                    }}
+                    data-testid="desktop-menu-cost-btn"
+                  >
+                    <DollarSignIcon size={16} style={{ color: '#10b981' }} />
+                    <div className="menu-item-text">
+                      <span>Cost &amp; Carbon Telemetry</span>
+                      <small>
+                        Relay ratio, participant costs, and carbon impact
+                      </small>
+                    </div>
+                  </button>
+
                   <button
                     type="button"
                     className="call-more-menu-item"
@@ -7345,6 +7404,24 @@ export function MeetingRoomView({
                       <small>
                         Transfer meeting seamlessly to phone or laptop
                       </small>
+                    </div>
+                  </button>
+
+                  {/* Phase 12: Cost & Carbon Telemetry */}
+                  <button
+                    type="button"
+                    className="call-more-menu-item"
+                    onClick={() => {
+                      setShowCostDashboardModal(true);
+                      setShowActivitiesPopover(false);
+                      setShowMoreActivitiesSheet(false);
+                    }}
+                    data-testid="call-cost-btn"
+                  >
+                    <DollarSignIcon size={16} style={{ color: '#10b981' }} />
+                    <div className="menu-item-text">
+                      <span>Cost &amp; Carbon Telemetry</span>
+                      <small>Live cost per minute &amp; relay ratio</small>
                     </div>
                   </button>
 
@@ -8372,6 +8449,25 @@ export function MeetingRoomView({
           onToast(`Call transferred to ${targetDevice}. Goodbye!`);
           handleHangUp();
         }}
+      />
+
+      {/* Phase 12: Cost, Scale & Carbon Telemetry Modal */}
+      <CostDashboardModal
+        isOpen={showCostDashboardModal}
+        onClose={() => setShowCostDashboardModal(false)}
+        durationSeconds={callSeconds}
+        participantCount={totalParticipantCount}
+        bytesReceived={liveTransportStats?.bytesReceived ?? 0}
+        bytesSent={liveTransportStats?.bytesSent ?? 0}
+        relayBytes={
+          (liveTransportStats?.relayBytesReceived ?? 0) +
+          (liveTransportStats?.relayBytesSent ?? 0)
+        }
+        currentRegionId={connectedRegion || 'default'}
+        isP2PDirectActive={
+          totalParticipantCount === 2 &&
+          liveTransportStats?.activeCandidatePairType !== 'relay'
+        }
       />
     </div>
   );

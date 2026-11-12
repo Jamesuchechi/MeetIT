@@ -8,6 +8,7 @@ import { MeetingRoomView } from './components/MeetingRoomView';
 import { WebinarRegistrationView } from './components/WebinarRegistrationView';
 import { EndedView } from './components/EndedView';
 import { NotFoundView } from './components/NotFoundView';
+import { StatusPageView } from './components/StatusPageView';
 import { Toast } from './components/Toast';
 import { Logo } from './components/Logo';
 import { Zap, X } from 'lucide-react';
@@ -122,6 +123,9 @@ function parseLocationRoute(
   }
   if (target === 'ended') {
     return { view: 'ended', roomCode: null };
+  }
+  if (target === 'status' || target === 'system-status') {
+    return { view: 'status', roomCode: null };
   }
   if (target === '404') {
     return { view: '404', roomCode: null };
@@ -488,6 +492,12 @@ function AppContent() {
           onRejoin={(code) => handleEnterRoom(code)}
           onNavigateHome={() => navigateTo('home')}
           onNavigateDashboard={() => navigateTo('dashboard')}
+        />
+      )}
+
+      {route.view === 'status' && (
+        <StatusPageView
+          onBackToApp={() => navigateTo(user ? 'dashboard' : 'home')}
         />
       )}
 
