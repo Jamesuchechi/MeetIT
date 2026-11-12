@@ -109,6 +109,15 @@ import {
   ShieldCheck as ShieldCheckIcon,
   Shield as ShieldIcon,
   Flag as FlagIcon,
+  ThumbsUp as ThumbsUpIcon,
+  Heart as HeartIcon,
+  PartyPopper as PartyPopperIcon,
+  Rocket as RocketIcon,
+  Flame as FlameIcon,
+  Lightbulb as LightbulbIcon,
+  Star as StarIcon,
+  Check as LucideCheckIcon,
+  type LucideIcon,
 } from 'lucide-react';
 import {
   loadLocalRecordings,
@@ -246,20 +255,100 @@ const DISPLAY_NAME_STORAGE_KEY = 'meetit_guest_display_name';
 const MIRROR_SELF_STORAGE_KEY = 'meetit_mirror_self_view';
 const CALL_SOUNDS_STORAGE_KEY = 'meetit_call_sounds_enabled';
 const BANDWIDTH_MODE_STORAGE_KEY = 'meetit_bandwidth_mode';
-const REACTION_EMOJIS: string[] = [
-  '👍',
-  '👏',
-  '❤️',
-  '🎉',
-  '😂',
-  '😮',
-  '🚀',
-  '🔥',
-  '💡',
-  '💯',
-  '🤝',
-  '🙌',
+export interface ReactionDefinition {
+  id: string;
+  label: string;
+  Icon: LucideIcon;
+  color: string;
+}
+
+export const REACTION_DEFINITIONS: ReactionDefinition[] = [
+  { id: 'thumbsup', label: 'Thumbs Up', Icon: ThumbsUpIcon, color: '#3b82f6' },
+  { id: 'heart', label: 'Heart', Icon: HeartIcon, color: '#ef4444' },
+  { id: 'party', label: 'Celebrate', Icon: PartyPopperIcon, color: '#8b5cf6' },
+  { id: 'laugh', label: 'Laugh', Icon: SmileIcon, color: '#f59e0b' },
+  { id: 'rocket', label: 'Rocket', Icon: RocketIcon, color: '#06b6d4' },
+  { id: 'fire', label: 'Fire', Icon: FlameIcon, color: '#f97316' },
+  { id: 'lightbulb', label: 'Idea', Icon: LightbulbIcon, color: '#eab308' },
+  { id: 'star', label: 'Star', Icon: StarIcon, color: '#f59e0b' },
+  { id: 'sparkles', label: 'Sparkles', Icon: SparklesIcon, color: '#10b981' },
 ];
+
+export function renderReactionIcon(
+  reaction: string,
+  size = 18,
+): React.ReactNode {
+  switch (reaction) {
+    case 'thumbsup':
+    case '👍':
+      return (
+        <ThumbsUpIcon
+          size={size}
+          color="#3b82f6"
+          fill="currentColor"
+          fillOpacity={0.25}
+        />
+      );
+    case 'heart':
+    case '❤️':
+    case '❤':
+      return (
+        <HeartIcon
+          size={size}
+          color="#ef4444"
+          fill="currentColor"
+          fillOpacity={0.25}
+        />
+      );
+    case 'party':
+    case '🎉':
+      return <PartyPopperIcon size={size} color="#8b5cf6" />;
+    case 'laugh':
+    case 'smile':
+    case '😂':
+    case '😮':
+      return <SmileIcon size={size} color="#f59e0b" />;
+    case 'rocket':
+    case '🚀':
+      return <RocketIcon size={size} color="#06b6d4" />;
+    case 'fire':
+    case 'flame':
+    case '🔥':
+      return (
+        <FlameIcon
+          size={size}
+          color="#f97316"
+          fill="currentColor"
+          fillOpacity={0.25}
+        />
+      );
+    case 'lightbulb':
+    case 'idea':
+    case '💡':
+      return <LightbulbIcon size={size} color="#eab308" />;
+    case 'star':
+    case '💯':
+    case '👏':
+    case '🙌':
+    case '🤝':
+      return (
+        <StarIcon
+          size={size}
+          color="#f59e0b"
+          fill="currentColor"
+          fillOpacity={0.25}
+        />
+      );
+    case 'sparkles':
+    case '✨':
+    case '🌟':
+      return <SparklesIcon size={size} color="#10b981" />;
+    default:
+      return <SparklesIcon size={size} color="#3b82f6" />;
+  }
+}
+
+const REACTION_EMOJIS: string[] = REACTION_DEFINITIONS.map((r) => r.id);
 
 function NetworkBarsBadge({
   bars,
@@ -503,7 +592,7 @@ function RemoteVideoTile({
                     fontWeight: 'bold',
                   }}
                 >
-                  ✕
+                  <XIcon size={11} style={{ verticalAlign: 'middle' }} />
                 </button>
               )}
             </span>
@@ -621,8 +710,9 @@ function RemoteVideoTile({
             <span
               className="role-pill verified-tile-pill"
               title="Verified account"
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}
             >
-              ✓ Verified
+              <LucideCheckIcon size={10} /> Verified
             </span>
           ) : (
             <span className="role-pill guest-tile-pill" title="Guest attendee">
@@ -1531,7 +1621,7 @@ export function MeetingRoomView({
             const processor = new VideoEffectProcessor(videoEffectsConfig);
             processor.onGesture((gesture) => {
               if (gesture === 'thumbs_up') {
-                handleSendReaction('👍');
+                handleSendReaction('thumbsup');
               } else if (gesture === 'hand_raise') {
                 handleToggleHand();
               }
@@ -1639,7 +1729,7 @@ export function MeetingRoomView({
       const next = !prev;
       signalingRef.current?.updateState({ handRaised: next });
       announce(next ? 'You raised your hand' : 'You lowered your hand');
-      onToast(next ? '✋ Hand raised.' : 'Hand lowered.');
+      onToast(next ? 'Hand raised.' : 'Hand lowered.');
       return next;
     });
   }, [announce, onToast]);
@@ -1796,11 +1886,11 @@ export function MeetingRoomView({
           const processor = new VideoEffectProcessor(newConfig);
           processor.onGesture((gesture) => {
             if (gesture === 'thumbs_up') {
-              handleSendReaction('👍');
-              onToast('👍 Gesture detected: Sent thumbs up');
+              handleSendReaction('thumbsup');
+              onToast('Gesture detected: Sent thumbs up');
             } else if (gesture === 'hand_raise') {
               handleToggleHand();
-              onToast('✋ Gesture detected: Raised hand');
+              onToast('Gesture detected: Raised hand');
             }
           });
           videoProcessorRef.current = processor;
@@ -1877,7 +1967,7 @@ export function MeetingRoomView({
           processor.onFeedbackDetected(() => {
             setFeedbackDetected(true);
             onToast(
-              '⚠️ Echo / feedback loop detected! Check speakers or use headphones.',
+              'Echo / feedback loop detected! Check speakers or use headphones.',
             );
           });
           audioProcessorRef.current = processor;
@@ -2713,7 +2803,7 @@ export function MeetingRoomView({
         if (!existing) return prev;
         if (!existing.state.handRaised && state.handRaised) {
           announce(`${existing.displayName} raised their hand`);
-          onToast(`✋ ${existing.displayName} raised their hand.`);
+          onToast(`${existing.displayName} raised their hand.`);
         }
         if (existing.state.screen && !state.screen) {
           setPinnedTargetId((curr) =>
@@ -2820,7 +2910,7 @@ export function MeetingRoomView({
         question,
         ...prev.filter((q) => q.id !== question.id),
       ]);
-      onToast(`❓ Q&A: ${question.question.slice(0, 40)}`);
+      onToast(`Q&A: ${question.question.slice(0, 40)}`);
     });
 
     signaling.on('qa.deleted', ({ questionId }) => {
@@ -4082,12 +4172,29 @@ export function MeetingRoomView({
                 data-testid="diagnostics-report-card"
               >
                 <div className="diagnostics-probe-head">
-                  <strong>
-                    {diagnosticsReport.recommendedMode === 'standard'
-                      ? '✓ Ready for HD Call'
-                      : diagnosticsReport.recommendedMode === 'data_saver'
-                        ? '⚠ Fair Network — Data Saver Recommended'
-                        : '✕ Low Bandwidth — Audio-Only Recommended'}
+                  <strong
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 6,
+                    }}
+                  >
+                    {diagnosticsReport.recommendedMode === 'standard' ? (
+                      <>
+                        <LucideCheckIcon size={14} color="#10b981" /> Ready for
+                        HD Call
+                      </>
+                    ) : diagnosticsReport.recommendedMode === 'data_saver' ? (
+                      <>
+                        <SlidersIcon size={14} color="#f59e0b" /> Fair Network —
+                        Data Saver Recommended
+                      </>
+                    ) : (
+                      <>
+                        <Volume2Icon size={14} color="#ef4444" /> Low Bandwidth
+                        — Audio-Only Recommended
+                      </>
+                    )}
                   </strong>
                   <button
                     type="button"
@@ -4122,13 +4229,25 @@ export function MeetingRoomView({
                   </div>
                   <div className="diag-metric">
                     <small>Hardware</small>
-                    <strong>
+                    <strong
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 4,
+                      }}
+                    >
                       Mic{' '}
-                      {diagnosticsReport.audioStatus === 'ok'
-                        ? '✓'
-                        : 'Muted/Off'}{' '}
+                      {diagnosticsReport.audioStatus === 'ok' ? (
+                        <LucideCheckIcon size={12} color="#10b981" />
+                      ) : (
+                        'Muted/Off'
+                      )}{' '}
                       · Cam{' '}
-                      {diagnosticsReport.videoStatus === 'ok' ? '✓' : 'Off'}
+                      {diagnosticsReport.videoStatus === 'ok' ? (
+                        <LucideCheckIcon size={12} color="#10b981" />
+                      ) : (
+                        'Off'
+                      )}
                     </strong>
                   </div>
                 </div>
@@ -4246,7 +4365,16 @@ export function MeetingRoomView({
               <label htmlFor="lobbyNameInput">
                 Your display name{' '}
                 {user ? (
-                  <span className="verified-inline-pill">✓ Verified</span>
+                  <span
+                    className="verified-inline-pill"
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 3,
+                    }}
+                  >
+                    <LucideCheckIcon size={11} /> Verified
+                  </span>
                 ) : (
                   <span className="guest-inline-pill">Guest (required)</span>
                 )}
@@ -4836,8 +4964,12 @@ export function MeetingRoomView({
               data-testid="recording-consent-banner"
             >
               <div className="recording-consent-content">
-                <span className="recording-consent-icon" aria-hidden="true">
-                  🔴
+                <span
+                  className="recording-consent-icon"
+                  aria-hidden="true"
+                  style={{ display: 'inline-flex', alignItems: 'center' }}
+                >
+                  <CircleIcon size={14} fill="#ef4444" color="#ef4444" />
                 </span>
                 <div className="recording-consent-text">
                   <strong>Recording in progress</strong>
@@ -4950,7 +5082,12 @@ export function MeetingRoomView({
                 >
                   {floatingReactions.map((rx) => (
                     <div key={rx.id} className="floating-reaction-pill">
-                      <span className="rx-emoji">{rx.emoji}</span>
+                      <span
+                        className="rx-emoji"
+                        style={{ display: 'inline-flex', alignItems: 'center' }}
+                      >
+                        {renderReactionIcon(rx.emoji, 18)}
+                      </span>
                       <span className="rx-name">{rx.displayName}</span>
                     </div>
                   ))}
@@ -5142,7 +5279,10 @@ export function MeetingRoomView({
                       <div className="tile-badges-left">
                         {handRaised && (
                           <span className="hand-raised-pill">
-                            ✋{' '}
+                            <HandIcon
+                              size={12}
+                              style={{ display: 'inline', marginRight: 4 }}
+                            />
                             {selfQueueIdx >= 0 ? `#${selfQueueIdx + 1} ` : ''}
                             Hand raised
                           </span>
@@ -5188,8 +5328,12 @@ export function MeetingRoomView({
                           <span
                             className="role-pill verified-tile-pill"
                             title="Verified account"
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                            }}
                           >
-                            ✓
+                            <LucideCheckIcon size={10} />
                           </span>
                         ) : (
                           <span
@@ -5422,8 +5566,27 @@ export function MeetingRoomView({
                       <div key={wp.id} className="host-peer-row">
                         <div className="host-peer-info">
                           <strong>{wp.displayName}</strong>
-                          <small>
-                            {wp.verified ? '✓ Verified' : 'Guest'} · Waiting
+                          <small
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: 4,
+                            }}
+                          >
+                            {wp.verified ? (
+                              <span
+                                style={{
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: 2,
+                                }}
+                              >
+                                <LucideCheckIcon size={11} /> Verified
+                              </span>
+                            ) : (
+                              'Guest'
+                            )}{' '}
+                            · Waiting
                           </small>
                         </div>
                         <div className="host-peer-actions">
@@ -5701,7 +5864,15 @@ export function MeetingRoomView({
                                 }
                                 title={`Reacted by ${peers.length} participant(s)`}
                               >
-                                <span>{emoji}</span>
+                                <span
+                                  style={{
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    marginRight: 4,
+                                  }}
+                                >
+                                  {renderReactionIcon(emoji, 12)}
+                                </span>
                                 <span className="reaction-count">
                                   {peers.length}
                                 </span>
@@ -5712,17 +5883,37 @@ export function MeetingRoomView({
                           type="button"
                           className="btn-add-chat-reaction"
                           title="Add thumbs up"
-                          onClick={() => handleChatReaction(msg.id, '👍')}
+                          onClick={() => handleChatReaction(msg.id, 'thumbsup')}
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 3,
+                          }}
                         >
-                          +👍
+                          <span
+                            style={{ fontSize: '0.72rem', fontWeight: 600 }}
+                          >
+                            +
+                          </span>
+                          <ThumbsUpIcon size={12} color="#3b82f6" />
                         </button>
                         <button
                           type="button"
                           className="btn-add-chat-reaction"
                           title="Add heart"
-                          onClick={() => handleChatReaction(msg.id, '❤️')}
+                          onClick={() => handleChatReaction(msg.id, 'heart')}
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 3,
+                          }}
                         >
-                          +❤️
+                          <span
+                            style={{ fontSize: '0.72rem', fontWeight: 600 }}
+                          >
+                            +
+                          </span>
+                          <HeartIcon size={12} color="#ef4444" />
                         </button>
                       </div>
                       <button
@@ -5750,7 +5941,7 @@ export function MeetingRoomView({
                   onClick={() => setReplyingToMessage(null)}
                   title="Cancel reply"
                 >
-                  ✕
+                  <XIcon size={11} style={{ verticalAlign: 'middle' }} />
                 </button>
               </div>
             )}
@@ -5772,7 +5963,7 @@ export function MeetingRoomView({
                   onClick={() => setChatAttachment(null)}
                   title="Remove attachment"
                 >
-                  ✕
+                  <XIcon size={11} style={{ verticalAlign: 'middle' }} />
                 </button>
               </div>
             )}
@@ -5939,15 +6130,22 @@ export function MeetingRoomView({
                 role="toolbar"
                 aria-label="Choose a reaction"
               >
-                {REACTION_EMOJIS.map((emoji) => (
+                {REACTION_DEFINITIONS.map((item) => (
                   <button
-                    key={emoji}
+                    key={item.id}
                     type="button"
                     className="reaction-choice-btn"
-                    onClick={() => handleSendReaction(emoji)}
-                    aria-label={`React with ${emoji}`}
+                    onClick={() => handleSendReaction(item.id)}
+                    aria-label={`React with ${item.label}`}
+                    title={item.label}
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      padding: 6,
+                    }}
                   >
-                    {emoji}
+                    {renderReactionIcon(item.id, 20)}
                   </button>
                 ))}
               </div>
@@ -6049,7 +6247,7 @@ export function MeetingRoomView({
             }
             title={
               captionsEnabled
-                ? 'Turn off captions (click ⚙ on captions for settings)'
+                ? 'Turn off captions (click settings icon on captions for options)'
                 : 'Turn on closed captions (CC)'
             }
             data-testid="call-captions-btn"
@@ -6970,17 +7168,25 @@ export function MeetingRoomView({
               <div className="mobile-reactions-bar">
                 <span className="mobile-section-label">Quick Reactions</span>
                 <div className="mobile-reactions-scroll">
-                  {REACTION_EMOJIS.map((emoji) => (
+                  {REACTION_DEFINITIONS.map((item) => (
                     <button
-                      key={emoji}
+                      key={item.id}
                       type="button"
                       className="reaction-choice-btn"
                       onClick={() => {
-                        handleSendReaction(emoji);
+                        handleSendReaction(item.id);
                         setShowMoreActivitiesSheet(false);
                       }}
+                      aria-label={`React with ${item.label}`}
+                      title={item.label}
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        padding: 8,
+                      }}
                     >
-                      {emoji}
+                      {renderReactionIcon(item.id, 22)}
                     </button>
                   ))}
                 </div>

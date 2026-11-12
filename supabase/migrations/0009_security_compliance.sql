@@ -93,3 +93,4 @@ begin
       using (reporter_id = auth.uid());
   end if;
 end $$;
+

@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useBackendHealth } from '../lib/backendHealth';
 import { WifiIcon, WifiOffIcon } from './Icons';
+import { Check } from 'lucide-react';
 
 interface BackendStatusIndicatorProps {
   compact?: boolean;
@@ -244,8 +245,16 @@ export function BackendStatusIndicator({
             <div>URL: {serverUrl}</div>
             {latencyMs !== null && <div>Latency: {latencyMs} ms</div>}
             {isColdStart && status === 'live' && (
-              <div style={{ color: '#10b981', marginTop: 2 }}>
-                ✓ Woken up from sleep
+              <div
+                style={{
+                  color: '#10b981',
+                  marginTop: 2,
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 4,
+                }}
+              >
+                <Check size={12} /> Woken up from sleep
               </div>
             )}
           </div>

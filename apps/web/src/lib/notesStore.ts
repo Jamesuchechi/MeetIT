@@ -525,7 +525,7 @@ export function formatNoteAsMarkdown(
   if (note.keyDecisions && note.keyDecisions.length > 0) {
     lines.push('', '## Key Decisions', '');
     for (const d of note.keyDecisions) {
-      lines.push(`- ✓ ${d}`);
+      lines.push(`- [x] ${d}`);
     }
   }
 

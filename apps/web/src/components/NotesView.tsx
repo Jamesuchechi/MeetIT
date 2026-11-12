@@ -831,9 +831,19 @@ export function NotesView({
                         <span
                           className={`note-task-pill ${openCount === 0 ? 'all-done' : ''}`}
                         >
-                          {openCount === 0
-                            ? `✓ ${noteTasks.length} done`
-                            : `${openCount} open task${openCount === 1 ? '' : 's'}`}
+                          {openCount === 0 ? (
+                            <span
+                              style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: 3,
+                              }}
+                            >
+                              <CheckIcon /> {noteTasks.length} done
+                            </span>
+                          ) : (
+                            `${openCount} open task${openCount === 1 ? '' : 's'}`
+                          )}
                         </span>
                       )}
                     </div>
@@ -1123,9 +1133,19 @@ export function NotesView({
                           className="note-mini-copy-btn"
                           onClick={() => void handleCopySummary(selectedNote)}
                         >
-                          {copiedId === `sum:${selectedNote.id}`
-                            ? '✓ Summary copied'
-                            : 'Copy summary'}
+                          {copiedId === `sum:${selectedNote.id}` ? (
+                            <span
+                              style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: 4,
+                              }}
+                            >
+                              <CheckIcon /> Summary copied
+                            </span>
+                          ) : (
+                            'Copy summary'
+                          )}
                         </button>
                       </div>
                       <p>

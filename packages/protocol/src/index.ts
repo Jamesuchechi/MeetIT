@@ -1120,7 +1120,8 @@ export type WebhookPayload = z.infer<typeof webhookPayloadSchema>;
 
 export const e2eeSasVerificationSchema = z.object({
   sasWords: z.array(z.string()).length(4),
-  sasEmoji: z.array(z.string()).length(4),
+  sasIcons: z.array(z.string()).length(4).optional(),
+  sasEmoji: z.array(z.string()).length(4).optional(),
   fingerprint: z.string().min(8),
   epoch: z.number().int().min(0),
   keyId: z.string().optional(),

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { E2eeKeyManager } from './e2eeKeyManager.js';
 import {
-  SAS_EMOJILIST,
+  SAS_ICONLIST,
   SAS_WORDLIST,
   generateSasFromFingerprint,
   verifySasMatch,
@@ -37,22 +37,22 @@ describe('E2EE Key Ratchet & Session Management', () => {
 });
 
 describe('E2EE SAS Verification & Fingerprints', () => {
-  it('generates 4 phonetic words and 4 visual emojis from fingerprint', () => {
+  it('generates 4 phonetic words and 4 visual UI icons from fingerprint', () => {
     const fakeFp =
       'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855';
     const sas = generateSasFromFingerprint(fakeFp, 0);
 
     expect(sas.sasWords).toHaveLength(4);
-    expect(sas.sasEmoji).toHaveLength(4);
+    expect(sas.sasIcons).toHaveLength(4);
     expect(sas.epoch).toBe(0);
     expect(sas.formattedFingerprint.startsWith('E2EE-')).toBe(true);
 
-    // Words and emojis belong to allowed lists
+    // Words and icons belong to allowed lists
     sas.sasWords.forEach((word) => {
       expect(SAS_WORDLIST).toContain(word);
     });
-    sas.sasEmoji.forEach((emoji) => {
-      expect(SAS_EMOJILIST).toContain(emoji);
+    sas.sasIcons.forEach((iconName) => {
+      expect(SAS_ICONLIST).toContain(iconName);
     });
   });
 

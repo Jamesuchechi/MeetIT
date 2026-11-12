@@ -363,21 +363,21 @@ export function ComplianceCenterModal({
                   {
                     id: 'eu-central-1' as const,
                     name: 'Frankfurt, Germany (EU Central)',
-                    flag: '🇪🇺',
+                    regionCode: 'EU',
                     framework: 'GDPR Article 44+ Certified',
                     desc: 'Strict European data boundary isolation. Zero data transfer outside EU boundaries.',
                   },
                   {
                     id: 'af-south-1' as const,
                     name: 'Cape Town / Johannesburg (Africa South)',
-                    flag: '🇿🇦',
+                    regionCode: 'AF',
                     framework: 'NDPR / POPIA Compliant',
                     desc: 'Sub-40ms lowest latency across Nigeria, Ghana, Kenya, and South Africa with local failover.',
                   },
                   {
                     id: 'us-east-1' as const,
                     name: 'N. Virginia, USA (US East)',
-                    flag: '🇺🇸',
+                    regionCode: 'US',
                     framework: 'SOC 2 / CCPA Compliant',
                     desc: 'High-capacity North American cluster with direct backbone peering to major enterprise providers.',
                   },
@@ -416,7 +416,20 @@ export function ComplianceCenterModal({
                           fontSize: '0.9rem',
                         }}
                       >
-                        <span>{item.flag}</span>
+                        <span
+                          style={{
+                            fontSize: '0.72rem',
+                            fontWeight: 700,
+                            padding: '2px 6px',
+                            borderRadius: 4,
+                            background: 'var(--soft)',
+                            border: '1px solid var(--line)',
+                            color: 'var(--accent)',
+                            fontFamily: 'monospace',
+                          }}
+                        >
+                          {item.regionCode}
+                        </span>
                         <span>{item.name}</span>
                         <span
                           style={{

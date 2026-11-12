@@ -527,7 +527,7 @@ export class SignalingClient implements SignalingChannel {
         });
       } else if (msg.type === 'reaction.send') {
         const emoji =
-          (msg as unknown as { emoji?: ReactionEmoji }).emoji ?? '👍';
+          (msg as unknown as { emoji?: ReactionEmoji }).emoji ?? 'thumbsup';
         this.emit('reaction.received', {
           id: `rx-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
           from: msg.senderId,

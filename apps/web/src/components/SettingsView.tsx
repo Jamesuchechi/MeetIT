@@ -25,6 +25,8 @@ import {
   FileText,
   Trash2,
   Globe,
+  Check,
+  Zap,
 } from 'lucide-react';
 import { SecuritySettingsModal } from './SecuritySettingsModal';
 import { ComplianceCenterModal } from './ComplianceCenterModal';
@@ -497,7 +499,19 @@ export function SettingsView({
                       : 'var(--line)',
                   }}
                 >
-                  {aiKeys.groqKey ? '✓ Active & Connected' : 'Managed'}
+                  {aiKeys.groqKey ? (
+                    <span
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 4,
+                      }}
+                    >
+                      <Check size={11} /> Active &amp; Connected
+                    </span>
+                  ) : (
+                    'Managed'
+                  )}
                 </span>
               </div>
 
@@ -534,7 +548,19 @@ export function SettingsView({
                       : 'var(--line)',
                   }}
                 >
-                  {aiKeys.mistralKey ? '✓ Active & Connected' : 'Managed'}
+                  {aiKeys.mistralKey ? (
+                    <span
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 4,
+                      }}
+                    >
+                      <Check size={11} /> Active &amp; Connected
+                    </span>
+                  ) : (
+                    'Managed'
+                  )}
                 </span>
               </div>
             </div>
@@ -553,9 +579,19 @@ export function SettingsView({
                 onClick={() => void handleTestAI()}
                 disabled={isTestingAI}
               >
-                {isTestingAI
-                  ? 'Testing Connection…'
-                  : '⚡ Test AI Connectivity'}
+                {isTestingAI ? (
+                  'Testing Connection…'
+                ) : (
+                  <span
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 6,
+                    }}
+                  >
+                    <Zap size={14} /> Test AI Connectivity
+                  </span>
+                )}
               </button>
               {testResult && (
                 <span style={{ fontSize: 13, color: 'var(--muted)' }}>

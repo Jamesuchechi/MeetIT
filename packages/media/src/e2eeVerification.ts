@@ -1,12 +1,31 @@
 /**
  * E2EE Short Authentication String (SAS) & Visual Verification for MeetIT.
- * Maps cryptographic fingerprints into 4 clear phonetic words and 4 visual emojis
- * so participants can confirm their encryption keys out-of-band over audio or video.
+ * Maps cryptographic fingerprints into 4 clear phonetic words and 4 visual UI icon identifiers
+ * so participants can confirm their encryption keys out-of-band over audio or video using React UI icons.
  */
+
+export type SasIconName =
+  | 'shield'
+  | 'zap'
+  | 'waves'
+  | 'key'
+  | 'gem'
+  | 'rocket'
+  | 'flame'
+  | 'sparkles'
+  | 'target'
+  | 'anchor'
+  | 'crown'
+  | 'globe'
+  | 'compass'
+  | 'sun'
+  | 'moon'
+  | 'lock';
 
 export interface E2eeSasResult {
   sasWords: [string, string, string, string];
-  sasEmoji: [string, string, string, string];
+  sasIcons: [SasIconName, SasIconName, SasIconName, SasIconName];
+  sasEmoji?: [string, string, string, string];
   fingerprint: string;
   formattedFingerprint: string;
   epoch: number;
@@ -80,28 +99,28 @@ export const SAS_WORDLIST: readonly string[] = [
   'PEAK',
 ];
 
-// 16 distinct, easily recognizable visual verification emojis
-export const SAS_EMOJILIST: readonly string[] = [
-  '🛡️',
-  '⚡',
-  '🌊',
-  '🔑',
-  '💎',
-  '🚀',
-  '🔥',
-  '🌟',
-  '🦅',
-  '🍀',
-  '🎯',
-  '⚓',
-  '👑',
-  '🪐',
-  '🦄',
-  '🌈',
+// 16 distinct Lucide UI icon names for visual verification without emojis
+export const SAS_ICONLIST: readonly SasIconName[] = [
+  'shield',
+  'zap',
+  'waves',
+  'key',
+  'gem',
+  'rocket',
+  'flame',
+  'sparkles',
+  'target',
+  'anchor',
+  'crown',
+  'globe',
+  'compass',
+  'sun',
+  'moon',
+  'lock',
 ];
 
 /**
- * Generate 4 SAS words and 4 visual emojis from a SHA-256 fingerprint string and epoch.
+ * Generate 4 SAS words and 4 visual UI icons from a SHA-256 fingerprint string and epoch.
  */
 export function generateSasFromFingerprint(
   fingerprintHex: string,
@@ -125,25 +144,25 @@ export function generateSasFromFingerprint(
     SAS_WORDLIST[w4] ?? 'SHIELD',
   ];
 
-  // Derive 4 distinct emojis
-  const emojiPool = [...SAS_EMOJILIST];
-  const sasEmoji: [string, string, string, string] = [
-    emojiPool.splice(
-      parseInt(cleanHex.slice(8, 10), 16) % emojiPool.length,
+  // Derive 4 distinct icon names
+  const iconPool = [...SAS_ICONLIST];
+  const sasIcons: [SasIconName, SasIconName, SasIconName, SasIconName] = [
+    iconPool.splice(
+      parseInt(cleanHex.slice(8, 10), 16) % iconPool.length,
       1,
-    )[0] ?? '🛡️',
-    emojiPool.splice(
-      parseInt(cleanHex.slice(10, 12), 16) % emojiPool.length,
+    )[0] ?? 'shield',
+    iconPool.splice(
+      parseInt(cleanHex.slice(10, 12), 16) % iconPool.length,
       1,
-    )[0] ?? '⚡',
-    emojiPool.splice(
-      parseInt(cleanHex.slice(12, 14), 16) % emojiPool.length,
+    )[0] ?? 'zap',
+    iconPool.splice(
+      parseInt(cleanHex.slice(12, 14), 16) % iconPool.length,
       1,
-    )[0] ?? '🌊',
-    emojiPool.splice(
-      parseInt(cleanHex.slice(14, 16), 16) % emojiPool.length,
+    )[0] ?? 'waves',
+    iconPool.splice(
+      parseInt(cleanHex.slice(14, 16), 16) % iconPool.length,
       1,
-    )[0] ?? '🔑',
+    )[0] ?? 'key',
   ];
 
   // Formatted fingerprint: E2EE-XXXX-XXXX-XXXX-XXXX
@@ -151,7 +170,8 @@ export function generateSasFromFingerprint(
 
   return {
     sasWords,
-    sasEmoji,
+    sasIcons,
+    sasEmoji: sasIcons,
     fingerprint: cleanHex,
     formattedFingerprint,
     epoch,

@@ -309,7 +309,7 @@ describe('protocol schemas and utilities', () => {
     expect(
       e2eeSasVerificationSchema.safeParse({
         sasWords: ['ALPHA', 'FALCON', 'RIVER', 'SHIELD'],
-        sasEmoji: ['🛡️', '⚡', '🌊', '🔑'],
+        sasIcons: ['shield', 'zap', 'waves', 'key'],
         fingerprint: 'e3b0c44298fc1c149afbf4c8996fb924',
         epoch: 1,
       }).success,

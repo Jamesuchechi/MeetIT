@@ -1,5 +1,6 @@
 import React, { Component, type ReactNode } from 'react';
 import * as Sentry from '@sentry/react';
+import { AlertTriangle } from 'lucide-react';
 
 const SENTRY_DSN = import.meta.env.VITE_SENTRY_DSN;
 const APP_ENV = import.meta.env.MODE || 'production';
@@ -291,10 +292,9 @@ export class AppErrorBoundary extends Component<
                 alignItems: 'center',
                 justifyContent: 'center',
                 margin: '0 auto 16px',
-                fontSize: '24px',
               }}
             >
-              ⚠️
+              <AlertTriangle size={26} color="#ef4444" />
             </div>
             <h1
               style={{

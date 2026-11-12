@@ -7,6 +7,22 @@ import {
   Check,
   X,
   Lock,
+  Shield,
+  Zap,
+  Waves,
+  Key,
+  Gem,
+  Rocket,
+  Flame,
+  Sparkles,
+  Target,
+  Anchor,
+  Crown,
+  Globe,
+  Compass,
+  Sun,
+  Moon,
+  type LucideIcon,
 } from 'lucide-react';
 import type { E2eeSasResult } from '@meetit/media';
 
@@ -17,6 +33,25 @@ interface E2eeVerificationModalProps {
   onAdvanceRatchet?: () => Promise<void>;
   participantCount?: number;
 }
+
+const SAS_ICONS: Record<string, LucideIcon> = {
+  shield: Shield,
+  zap: Zap,
+  waves: Waves,
+  key: Key,
+  gem: Gem,
+  rocket: Rocket,
+  flame: Flame,
+  sparkles: Sparkles,
+  target: Target,
+  anchor: Anchor,
+  crown: Crown,
+  globe: Globe,
+  compass: Compass,
+  sun: Sun,
+  moon: Moon,
+  lock: Lock,
+};
 
 export function E2eeVerificationModal({
   isOpen,
@@ -33,7 +68,8 @@ export function E2eeVerificationModal({
 
   const handleCopy = () => {
     if (!sas) return;
-    const text = `MeetIT E2EE SAS: ${sas.sasWords.join(' ')} | ${sas.sasEmoji.join(' ')} | ${sas.formattedFingerprint}`;
+    const iconsText = (sas.sasIcons || []).join(' ');
+    const text = `MeetIT E2EE SAS: ${sas.sasWords.join(' ')} | ${iconsText} | ${sas.formattedFingerprint}`;
     navigator.clipboard.writeText(text).catch(() => {});
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
@@ -175,16 +211,40 @@ export function E2eeVerificationModal({
               Short Authentication String (SAS)
             </span>
 
-            {/* Visual Emojis */}
+            {/* Visual Verification React UI Icons */}
             <div
               style={{
-                fontSize: '2rem',
-                letterSpacing: '0.5rem',
-                margin: '12px 0 8px',
-                userSelect: 'none',
+                display: 'flex',
+                justifyContent: 'center',
+                alignItems: 'center',
+                gap: 12,
+                margin: '14px 0 10px',
               }}
             >
-              {sas?.sasEmoji.join(' ') ?? '🛡️ ⚡ 🌊 🔑'}
+              {(sas?.sasIcons ?? ['shield', 'zap', 'waves', 'key']).map(
+                (iconKey, idx) => {
+                  const IconComp = SAS_ICONS[iconKey] || Shield;
+                  return (
+                    <div
+                      key={idx}
+                      title={iconKey.toUpperCase()}
+                      style={{
+                        width: 44,
+                        height: 44,
+                        borderRadius: 10,
+                        background: 'var(--soft)',
+                        border: '1px solid var(--line)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        color: 'var(--accent)',
+                      }}
+                    >
+                      <IconComp size={22} />
+                    </div>
+                  );
+                },
+              )}
             </div>
 
             {/* SAS Phonetic Words */}

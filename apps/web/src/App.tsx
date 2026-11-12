@@ -10,6 +10,7 @@ import { EndedView } from './components/EndedView';
 import { NotFoundView } from './components/NotFoundView';
 import { Toast } from './components/Toast';
 import { Logo } from './components/Logo';
+import { Zap, X } from 'lucide-react';
 import { normalizeRoomCode, type ViewMode, type DashboardTab } from './types';
 
 interface ParsedRoute {
@@ -356,10 +357,12 @@ function AppContent() {
           aria-live="polite"
           data-testid="pwa-offline-banner"
         >
-          <span>
-            ⚡ Offline shell active — your scheduled meetings, notes, and action
-            items are available locally. Calls will reconnect automatically when
-            back online.
+          <span
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
+          >
+            <Zap size={14} /> Offline shell active — your scheduled meetings,
+            notes, and action items are available locally. Calls will reconnect
+            automatically when back online.
           </span>
         </div>
       )}
@@ -388,7 +391,7 @@ function AppContent() {
             onClick={() => setDeferredInstallPrompt(null)}
             aria-label="Dismiss install prompt"
           >
-            ✕
+            <X size={14} />
           </button>
         </div>
       )}
