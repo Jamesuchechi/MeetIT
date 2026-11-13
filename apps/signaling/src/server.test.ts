@@ -2,7 +2,6 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { WebSocket } from 'ws';
 import { generateRoomCode, type ServerMessage } from '@meetit/protocol';
 import { buildSignalingApp, type SignalingServerInstance } from './app.js';
-import { turnCredentials, buildIceServers } from './turn.js';
 import { TokenBucketRateLimiter } from './rateLimiter.js';
 
 function waitForMessage(
@@ -37,22 +36,7 @@ function waitForMessage(
   });
 }
 
-describe('TURN credentials and RateLimiter unit tests', () => {
-  it('generates deterministic HMAC-SHA1 TURN credentials', () => {
-    const creds = turnCredentials('user-123', 'my-secret', 3600, 1700000000000);
-    expect(creds.username).toBe('1700003600:user-123');
-    expect(creds.credential.length).toBeGreaterThan(10);
-    expect(creds.ttl).toBe(3600);
-
-    const servers = buildIceServers('user-123', {
-      stunUrls: ['stun:stun.example.com:19302'],
-      turnUrls: ['turn:turn.example.com:3478'],
-      turnSecret: 'my-secret',
-    });
-    expect(servers.length).toBe(2);
-    expect(servers[1]?.username).toContain(':user-123');
-  });
-
+describe('RateLimiter unit tests', () => {
   it('enforces token bucket capacity and refills over time', () => {
     let now = 1000;
     const limiter = new TokenBucketRateLimiter({

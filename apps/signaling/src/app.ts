@@ -15,7 +15,6 @@ import {
   type Room,
 } from './room.js';
 import { TokenBucketRateLimiter } from './rateLimiter.js';
-import { buildIceServers, type IceServerEnvConfig } from './turn.js';
 import { issueGuestToken, verifyJoinToken } from './auth.js';
 import { SignalingPersistence } from './persistence.js';
 import { RedisAdapter } from './redis.js';
@@ -52,7 +51,6 @@ export interface SignalingAppOptions {
   rateLimitCapacity?: number;
   rateLimitRefillPerSec?: number;
   allowedOrigins?: string[];
-  iceConfig?: IceServerEnvConfig;
   autoCreateRoomOnJoin?: boolean;
   redisUrl?: string;
   livekitUrl?: string;
@@ -122,25 +120,6 @@ export function buildSignalingApp(
       }
       return false;
     });
-  };
-
-  const iceConfig: IceServerEnvConfig = options.iceConfig ?? {
-    stunUrls: process.env.STUN_URLS
-      ? process.env.STUN_URLS.split(',').map((s) => s.trim())
-      : ['stun:stun.l.google.com:19302'],
-    ...(process.env.TURN_URLS
-      ? { turnUrls: process.env.TURN_URLS.split(',').map((s) => s.trim()) }
-      : {}),
-    ...(process.env.TURN_SHARED_SECRET
-      ? { turnSecret: process.env.TURN_SHARED_SECRET }
-      : {}),
-    ...(process.env.TURN_USERNAME
-      ? { turnUsername: process.env.TURN_USERNAME }
-      : {}),
-    ...(process.env.TURN_CREDENTIAL
-      ? { turnCredential: process.env.TURN_CREDENTIAL }
-      : {}),
-    ttlSeconds: Number(process.env.TURN_CREDENTIAL_TTL_SECONDS ?? 3600),
   };
 
   const roomManager = new RoomManager({ reclaimSlotMs });
@@ -733,7 +712,11 @@ export function buildSignalingApp(
     lastChatSeq?: number,
     preferredRegion?: string,
   ): Promise<void> => {
-    const iceServers = buildIceServers(peer.id, iceConfig);
+    const iceServers: Array<{
+      urls: string | string[];
+      username?: string;
+      credential?: string;
+    }> = [];
     const chatBackfill = room.getChatBackfill(lastChatSeq ?? 0);
     const issuedMedia = await issueRoomMediaProviders({
       roomCode: room.code,
