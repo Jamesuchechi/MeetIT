@@ -877,7 +877,7 @@ export class MeshTransport implements MediaTransport {
     const pc = new this.PeerConnectionCtor({
       iceServers: this.iceServers,
       iceTransportPolicy: this.iceTransportPolicy,
-      iceCandidatePoolSize: 4,
+      iceCandidatePoolSize: 1,
     });
     const session: PeerSession = {
       peerId,
