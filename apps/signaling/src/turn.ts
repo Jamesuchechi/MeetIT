@@ -28,6 +28,8 @@ export interface IceServerEnvConfig {
   stunUrls?: string[];
   turnUrls?: string[];
   turnSecret?: string;
+  turnUsername?: string;
+  turnCredential?: string;
   ttlSeconds?: number;
 }
 
@@ -42,17 +44,25 @@ export function buildIceServers(
 
   const servers: IceServerConfig[] = [{ urls: stunUrls }];
 
-  if (config.turnUrls && config.turnUrls.length > 0 && config.turnSecret) {
-    const creds = turnCredentials(
-      userId,
-      config.turnSecret,
-      config.ttlSeconds ?? 3600,
-    );
-    servers.push({
-      urls: config.turnUrls,
-      username: creds.username,
-      credential: creds.credential,
-    });
+  if (config.turnUrls && config.turnUrls.length > 0) {
+    if (config.turnSecret) {
+      const creds = turnCredentials(
+        userId,
+        config.turnSecret,
+        config.ttlSeconds ?? 3600,
+      );
+      servers.push({
+        urls: config.turnUrls,
+        username: creds.username,
+        credential: creds.credential,
+      });
+    } else if (config.turnUsername && config.turnCredential) {
+      servers.push({
+        urls: config.turnUrls,
+        username: config.turnUsername,
+        credential: config.turnCredential,
+      });
+    }
   }
 
   return servers;

@@ -127,6 +127,12 @@ export function buildSignalingApp(
     ...(process.env.TURN_SHARED_SECRET
       ? { turnSecret: process.env.TURN_SHARED_SECRET }
       : {}),
+    ...(process.env.TURN_USERNAME
+      ? { turnUsername: process.env.TURN_USERNAME }
+      : {}),
+    ...(process.env.TURN_CREDENTIAL
+      ? { turnCredential: process.env.TURN_CREDENTIAL }
+      : {}),
     ttlSeconds: Number(process.env.TURN_CREDENTIAL_TTL_SECONDS ?? 3600),
   };
 
