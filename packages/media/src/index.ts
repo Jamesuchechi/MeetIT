@@ -1,5 +1,7 @@
 import type {
+  AgoraConfig,
   IceCandidatePayload,
+  JitsiConfig,
   SdpPayload,
   SignalingChannel,
 } from '@meetit/protocol';
@@ -13,6 +15,9 @@ import {
 export * from './audioEffects.js';
 export * from './videoEffects.js';
 export * from './livekit.js';
+export * from './agora.js';
+export * from './jitsi.js';
+export * from './fallback.js';
 export * from './e2eeKeyManager.js';
 export * from './e2eeVerification.js';
 export * from './e2eeTransform.js';
@@ -54,6 +59,8 @@ export interface ConnectOptions {
     url: string;
     token: string;
   };
+  jitsi?: JitsiConfig;
+  agora?: AgoraConfig;
 }
 
 export interface RemoteTrackEvent {

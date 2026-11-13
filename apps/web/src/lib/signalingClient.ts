@@ -268,6 +268,7 @@ export class SignalingClient implements SignalingChannel {
     'recording.stopped': new Set(),
     'host.command': new Set(),
     'transport.promoted': new Set(),
+    'transport.switched': new Set(),
     'chat.reaction.updated': new Set(),
     'breakout.updated': new Set(),
     'breakout.broadcast': new Set(),

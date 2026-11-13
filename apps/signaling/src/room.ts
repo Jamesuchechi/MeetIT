@@ -9,6 +9,7 @@ import {
   type ErrorCode,
   type FormItSession,
   type HandRaiseItem,
+  type MediaProviderName,
   type MeetingTimer,
   type NotesDoc,
   type PeerInfo,
@@ -131,6 +132,8 @@ export class Room {
   hostId: string | null = null;
   permissions: RoomPermissions;
   transport: 'mesh' | 'sfu';
+  activeProvider?: MediaProviderName | undefined;
+  readonly failedProviders = new Set<MediaProviderName>();
   maxParticipants: number;
   isRecording = false;
   recordingStartedAt: number | null = null;
@@ -228,9 +231,7 @@ export class Room {
         : {}),
       ...(options.permissions ?? {}),
     };
-    this.transport =
-      options.transport ??
-      (options.maxParticipants && options.maxParticipants > 4 ? 'sfu' : 'mesh');
+    this.transport = options.transport ?? 'sfu';
     this.maxParticipants =
       options.maxParticipants ?? (this.transport === 'sfu' ? 100 : 4);
     this.reclaimSlotMs = options.reclaimSlotMs ?? 30_000;
@@ -282,6 +283,23 @@ export class Room {
       this.maxParticipants = 100;
     }
     return true;
+  }
+
+  advanceMediaProvider(
+    failed: MediaProviderName,
+    availableOrder: MediaProviderName[],
+  ): MediaProviderName | null {
+    this.failedProviders.add(failed);
+    if (this.activeProvider && this.activeProvider !== failed) {
+      // Room already moved past the failed provider.
+      return this.activeProvider;
+    }
+    const next = availableOrder.find((p) => !this.failedProviders.has(p));
+    if (!next) {
+      return null;
+    }
+    this.activeProvider = next;
+    return next;
   }
 
   startRecording(

@@ -19,6 +19,8 @@
   },
   "dependencies": {
     "@meetit/protocol": "workspace:*",
+    "agora-rtc-sdk-ng": "^4.24.9",
+    "lib-jitsi-meet": "^1.0.6",
     "livekit-client": "^2.23.0"
   },
   "devDependencies": {

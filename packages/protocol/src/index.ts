@@ -892,10 +892,23 @@ export const clientMessageSchema = z.discriminatedUnion('type', [
     v: z.literal(1),
     id: z.string().uuid().optional(),
     ts: z.number().optional(),
+    type: z.literal('transport.failed'),
+    payload: z.object({
+      provider: z.enum(['livekit', 'jitsi', 'agora']),
+      reason: z.string().max(500).optional(),
+    }),
+  }),
+  z.object({
+    v: z.literal(1),
+    id: z.string().uuid().optional(),
+    ts: z.number().optional(),
     type: z.literal('ping'),
     payload: z.object({}),
   }),
 ]);
+
+export const mediaProviderNameSchema = z.enum(['livekit', 'jitsi', 'agora']);
+export type MediaProviderName = z.infer<typeof mediaProviderNameSchema>;
 
 export const liveKitRegionSchema = z.object({
   id: z.string().min(1),
@@ -914,12 +927,56 @@ export const livekitConfigSchema = z.object({
 });
 export type LivekitConfig = z.infer<typeof livekitConfigSchema>;
 
+export const jitsiConfigSchema = z.object({
+  domain: z.string().min(1),
+  roomName: z.string().min(1),
+  jwt: z.string().optional(),
+  mucDomain: z.string().optional(),
+  serviceUrl: z.string().optional(),
+});
+export type JitsiConfig = z.infer<typeof jitsiConfigSchema>;
+
+export const agoraConfigSchema = z.object({
+  appId: z.string().min(1),
+  channel: z.string().min(1),
+  token: z.string().min(1),
+  uid: z.string().min(1),
+});
+export type AgoraConfig = z.infer<typeof agoraConfigSchema>;
+
+export const mediaProviderConfigSchema = z.discriminatedUnion('provider', [
+  z.object({
+    provider: z.literal('livekit'),
+    url: z.string().min(1),
+    token: z.string().min(1),
+    region: z.string().optional(),
+  }),
+  z.object({
+    provider: z.literal('jitsi'),
+    domain: z.string().min(1),
+    roomName: z.string().min(1),
+    jwt: z.string().optional(),
+    mucDomain: z.string().optional(),
+    serviceUrl: z.string().optional(),
+  }),
+  z.object({
+    provider: z.literal('agora'),
+    appId: z.string().min(1),
+    channel: z.string().min(1),
+    token: z.string().min(1),
+    uid: z.string().min(1),
+  }),
+]);
+export type MediaProviderConfig = z.infer<typeof mediaProviderConfigSchema>;
+
 export const serverJoinedPayloadSchema = z.object({
   selfId: z.string().uuid(),
   role: peerRoleSchema,
   peers: z.array(peerInfoSchema),
   iceServers: z.array(iceServerSchema),
   transport: z.enum(['mesh', 'sfu']),
+  activeProvider: mediaProviderNameSchema.optional(),
+  providers: z.array(mediaProviderConfigSchema).optional(),
   livekit: livekitConfigSchema.optional(),
   region: z.string().optional(),
   roomState: z.object({
@@ -1049,6 +1106,13 @@ export interface SignalingEvents {
   'transport.promoted': {
     transport: 'sfu';
     livekit: LivekitConfig;
+  };
+  'transport.switched': {
+    provider: MediaProviderName;
+    reason?: string;
+    livekit?: LivekitConfig;
+    jitsi?: JitsiConfig;
+    agora?: AgoraConfig;
   };
   'recording.started': {
     startedAt: number;

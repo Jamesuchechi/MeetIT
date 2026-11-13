@@ -25,6 +25,12 @@ import {
   getSupportedRegions,
 } from './livekit.js';
 import {
+  ProviderHealthTracker,
+  issueRoomMediaProviders,
+  parseProviderOrder,
+  type MediaProviderEnvOptions,
+} from './mediaProviders.js';
+import {
   startRoomCompositeRecording,
   stopRoomCompositeRecording,
   handleLiveKitWebhook,
@@ -53,6 +59,7 @@ export interface SignalingAppOptions {
   livekitApiKey?: string;
   livekitApiSecret?: string;
   livekitRegionalUrls?: Record<string, string>;
+  mediaProviders?: MediaProviderEnvOptions;
   egressStorage?: EgressStorageConfig;
   egressClient?: EgressClient;
 }
@@ -708,6 +715,16 @@ export function buildSignalingApp(
   }
 
   const socketContexts = new Map<WebSocket, SocketContext>();
+  const providerHealth = new ProviderHealthTracker();
+  const providerOrder = parseProviderOrder();
+  const mediaEnvOptions: MediaProviderEnvOptions = {
+    livekitUrl: options.livekitUrl,
+    livekitApiKey: options.livekitApiKey,
+    livekitApiSecret: options.livekitApiSecret,
+    livekitRegionalUrls: options.livekitRegionalUrls,
+    ...options.mediaProviders,
+    providerOrder: options.mediaProviders?.providerOrder ?? providerOrder,
+  };
 
   const sendJoinedPayloadToPeer = async (
     room: Room,
@@ -718,25 +735,23 @@ export function buildSignalingApp(
   ): Promise<void> => {
     const iceServers = buildIceServers(peer.id, iceConfig);
     const chatBackfill = room.getChatBackfill(lastChatSeq ?? 0);
-    let livekitConfig:
-      { url: string; token: string; region: string } | undefined = undefined;
+    const issuedMedia = await issueRoomMediaProviders({
+      roomCode: room.code,
+      identity: peer.id,
+      displayName: peer.displayName,
+      role: peer.role,
+      preferredRegion,
+      preferredActiveProvider: room.activeProvider,
+      failedProviders: room.failedProviders,
+      healthTracker: providerHealth,
+      options: mediaEnvOptions,
+    });
 
-    if (room.transport === 'sfu' || isLiveKitConfigured(options)) {
-      const lk = await issueLiveKitToken({
-        livekitUrl: options.livekitUrl,
-        regionalUrls: options.livekitRegionalUrls,
-        region: preferredRegion,
-        apiKey: options.livekitApiKey,
-        apiSecret: options.livekitApiSecret,
-        roomCode: room.code,
-        identity: peer.id,
-        displayName: peer.displayName,
-        role: peer.role,
-      });
-      if (lk) {
-        livekitConfig = lk;
-      }
+    if (issuedMedia.activeProvider && !room.activeProvider) {
+      room.activeProvider = issuedMedia.activeProvider;
     }
+
+    const livekitConfig = issuedMedia.livekit;
 
     peer.send({
       v: 1,
@@ -749,6 +764,12 @@ export function buildSignalingApp(
         peers: room.listOtherPeerInfos(peer.id),
         iceServers,
         transport: room.transport,
+        ...(issuedMedia.activeProvider
+          ? { activeProvider: issuedMedia.activeProvider }
+          : {}),
+        ...(issuedMedia.providers.length > 0
+          ? { providers: issuedMedia.providers }
+          : {}),
         ...(livekitConfig
           ? { livekit: livekitConfig, region: livekitConfig.region }
           : {}),
@@ -1098,6 +1119,68 @@ export function buildSignalingApp(
           );
           ctx.room = null;
           ctx.peer = null;
+          break;
+        }
+
+        case 'transport.failed': {
+          const failedProvider = msg.payload.provider;
+          providerHealth.markUnhealthy(failedProvider);
+          const nextProvider = room.advanceMediaProvider(
+            failedProvider,
+            mediaEnvOptions.providerOrder ?? providerOrder,
+          );
+          if (!nextProvider) {
+            sendError(
+              ws,
+              'INVALID_MESSAGE',
+              'All configured media providers failed.',
+            );
+            break;
+          }
+          app.log.warn(
+            {
+              traceId: ctx.traceId,
+              roomId: room.code,
+              peerId: peer.id,
+              failedProvider,
+              nextProvider,
+              reason: msg.payload.reason,
+            },
+            'switching room media provider after failure',
+          );
+          for (const activePeer of room.listActivePeers()) {
+            void (async () => {
+              const issued = await issueRoomMediaProviders({
+                roomCode: room.code,
+                identity: activePeer.id,
+                displayName: activePeer.displayName,
+                role: activePeer.role,
+                preferredActiveProvider: nextProvider,
+                failedProviders: room.failedProviders,
+                healthTracker: providerHealth,
+                options: mediaEnvOptions,
+              });
+              const chosen = issued.activeProvider ?? nextProvider;
+              activePeer.send({
+                v: 1,
+                ts: Date.now(),
+                type: 'transport.switched',
+                payload: {
+                  provider: chosen,
+                  ...(msg.payload.reason ? { reason: msg.payload.reason } : {}),
+                  ...(chosen === 'livekit' && issued.livekit
+                    ? { livekit: issued.livekit }
+                    : {}),
+                  ...(chosen === 'jitsi' && issued.jitsi
+                    ? { jitsi: issued.jitsi }
+                    : {}),
+                  ...(chosen === 'agora' && issued.agora
+                    ? { agora: issued.agora }
+                    : {}),
+                },
+              });
+            })();
+          }
           break;
         }
 

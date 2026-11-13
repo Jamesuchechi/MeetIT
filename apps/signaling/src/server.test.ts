@@ -300,6 +300,7 @@ describe('Signaling server integration tests', () => {
     const createRes = await instance.app.inject({
       method: 'POST',
       url: '/rooms',
+      payload: { maxParticipants: 4 },
     });
     const { code } = createRes.json<{ code: string }>();
 

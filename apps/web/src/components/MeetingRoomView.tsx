@@ -6,10 +6,13 @@ import React, {
   useMemo,
 } from 'react';
 import {
-  MeshTransport,
   LiveKitTransport,
+  createTransportForProvider,
+  applyProviderConfigToConnectOptions,
+  connectTransportWithTimeout,
   type MediaTransport,
   type BandwidthMode,
+  type ConnectOptions,
   type ConnectionState,
   type NetworkQualityBars,
   type NetworkQualityLevel,
@@ -23,6 +26,7 @@ import type {
   ChatAttachment,
   FormItSession,
   HandRaiseItem,
+  MediaProviderName,
   MeetingTimer,
   NotesDoc,
   PeerInfo,
@@ -2516,14 +2520,29 @@ export function MeetingRoomView({
         } else if (status === 'failed') {
           setConnectionBanner({
             tone: 'danger',
-            text: 'Connection degraded — renegotiating route…',
+            text: 'Connection degraded — switching media provider…',
           });
-          onToast('Connection failed — attempting recovery.');
+          onToast('Connection failed — switching media provider.');
+          const failedProvider = activeProviderRef.current;
+          if (failedProvider) {
+            signaling.send({
+              v: 1,
+              ts: Date.now(),
+              type: 'transport.failed',
+              payload: {
+                provider: failedProvider,
+                reason: 'Runtime connection failed',
+              },
+            });
+          }
         }
       });
     };
 
-    let transport: MediaTransport = new MeshTransport();
+    const activeProviderRef: { current: MediaProviderName | null } = {
+      current: null,
+    };
+    let transport: MediaTransport = new LiveKitTransport();
     wireTransport(transport);
 
     signaling.on('waiting.room', (payload) => {
@@ -2653,8 +2672,9 @@ export function MeetingRoomView({
 
       recordCallJoinSuccess(roomCode);
 
-      const isSfu = payload.transport === 'sfu' && Boolean(payload.livekit);
-      setRoomTransport(payload.transport);
+      const chosenProvider: MediaProviderName | undefined =
+        payload.activeProvider ?? (payload.livekit ? 'livekit' : undefined);
+      setRoomTransport('sfu');
       if (payload.region) {
         setConnectedRegion(payload.region);
       }
@@ -2662,18 +2682,26 @@ export function MeetingRoomView({
       void (async () => {
         if (!hasConnectedTransportRef.current) {
           hasConnectedTransportRef.current = true;
-          if (isSfu && payload.livekit) {
-            void transport.disconnect();
-            transport = new LiveKitTransport();
-            wireTransport(transport);
-            transportRef.current = transport;
+          if (!chosenProvider) {
+            onToast('No SFU media provider configured on signaling server.');
+            return;
           }
 
-          await transport.connect({
+          activeProviderRef.current = chosenProvider;
+          void transport.disconnect();
+          transport = createTransportForProvider(chosenProvider);
+          wireTransport(transport);
+          transportRef.current = transport;
+
+          const providerConfig = payload.providers?.find(
+            (p) => p.provider === chosenProvider,
+          );
+          let connectOptions: ConnectOptions = {
             roomId: roomCode,
             selfId: payload.selfId,
             iceServers: payload.iceServers as RTCIceServer[],
-            iceTransportPolicy: relayPrivacyActive ? 'relay' : 'all',
+            iceTransportPolicy: (relayPrivacyActive ? 'relay' : 'all') as
+              'all' | 'relay',
             e2ee: {
               enabled: true,
               sharedSecret: roomCode,
@@ -2681,7 +2709,29 @@ export function MeetingRoomView({
             signaling,
             peerIds: payload.peers.map((p) => p.id),
             ...(payload.livekit ? { livekit: payload.livekit } : {}),
-          });
+          };
+          if (providerConfig) {
+            connectOptions = applyProviderConfigToConnectOptions(
+              connectOptions,
+              providerConfig,
+            );
+          }
+
+          try {
+            await connectTransportWithTimeout(transport, connectOptions, 8000);
+          } catch (err) {
+            signaling.send({
+              v: 1,
+              ts: Date.now(),
+              type: 'transport.failed',
+              payload: {
+                provider: chosenProvider,
+                reason: err instanceof Error ? err.message : 'Connect failed',
+              },
+            });
+            return;
+          }
+
           await transport.setBandwidthMode?.(bandwidthMode);
 
           const currentStream = localStreamRef.current;
@@ -2700,13 +2750,79 @@ export function MeetingRoomView({
             }
           }
         } else {
-          if (transport instanceof MeshTransport) {
-            transport.syncPeers(
-              payload.peers.map((p) => p.id),
-              payload.iceServers as RTCIceServer[],
-            );
-          }
           await transport.setBandwidthMode?.(bandwidthMode);
+        }
+      })();
+    });
+
+    signaling.on('transport.switched', (payload) => {
+      activeProviderRef.current = payload.provider;
+      onToast(`Switching media provider to ${payload.provider.toUpperCase()}…`);
+      setRoomTransport('sfu');
+      setRemotePeers((prev) => {
+        const next: Record<string, RemoteParticipant> = {};
+        for (const [id, p] of Object.entries(prev)) {
+          next[id] = {
+            ...p,
+            stream: null,
+            screenStream: null,
+            connectionStatus: 'connecting',
+          };
+        }
+        return next;
+      });
+
+      void (async () => {
+        if (transportRef.current) {
+          await transportRef.current.disconnect();
+        }
+        transport = createTransportForProvider(payload.provider);
+        wireTransport(transport);
+        transportRef.current = transport;
+
+        try {
+          await connectTransportWithTimeout(
+            transport,
+            {
+              roomId: roomCode,
+              selfId: signaling.getSelfId() ?? 'self',
+              iceServers: [],
+              ...(payload.livekit ? { livekit: payload.livekit } : {}),
+              ...(payload.jitsi ? { jitsi: payload.jitsi } : {}),
+              ...(payload.agora ? { agora: payload.agora } : {}),
+            },
+            8000,
+          );
+        } catch (err) {
+          signaling.send({
+            v: 1,
+            ts: Date.now(),
+            type: 'transport.failed',
+            payload: {
+              provider: payload.provider,
+              reason:
+                err instanceof Error ? err.message : 'Fallback connect failed',
+            },
+          });
+          return;
+        }
+
+        await transport.setBandwidthMode?.(bandwidthMode);
+
+        const currentStream = localStreamRef.current;
+        if (currentStream) {
+          const audioTrack = currentStream.getAudioTracks()[0];
+          if (audioTrack) {
+            await transport.publish(audioTrack, 'microphone', {
+              stream: currentStream,
+            });
+          }
+          const videoTrack = currentStream.getVideoTracks()[0];
+          if (videoTrack) {
+            await transport.publish(videoTrack, 'camera', {
+              stream: currentStream,
+            });
+          }
         }
       })();
     });
