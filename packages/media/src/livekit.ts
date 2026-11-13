@@ -51,7 +51,8 @@ export class LiveKitTransport implements MediaTransport {
     this.room =
       options.room ??
       new Room({
-        adaptiveStream: options.adaptiveStream ?? true,
+        // AdaptiveStream pauses video if remoteTrack.attach(el) isn't used directly
+        adaptiveStream: options.adaptiveStream ?? false,
         dynacast: options.dynacast ?? true,
         publishDefaults: {
           simulcast: true,

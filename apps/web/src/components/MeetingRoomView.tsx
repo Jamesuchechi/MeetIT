@@ -2420,11 +2420,15 @@ export function MeetingRoomView({
             };
           }
 
-          const nextStream =
-            stream ?? existing?.stream ?? new MediaStream([track]);
-          if (existing?.stream && !stream) {
-            existing.stream.addTrack(track);
-          }
+          // Merge tracks by kind so separate audio/video streams (e.g. LiveKit)
+          // never overwrite each other on the same participant tile.
+          const baseTracks = (existing?.stream?.getTracks() ?? []).filter(
+            (t) =>
+              t.id !== track.id &&
+              t.kind !== track.kind &&
+              t.readyState !== 'ended',
+          );
+          const nextStream = new MediaStream([...baseTracks, track]);
           if (!existing) {
             return {
               ...prev,
@@ -2710,6 +2714,18 @@ export function MeetingRoomView({
     signaling.on('transport.promoted', ({ livekit }) => {
       onToast('Meeting promoted to LiveKit SFU mode.');
       setRoomTransport('sfu');
+      setRemotePeers((prev) => {
+        const next: Record<string, RemoteParticipant> = {};
+        for (const [id, p] of Object.entries(prev)) {
+          next[id] = {
+            ...p,
+            stream: null,
+            screenStream: null,
+            connectionStatus: 'connecting',
+          };
+        }
+        return next;
+      });
       if (livekit.region) {
         setConnectedRegion(livekit.region);
       }
