@@ -423,4 +423,67 @@ describe('MeshTransport', () => {
     vi.useRealTimers();
     await meshA.disconnect();
   });
+
+  it('queues follow-up negotiation when tracks are published back-to-back and syncs peers on reconnect', async () => {
+    MockRTCPeerConnection.instances = [];
+    const peerA = '00000000-0000-4000-8000-000000000001';
+    const peerB = '00000000-0000-4000-8000-000000000002';
+    const peerC = '00000000-0000-4000-8000-000000000003';
+    const sig = new MockSignalingPair(peerA, peerB);
+
+    let offersSent = 0;
+    const origSend = sig.a.send.bind(sig.a);
+    sig.a.send = (msg) => {
+      if (msg.type === 'signal.offer') offersSent += 1;
+      origSend(msg);
+    };
+
+    const meshA = new MeshTransport({
+      PeerConnectionImpl:
+        MockRTCPeerConnection as unknown as typeof RTCPeerConnection,
+    });
+    const meshB = new MeshTransport({
+      PeerConnectionImpl:
+        MockRTCPeerConnection as unknown as typeof RTCPeerConnection,
+    });
+
+    await meshB.connect({
+      roomId: 'abc-defg-hij',
+      selfId: peerB,
+      iceServers: [],
+      signaling: sig.b,
+    });
+    await meshA.connect({
+      roomId: 'abc-defg-hij',
+      selfId: peerA,
+      iceServers: [],
+      signaling: sig.a,
+      peerIds: [peerB],
+    });
+    await new Promise((r) => setTimeout(r, 20));
+    const initialOffers = offersSent;
+
+    const audioTrack = { kind: 'audio' } as MediaStreamTrack;
+    const videoTrack = { kind: 'video' } as MediaStreamTrack;
+    // Publish both back-to-back without awaiting between them
+    await Promise.all([
+      meshA.publish(audioTrack, 'microphone'),
+      meshA.publish(videoTrack, 'camera'),
+    ]);
+    await new Promise((r) => setTimeout(r, 20));
+
+    // At least two more offers should have been sent (one for mic, queued one for camera)
+    expect(offersSent).toBeGreaterThanOrEqual(initialOffers + 2);
+
+    // Sync peers on reconnect: drop peerB, add peerC
+    const countBeforeSync = MockRTCPeerConnection.instances.length;
+    meshA.syncPeers([peerC], [{ urls: 'stun:stun.l.google.com:19302' }]);
+    await new Promise((r) => setTimeout(r, 20));
+    expect(MockRTCPeerConnection.instances.length).toBeGreaterThan(
+      countBeforeSync,
+    );
+
+    await meshA.disconnect();
+    await meshB.disconnect();
+  });
 });

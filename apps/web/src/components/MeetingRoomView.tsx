@@ -2696,6 +2696,12 @@ export function MeetingRoomView({
             }
           }
         } else {
+          if (transport instanceof MeshTransport) {
+            transport.syncPeers(
+              payload.peers.map((p) => p.id),
+              payload.iceServers as RTCIceServer[],
+            );
+          }
           await transport.setBandwidthMode?.(bandwidthMode);
         }
       })();

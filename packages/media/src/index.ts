@@ -446,6 +446,8 @@ interface PeerSession {
   peerId: string;
   pc: RTCPeerConnection;
   makingOffer: boolean;
+  pendingNegotiation: boolean;
+  pendingIceRestart: boolean;
   ignoreOffer: boolean;
   isSettingRemoteAnswerPending: boolean;
   remoteDescriptionSet: boolean;
@@ -500,7 +502,7 @@ export class MeshTransport implements MediaTransport {
       (typeof globalThis.RTCPeerConnection !== 'undefined'
         ? globalThis.RTCPeerConnection
         : undefined);
-    this.iceRestartGraceMs = options.iceRestartGraceMs ?? 3000;
+    this.iceRestartGraceMs = options.iceRestartGraceMs ?? 5000;
     this.renegotiateTimeoutMs = options.renegotiateTimeoutMs ?? 15000;
   }
 
@@ -821,6 +823,38 @@ export class MeshTransport implements MediaTransport {
     }
   }
 
+  /**
+   * Re-synchronizes active mesh peer connections after a signaling reconnect.
+   */
+  syncPeers(peerIds: string[], iceServers?: RTCIceServer[]): void {
+    if (!this.connected) return;
+    if (iceServers) {
+      this.iceServers = iceServers;
+      for (const session of this.peers.values()) {
+        if (typeof session.pc.setConfiguration === 'function') {
+          try {
+            session.pc.setConfiguration({
+              iceServers: this.iceServers,
+              iceTransportPolicy: this.iceTransportPolicy,
+            });
+          } catch {
+            // ignore if browser rejects runtime ICE config update
+          }
+        }
+      }
+    }
+
+    const desired = new Set(peerIds.filter((id) => id !== this.selfId));
+    for (const existingId of Array.from(this.peers.keys())) {
+      if (!desired.has(existingId)) {
+        this.removePeer(existingId);
+      }
+    }
+    for (const peerId of desired) {
+      this.ensurePeer(peerId, true);
+    }
+  }
+
   private emit<E extends keyof TransportEvents>(
     event: E,
     payload: TransportEvents[E],
@@ -843,11 +877,14 @@ export class MeshTransport implements MediaTransport {
     const pc = new this.PeerConnectionCtor({
       iceServers: this.iceServers,
       iceTransportPolicy: this.iceTransportPolicy,
+      iceCandidatePoolSize: 4,
     });
     const session: PeerSession = {
       peerId,
       pc,
       makingOffer: false,
+      pendingNegotiation: false,
+      pendingIceRestart: false,
       ignoreOffer: false,
       isSettingRemoteAnswerPending: false,
       remoteDescriptionSet: false,
@@ -945,11 +982,8 @@ export class MeshTransport implements MediaTransport {
     pc.oniceconnectionstatechange = handleStateChange;
     pc.onconnectionstatechange = handleStateChange;
 
-    // If impolite (or if local tracks already attached), start negotiation
-    if (
-      initiateIfImpolite &&
-      (!this.isPoliteWith(peerId) || this.publishedTracks.size > 0)
-    ) {
+    // Only the impolite peer initiates the initial offer on join to avoid glare
+    if (initiateIfImpolite && !this.isPoliteWith(peerId)) {
       void this.negotiate(session);
     }
 
@@ -1013,11 +1047,34 @@ export class MeshTransport implements MediaTransport {
     }
   }
 
+  private flushPendingNegotiation(session: PeerSession): void {
+    if (
+      !this.connected ||
+      !session.pendingNegotiation ||
+      session.makingOffer ||
+      session.pc.signalingState !== 'stable'
+    ) {
+      return;
+    }
+    session.pendingNegotiation = false;
+    const iceRestart = session.pendingIceRestart;
+    session.pendingIceRestart = false;
+    void this.negotiate(session, iceRestart);
+  }
+
   private async negotiate(
     session: PeerSession,
     iceRestart = false,
   ): Promise<void> {
-    if (!this.connected || session.makingOffer) return;
+    if (!this.connected) return;
+    if (session.makingOffer || session.pc.signalingState !== 'stable') {
+      // Queue follow-up negotiation so tracks added mid-handshake are not dropped
+      session.pendingNegotiation = true;
+      if (iceRestart) {
+        session.pendingIceRestart = true;
+      }
+      return;
+    }
     try {
       session.makingOffer = true;
       this.updateSessionState(
@@ -1028,7 +1085,13 @@ export class MeshTransport implements MediaTransport {
       const offer = await session.pc.createOffer(
         iceRestart ? { iceRestart: true } : undefined,
       );
-      if (session.pc.signalingState !== 'stable') return;
+      if (session.pc.signalingState !== 'stable') {
+        session.pendingNegotiation = true;
+        if (iceRestart) {
+          session.pendingIceRestart = true;
+        }
+        return;
+      }
 
       const tunedSdp = tuneOpusSdp(offer.sdp);
       const finalOffer: RTCSessionDescriptionInit = {
@@ -1056,6 +1119,7 @@ export class MeshTransport implements MediaTransport {
       this.emit('error', err instanceof Error ? err : new Error(String(err)));
     } finally {
       session.makingOffer = false;
+      this.flushPendingNegotiation(session);
     }
   }
 
@@ -1084,10 +1148,8 @@ export class MeshTransport implements MediaTransport {
         ...(description.sdp !== undefined ? { sdp: description.sdp } : {}),
       };
       if (offerCollision && polite) {
-        await Promise.all([
-          session.pc.setLocalDescription({ type: 'rollback' }),
-          session.pc.setRemoteDescription(rtcDesc),
-        ]);
+        await session.pc.setLocalDescription({ type: 'rollback' });
+        await session.pc.setRemoteDescription(rtcDesc);
       } else {
         await session.pc.setRemoteDescription(rtcDesc);
       }
@@ -1127,6 +1189,7 @@ export class MeshTransport implements MediaTransport {
           });
         }
       }
+      this.flushPendingNegotiation(session);
     } catch (err) {
       session.isSettingRemoteAnswerPending = false;
       this.emit('error', err instanceof Error ? err : new Error(String(err)));
