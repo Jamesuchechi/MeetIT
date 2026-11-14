@@ -5,6 +5,8 @@ import {
   Code2 as Code2Icon,
   DollarSign as DollarSignIcon,
   BarChart3 as BarChartIcon,
+  Shield as ShieldIcon,
+  Brain as BrainIcon,
 } from 'lucide-react';
 import { Logo } from './Logo';
 import {
@@ -64,6 +66,8 @@ import { TranscriptsView } from './TranscriptsView';
 import { DeveloperHubView } from './DeveloperHubView';
 import { AnalyticsView } from './AnalyticsView';
 import { CostDashboardView } from './CostDashboardView';
+import { AuditLogView } from './AuditLogModal';
+import { MemoryLabView } from './MemoryLabView';
 import { BackendStatusIndicator } from './BackendStatusIndicator';
 
 interface DashboardViewProps {
@@ -87,6 +91,8 @@ const TAB_LABELS: Record<DashboardTab, string> = {
   developer: 'Developer Platform',
   analytics: 'Meeting Analytics',
   cost: 'Cost & Scale Telemetry',
+  memory: 'Memory & AI Lab',
+  audit: 'Security Audit Log',
   settings: 'Settings',
   profile: 'Public Profile',
   'profile-edit': 'Edit Profile',
@@ -436,6 +442,34 @@ export function DashboardView({
           </button>
           <button
             type="button"
+            aria-current={activeTab === 'memory' ? 'page' : undefined}
+            onClick={() => {
+              selectTab('memory');
+              setIsNavDrawerOpen(false);
+            }}
+            data-testid="sidebar-memory-btn"
+          >
+            <span>
+              <BrainIcon size={16} />
+            </span>
+            <span>Memory &amp; Lab</span>
+          </button>
+          <button
+            type="button"
+            aria-current={activeTab === 'audit' ? 'page' : undefined}
+            onClick={() => {
+              selectTab('audit');
+              setIsNavDrawerOpen(false);
+            }}
+            data-testid="sidebar-audit-btn"
+          >
+            <span>
+              <ShieldIcon size={16} />
+            </span>
+            <span>Security Audit</span>
+          </button>
+          <button
+            type="button"
             aria-current={activeTab === 'settings' ? 'page' : undefined}
             onClick={() => {
               selectTab('settings');
@@ -724,6 +758,10 @@ export function DashboardView({
             <AnalyticsView onToast={onToast} />
           ) : activeTab === 'cost' ? (
             <CostDashboardView onToast={onToast} />
+          ) : activeTab === 'memory' ? (
+            <MemoryLabView userId={user?.id} onToast={onToast} />
+          ) : activeTab === 'audit' ? (
+            <AuditLogView userId={user?.id} />
           ) : activeTab === 'settings' ? (
             <SettingsView
               user={user ?? null}

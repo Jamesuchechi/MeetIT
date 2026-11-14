@@ -24,6 +24,8 @@ export type DashboardTab =
   | 'developer'
   | 'analytics'
   | 'cost'
+  | 'memory'
+  | 'audit'
   | 'settings'
   | 'profile'
   | 'profile-edit';

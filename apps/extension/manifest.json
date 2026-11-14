@@ -1,0 +1,22 @@
+{
+  "manifest_version": 3,
+  "name": "MeetIT Quick Launcher",
+  "version": "0.1.0",
+  "description": "One-click Start MeetIT on any page with calendar link detection.",
+  "permissions": ["activeTab", "storage"],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Start MeetIT"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://calendar.google.com/*",
+        "https://outlook.live.com/*",
+        "https://outlook.office.com/*"
+      ],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}

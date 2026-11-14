@@ -11,6 +11,8 @@ import {
   applyProviderConfigToConnectOptions,
   connectTransportWithTimeout,
   computeProximityAudioGain,
+  speakTranslatedCaption,
+  translateCaptionText,
   triggerHapticCue,
   type MediaTransport,
   type BandwidthMode,
@@ -19,7 +21,6 @@ import {
   type NetworkQualityBars,
   type NetworkQualityLevel,
   type PeerNetworkStats,
-  type TransportStats,
 } from '@meetit/media';
 import type {
   AgendaItem,
@@ -46,7 +47,6 @@ import type {
 } from '@meetit/protocol';
 import { WebinarWaitingScreen } from './WebinarWaitingScreen';
 import { WebinarStreamModal } from './WebinarStreamModal';
-import { WebinarAnalyticsModal } from './WebinarAnalyticsModal';
 import { WebinarSimulivePlayer } from './WebinarSimulivePlayer';
 import { WebinarQaPanel } from './WebinarQaPanel';
 import { BreakoutModal } from './BreakoutModal';
@@ -73,9 +73,7 @@ import {
 } from './AppsMarketplaceModal';
 import { E2eeVerificationModal } from './E2eeVerificationModal';
 import { ReportAbuseModal } from './ReportAbuseModal';
-import { AuditLogModal } from './AuditLogModal';
 import { DeviceHandoffModal } from './DeviceHandoffModal';
-import { CostDashboardModal } from './CostDashboardModal';
 import {
   extractHandoffToken,
   getDeviceDescriptor,
@@ -101,7 +99,6 @@ import {
   Paintbrush as PaintbrushIcon,
   FileText as FileTextIcon,
   Radio as RadioIcon,
-  TrendingUp as TrendingUpIcon,
   MessageSquare as MessageSquareIcon,
   Smile as SmileIcon,
   Hand as HandIcon,
@@ -124,8 +121,6 @@ import {
   ArrowRightLeft as ArrowRightLeftIcon,
   ShieldCheck as ShieldCheckIcon,
   Shield as ShieldIcon,
-  DollarSign as DollarSignIcon,
-  Leaf as LeafIcon,
   Flag as FlagIcon,
   ThumbsUp as ThumbsUpIcon,
   Heart as HeartIcon,
@@ -889,13 +884,8 @@ export function MeetingRoomView({
     id: string;
     displayName: string;
   } | null>(null);
-  const [showAuditLogModal, setShowAuditLogModal] = useState(false);
   // Phase 11: Seamless Device Handoff state
   const [showDeviceHandoffModal, setShowDeviceHandoffModal] = useState(false);
-  // Phase 12: Cost, Scale & Carbon Telemetry state
-  const [showCostDashboardModal, setShowCostDashboardModal] = useState(false);
-  const [liveTransportStats, setLiveTransportStats] =
-    useState<TransportStats | null>(null);
   const incomingHandoffToken = useMemo(() => {
     if (typeof window === 'undefined') return null;
     return extractHandoffToken(window.location.search);
@@ -1188,6 +1178,10 @@ export function MeetingRoomView({
     Record<string, { x: number; y: number }>
   >({});
   const [translatorLang, setTranslatorLang] = useState('en');
+  const translatorLangRef = useRef('en');
+  useEffect(() => {
+    translatorLangRef.current = translatorLang;
+  }, [translatorLang]);
   const [hapticsEnabled, setHapticsEnabled] = useState(false);
   const [simplifiedMode, setSimplifiedMode] = useState(false);
   const [engagementOptIn, setEngagementOptIn] = useState(false);
@@ -1234,8 +1228,6 @@ export function MeetingRoomView({
     [],
   );
   const [showWebinarStreamModal, setShowWebinarStreamModal] = useState(false);
-  const [showWebinarAnalyticsModal, setShowWebinarAnalyticsModal] =
-    useState(false);
   const [showWebinarQaPanel, setShowWebinarQaPanel] = useState(false);
   const [showSimulivePlayer, setShowSimulivePlayer] = useState(false);
 
@@ -1459,12 +1451,6 @@ export function MeetingRoomView({
           const stats = await transport.getPeerStats();
           if (!cancelled) {
             setPeerStatsMap(stats);
-          }
-        }
-        if (typeof transport.getStats === 'function') {
-          const tStats = await transport.getStats();
-          if (!cancelled) {
-            setLiveTransportStats(tStats);
           }
         }
       } catch {
@@ -3008,6 +2994,12 @@ export function MeetingRoomView({
           cueOrder: transcriptCuesRef.current.length,
           ...(cue.language ? { language: cue.language } : {}),
         });
+        const targetLang = translatorLangRef.current;
+        if (targetLang && targetLang !== 'en') {
+          void translateCaptionText(cue.text, targetLang).then((translated) => {
+            speakTranslatedCaption(translated, targetLang);
+          });
+        }
       }
 
       if (
@@ -5075,32 +5067,6 @@ export function MeetingRoomView({
             <span>E2EE</span>
           </button>
 
-          {/* Phase 12: Scale, Cost & Carbon Telemetry pill */}
-          <button
-            type="button"
-            className="call-telemetry-chip"
-            onClick={() => setShowCostDashboardModal(true)}
-            title="Scale, Relay & Carbon Telemetry. Click to view cost per participant-minute."
-            aria-label="Cost and Carbon Telemetry"
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 4,
-              padding: '3px 8px',
-              borderRadius: 12,
-              background: 'rgba(16, 185, 129, 0.15)',
-              border: '1px solid rgba(16, 185, 129, 0.3)',
-              color: '#10b981',
-              fontSize: '0.75rem',
-              fontWeight: 700,
-              cursor: 'pointer',
-            }}
-            data-testid="telemetry-chip-btn"
-          >
-            <LeafIcon size={13} />
-            <span>Telemetry</span>
-          </button>
-
           {relayPrivacyActive && (
             <div
               className="call-relay-chip"
@@ -7109,22 +7075,6 @@ export function MeetingRoomView({
                     type="button"
                     className="call-more-menu-item"
                     onClick={() => {
-                      setShowAuditLogModal(true);
-                      setShowMoreDesktopMenu(false);
-                    }}
-                    data-testid="desktop-menu-audit-btn"
-                  >
-                    <FileTextIcon size={16} />
-                    <div className="menu-item-text">
-                      <span>Security Audit Trail</span>
-                      <small>Room actions, recording, and access log</small>
-                    </div>
-                  </button>
-
-                  <button
-                    type="button"
-                    className="call-more-menu-item"
-                    onClick={() => {
                       setShowDeviceHandoffModal(true);
                       setShowMoreDesktopMenu(false);
                     }}
@@ -7137,25 +7087,6 @@ export function MeetingRoomView({
                     <div className="menu-item-text">
                       <span>Switch Device (Handoff)</span>
                       <small>Transfer meeting to phone or another device</small>
-                    </div>
-                  </button>
-
-                  {/* Phase 12: Cost & Carbon Telemetry */}
-                  <button
-                    type="button"
-                    className="call-more-menu-item"
-                    onClick={() => {
-                      setShowCostDashboardModal(true);
-                      setShowMoreDesktopMenu(false);
-                    }}
-                    data-testid="desktop-menu-cost-btn"
-                  >
-                    <DollarSignIcon size={16} style={{ color: '#10b981' }} />
-                    <div className="menu-item-text">
-                      <span>Cost &amp; Carbon Telemetry</span>
-                      <small>
-                        Relay ratio, participant costs, and carbon impact
-                      </small>
                     </div>
                   </button>
 
@@ -7534,25 +7465,6 @@ export function MeetingRoomView({
                               </span>
                             )}
                           </button>
-
-                          <button
-                            type="button"
-                            className="call-more-menu-item"
-                            onClick={() => {
-                              setShowWebinarAnalyticsModal(true);
-                              setShowActivitiesPopover(false);
-                            }}
-                            data-testid="call-webinar-analytics-btn"
-                          >
-                            <TrendingUpIcon
-                              size={16}
-                              className="menu-icon-accent"
-                            />
-                            <div className="menu-item-text">
-                              <span>Attendee Analytics</span>
-                              <small>Viewer engagement &amp; attendance</small>
-                            </div>
-                          </button>
                         </>
                       )}
                     </>
@@ -7581,23 +7493,6 @@ export function MeetingRoomView({
                     type="button"
                     className="call-more-menu-item"
                     onClick={() => {
-                      setShowAuditLogModal(true);
-                      setShowActivitiesPopover(false);
-                      setShowMoreActivitiesSheet(false);
-                    }}
-                    data-testid="call-audit-btn"
-                  >
-                    <FileTextIcon size={16} className="menu-icon-accent" />
-                    <div className="menu-item-text">
-                      <span>Security Audit Log</span>
-                      <small>Room access and security trail</small>
-                    </div>
-                  </button>
-
-                  <button
-                    type="button"
-                    className="call-more-menu-item"
-                    onClick={() => {
                       setShowDeviceHandoffModal(true);
                       setShowActivitiesPopover(false);
                       setShowMoreActivitiesSheet(false);
@@ -7613,24 +7508,6 @@ export function MeetingRoomView({
                       <small>
                         Transfer meeting seamlessly to phone or laptop
                       </small>
-                    </div>
-                  </button>
-
-                  {/* Phase 12: Cost & Carbon Telemetry */}
-                  <button
-                    type="button"
-                    className="call-more-menu-item"
-                    onClick={() => {
-                      setShowCostDashboardModal(true);
-                      setShowActivitiesPopover(false);
-                      setShowMoreActivitiesSheet(false);
-                    }}
-                    data-testid="call-cost-btn"
-                  >
-                    <DollarSignIcon size={16} style={{ color: '#10b981' }} />
-                    <div className="menu-item-text">
-                      <span>Cost &amp; Carbon Telemetry</span>
-                      <small>Live cost per minute &amp; relay ratio</small>
                     </div>
                   </button>
 
@@ -8153,24 +8030,6 @@ export function MeetingRoomView({
                     <span>Stream</span>
                   </button>
                 )}
-
-                {/* Webinar Analytics */}
-                {webinarState?.enabled && canModerate && (
-                  <button
-                    type="button"
-                    className={`mobile-activity-card ${showWebinarAnalyticsModal ? 'active' : ''}`}
-                    onClick={() => {
-                      setShowWebinarAnalyticsModal(true);
-                      setShowMoreActivitiesSheet(false);
-                    }}
-                    data-testid="mobile-sheet-analytics-btn"
-                  >
-                    <div className="mobile-activity-icon-wrap">
-                      <TrendingUpIcon size={18} />
-                    </div>
-                    <span>Analytics</span>
-                  </button>
-                )}
               </div>
             </div>
           </div>
@@ -8567,12 +8426,6 @@ export function MeetingRoomView({
         onStopStream={() => signalingRef.current?.stopWebinarStream()}
       />
 
-      <WebinarAnalyticsModal
-        isOpen={showWebinarAnalyticsModal}
-        onClose={() => setShowWebinarAnalyticsModal(false)}
-        roomCode={roomCode}
-      />
-
       {showWebinarQaPanel && (
         <aside
           className="call-side-panel webinar-qa-panel-container"
@@ -8683,13 +8536,6 @@ export function MeetingRoomView({
         onSubmitted={() => onToast('Abuse report submitted to moderation.')}
       />
 
-      {/* Phase 10: Security Audit Log Viewer */}
-      <AuditLogModal
-        isOpen={showAuditLogModal}
-        onClose={() => setShowAuditLogModal(false)}
-        userId={user?.id}
-      />
-
       {/* Phase 11: Seamless Device Handoff Modal */}
       <DeviceHandoffModal
         isOpen={showDeviceHandoffModal}
@@ -8710,25 +8556,6 @@ export function MeetingRoomView({
           onToast(`Call transferred to ${targetDevice}. Goodbye!`);
           handleHangUp();
         }}
-      />
-
-      {/* Phase 12: Cost, Scale & Carbon Telemetry Modal */}
-      <CostDashboardModal
-        isOpen={showCostDashboardModal}
-        onClose={() => setShowCostDashboardModal(false)}
-        durationSeconds={callSeconds}
-        participantCount={totalParticipantCount}
-        bytesReceived={liveTransportStats?.bytesReceived ?? 0}
-        bytesSent={liveTransportStats?.bytesSent ?? 0}
-        relayBytes={
-          (liveTransportStats?.relayBytesReceived ?? 0) +
-          (liveTransportStats?.relayBytesSent ?? 0)
-        }
-        currentRegionId={connectedRegion || 'default'}
-        isP2PDirectActive={
-          totalParticipantCount === 2 &&
-          liveTransportStats?.activeCandidatePairType !== 'relay'
-        }
       />
     </div>
   );

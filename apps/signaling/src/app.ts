@@ -36,6 +36,14 @@ import {
 import { MeetingMemoryGraph } from './memoryGraph.js';
 import { AiProxySession } from './aiProxy.js';
 import {
+  MEETING_TEMPLATES,
+  buildCatchMeUpSummary,
+  buildTranscriptHashChain,
+  handleMcpRequest,
+  verifyTranscriptHashChain,
+  type SignedTranscriptEntry,
+} from './phase14.js';
+import {
   startRoomCompositeRecording,
   stopRoomCompositeRecording,
   handleLiveKitWebhook,
@@ -559,6 +567,54 @@ export function buildSignalingApp(
       });
     },
   );
+
+  app.get('/templates', async () => ({ templates: MEETING_TEMPLATES }));
+
+  app.get<{
+    Params: { code: string };
+    Querystring: { sinceTs?: string };
+  }>('/rooms/:code/catch-me-up', async (request, reply) => {
+    const normalized = normalizeRoomCode(request.params.code);
+    const room = normalized ? roomManager.getRoom(normalized) : undefined;
+    if (!room) {
+      return reply.code(404).send({ error: 'ROOM_NOT_FOUND' });
+    }
+    const sinceTs = request.query.sinceTs ? Number(request.query.sinceTs) : 0;
+    const captions = room.intelligence.getRecentCaptions(60 * 60 * 1000);
+    return reply.code(200).send(buildCatchMeUpSummary(captions, sinceTs));
+  });
+
+  app.post<{
+    Body: { entries: Array<{ speaker: string; text: string; ts: number }> };
+  }>('/transcripts/sign', async (request, reply) => {
+    const secret =
+      process.env.GUEST_TOKEN_SECRET ?? 'dev-transcript-signing-secret';
+    const signed = buildTranscriptHashChain(request.body.entries ?? [], secret);
+    return reply.code(200).send({ entries: signed });
+  });
+
+  app.post<{
+    Body: { entries: SignedTranscriptEntry[] };
+  }>('/transcripts/verify', async (request, reply) => {
+    const secret =
+      process.env.GUEST_TOKEN_SECRET ?? 'dev-transcript-signing-secret';
+    return reply
+      .code(200)
+      .send(verifyTranscriptHashChain(request.body.entries ?? [], secret));
+  });
+
+  app.post<{
+    Body: {
+      jsonrpc?: string;
+      id?: unknown;
+      method?: string;
+      params?: Record<string, unknown>;
+    };
+  }>('/mcp', async (request, reply) => {
+    return reply
+      .code(200)
+      .send(handleMcpRequest(request.body ?? {}, memoryGraph));
+  });
 
   app.get('/meetings/history', async () => ({
     meetings: persistence.listMeetingsHistory(50),
@@ -1621,6 +1677,19 @@ export function buildSignalingApp(
             },
             peer.id,
           );
+          break;
+        }
+
+        case 'slides.sync': {
+          room.broadcast({
+            v: 1,
+            ts: Date.now(),
+            type: 'slides.sync',
+            payload: {
+              presenterId: peer.id,
+              ...msg.payload,
+            },
+          });
           break;
         }
 

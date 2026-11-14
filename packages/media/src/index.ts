@@ -20,6 +20,8 @@ export * from './jitsi.js';
 export * from './fallback.js';
 export * from './tier2.js';
 export * from './tier3.js';
+export * from './doubleEnder.js';
+export * from './phase13Runtime.js';
 export * from './e2eeKeyManager.js';
 export * from './e2eeVerification.js';
 export * from './e2eeTransform.js';

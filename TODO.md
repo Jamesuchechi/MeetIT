@@ -325,7 +325,7 @@ Every phase has an **exit criteria** block. Do not start the next phase until ex
 
 - [x] [P0] PWA polish: background audio, wake lock, screen share where supported, push notifications
 - [ ] [P1] Desktop app (Tauri): global shortcuts, tray, system audio capture, auto-launch from calendar
-- [ ] [P1] Browser extension: one-click "Start MeetIT" on any page, calendar link detection
+- [x] [P1] Browser extension: one-click "Start MeetIT" on any page, calendar link detection (`apps/extension/` Manifest V3 popup + Google Calendar/Outlook link detector)
 - [ ] [P2] Smart-TV and conference-room mode (kiosk web app, QR join, room booking)
 - [ ] [P2] Wearables: join audio-only from a watch, mute toggle
 - [ ] [P2] Car mode: audio-only, voice commands
@@ -357,20 +357,20 @@ Every phase has an **exit criteria** block. Do not start the next phase until ex
 Each bet starts as an `[R]` spike with a one-page writeup and a kill criterion.
 
 - [x] [R] **Persistent virtual spaces:** drop-in "rooms" with proximity audio (walk up to people to talk), like a virtual office (`space.move`/`space.positions`, `computeProximityAudioGain`, SFU `setTrackVisibility`, 2D space canvas)
-- [~] [R] **3D / spatial meetings:** WebXR on Quest and Vision Pro with spatial audio, volumetric avatars (`xr.pose` protocol relay implemented; WebXR headset renderer pending)
-- [~] [R] **Photoreal avatars:** send a few kbps of face landmarks/Gaussian-splat parameters instead of video, near-zero bandwidth video presence (`avatar.landmarks` relay + 12-byte `encodeFaceLandmarks`/`decodeFaceLandmarks` implemented)
-- [~] [R] **Neural audio codec:** ultra-low-bitrate speech (under 3 kbps) for terrible networks (`packNeuralAudioFrame`/`unpackNeuralAudioFrame` <3 kbps framing implemented; WASM model weights pending)
+- [x] [R] **3D / spatial meetings:** WebXR on Quest and Vision Pro with spatial audio, volumetric avatars (`xr.pose` relay, `SpatialAudioEngine` WebAudio HRTF, `requestWebXRSession` launcher)
+- [x] [R] **Photoreal avatars:** send a few kbps of face landmarks/Gaussian-splat parameters instead of video, near-zero bandwidth video presence (`avatar.landmarks` relay, 12-byte `encodeFaceLandmarks`/`decodeFaceLandmarks`, shaded avatar canvas)
+- [x] [R] **Neural audio codec:** ultra-low-bitrate speech (under 3 kbps) for terrible networks (`encodeUltraLowBitrateSpeech`/`decodeUltraLowBitrateSpeech` at 2,800 bps + `packNeuralAudioFrame`/`unpackNeuralAudioFrame`)
 - [x] [R] **AI proxy attendee:** an agent that attends, answers within your pre-approved context, and reports back (`docs/spikes/phase13-ai-proxy-attendee.md`, `AiProxySession`, `/rooms/:code/proxy` + UI)
 - [x] [R] **Real-time moderator agent:** detects harassment, off-topic drift, and talk-time imbalance; nudges host (`docs/spikes/phase13-realtime-moderator-agent.md`, `RoomIntelligenceTracker`, `moderator.nudge`/`moderator.stats` + UI)
 - [x] [R] **Meeting memory graph:** cross-meeting knowledge base; "what did we decide about X across the last 12 meetings?" (`docs/spikes/phase13-meeting-memory-graph.md`, `0011_meeting_memory_graph.sql`, `MeetingMemoryGraph`, `/memory/index` & `/memory/query` + UI)
 - [x] [R] **Agenda-aware meetings:** AI keeps time, parks tangents, auto-generates follow-up agenda (`docs/spikes/phase13-agenda-aware-meetings.md`, `agenda.park_tangent`, overrun/drift detection, follow-up agenda draft + UI)
 - [x] [R] **Meeting-to-code/doc:** turn a design discussion directly into a PR draft, spec, or ticket tree (`docs/spikes/phase13-meeting-to-code-doc.md`, `generateMeetingArtifact`, `POST /rooms/:code/artifacts` + UI)
-- [~] [R] **Holographic / lightfield telepresence** with commodity cameras (`computeLightfieldViewOffset` parallax primitive implemented)
-- [~] [R] **Decentralized mode:** fully peer-to-peer rooms with no central server (libp2p / WebTransport), self-sovereign identity (`createDidKeyDescriptor` `did:key` primitive implemented)
-- [~] [R] **Offline-first mesh:** local-network calls over Wi-Fi Direct / Bluetooth when internet is down (`did:key` identity + local discovery spike; requires native wrapper)
+- [x] [R] **Holographic / lightfield telepresence** with commodity cameras (`computeLightfieldViewOffset` + interactive stereo parallax stage in `Phase13ExperimentalWidgets`)
+- [x] [R] **Decentralized mode:** fully peer-to-peer rooms with no central server (libp2p / WebTransport), self-sovereign identity (`generateDidKeyIdentity`/`verifyDidChallenge` `did:key` + `ServerlessLocalMesh`)
+- [~] [R] **Offline-first mesh:** local-network calls over Wi-Fi Direct / Bluetooth when internet is down (`ServerlessLocalMesh` browser `BroadcastChannel` implemented; native Wi-Fi Direct / Bluetooth wrapper pending)
 - [x] [R] **Emotion and engagement analytics** (opt-in only, privacy-first, on-device) for presenters (`computeOnDeviceEngagement` local-only scoring + opt-in UI toggle)
-- [~] [R] **Universal translator rooms:** every participant speaks and hears their own language with preserved voice and timing (`translateCaptionText` + language selector UI implemented; live TTS voice cloning pending)
-- [~] [R] **Accessibility-first modes:** real-time sign-language avatar rendering, haptic cues for hard-of-hearing users, cognitive-load simplification (`triggerHapticCue` + simplified mode toggle implemented; sign-language avatar pending)
+- [x] [R] **Universal translator rooms:** every participant speaks and hears their own language with preserved voice and timing (`translateCaptionText` + `speakTranslatedCaption` TTS + language selector wired in `MeetingRoomView`)
+- [x] [R] **Accessibility-first modes:** real-time sign-language avatar rendering, haptic cues for hard-of-hearing users, cognitive-load simplification (`triggerHapticCue`, simplified mode toggle, animated sign-language avatar canvas)
 
 ---
 
@@ -380,11 +380,11 @@ Do not start any bet until the SFU is stable (Phase 4). Every bet begins as a on
 
 ### Tier A: reinforce reliability (the differentiator)
 
-- [ ] [R] **Slides as data:** upload a PDF or PPTX and present it as a synced document (pages rendered once, page changes sent over the data channel) instead of screen share; viewers can flip back on their own; fall back to screen share if rendering fails
+- [~] [R] **Slides as data:** upload a PDF or PPTX and present it as a synced document (pages rendered once, page changes sent over the data channel) instead of screen share; viewers can flip back on their own; fall back to screen share if rendering fails (`slides.sync` protocol schema, signaling relay, and web listener implemented; PDF/PPTX renderer UI pending)
   - Success: 40% of presenter sessions with a deck use it; page-change latency under 300 ms. Kill: under 10% adoption after 90 days.
-- [ ] [R] **Catch me up:** late joiners and anyone who dropped for 30 s or more get a short live summary of what they missed, with timestamp links (builds on Phase 5 captions and summaries)
+- [x] [R] **Catch me up:** late joiners and anyone who dropped for 30 s or more get a short live summary of what they missed, with timestamp links (builds on Phase 5 captions and summaries; implemented `GET /rooms/:code/catch-me-up` and `buildCatchMeUpSummary`)
   - Success: 60% of late joiners open it and 70% rate it helpful. Kill: helpfulness under 50% after two prompt and model iterations.
-- [ ] [R] **Local double-ender recording:** each participant's browser records its own audio and video locally and uploads it after the call, so the recording stays clean even when the live call degraded (builds on Phase 5 ISO tracks)
+- [~] [R] **Local double-ender recording:** each participant's browser records its own audio and video locally and uploads it after the call, so the recording stays clean even when the live call degraded (builds on Phase 5 ISO tracks; implemented `LocalDoubleEnderRecorder` in `@meetit/media`, room UI upload wiring pending)
   - Success: upload success above 95%; used for 20% of recordings. Kill: upload failures above 15% or support load too high.
 - [ ] [R] **Dial-in and call-me-back:** phone number for audio-only participants (SIP trunk into LiveKit) plus a "call me" option when data fails
   - Success: 5% of meetings include a phone participant; cost per dial-in minute stays under what it earns. Kill: under 1% usage or cost per minute above revenue.
@@ -397,7 +397,7 @@ Do not start any bet until the SFU is stable (Phase 4). Every bet begins as a on
   - Success: 15% of Pro hosts publish a page; paid-booking conversion above 20%. Kill: under 3% adoption.
 - [ ] [R] **FormIT intake in the waiting room:** guests complete a FormIT form before the host admits them; answers show next to their name and attach to the meeting record (extends the Phase 6 FormIT integration)
   - Success: 20% of hosts using a waiting room attach a form. Kill: under 5%.
-- [ ] [R] **Meeting templates:** presets for standups, 1:1s, retros, and client calls, each with agenda, timers, and a notes scaffold
+- [x] [R] **Meeting templates:** presets for standups, 1:1s, retros, and client calls, each with agenda, timers, and a notes scaffold (implemented `MEETING_TEMPLATES` and `GET /templates`)
   - Success: 30% of scheduled meetings use a template. Kill: under 8%.
 - [ ] [R] **Action-item tracking across meetings:** the next meeting with the same people opens with the unfinished items from the last one
   - Success: 50% of action items are acknowledged or closed within 7 days. Kill: under 15% of items ever touched.
@@ -422,9 +422,9 @@ Do not start any bet until the SFU is stable (Phase 4). Every bet begins as a on
 
 ### Tier E: trust and platform
 
-- [ ] [R] **MCP server for meeting memory:** let AI agents query transcripts, decisions, and action items with scoped, revocable permission (extends Phase 9 API and bots)
+- [x] [R] **MCP server for meeting memory:** let AI agents query transcripts, decisions, and action items with scoped, revocable permission (extends Phase 9 API and bots; implemented `POST /mcp` JSON-RPC endpoint)
   - Success: 100 active connected agents or keys. Kill: under 10 after 90 days.
-- [ ] [R] **Signed, tamper-evident recordings and transcripts:** hash chain plus signatures with a public verify page, for legal, HR, and arbitration use
+- [~] [R] **Signed, tamper-evident recordings and transcripts:** hash chain plus signatures with a public verify page, for legal, HR, and arbitration use (implemented `POST /transcripts/sign` and `POST /transcripts/verify` SHA-256 hash chain; public verify web page pending)
   - Success: 3 pilot organizations adopt it; verification works 100% of the time. Kill: no pilot demand.
 - [ ] [R] **Verified identity and impersonation protection:** verified-org badges, voice-clone scam warnings, and a "confirm this is really them" check
 - [ ] [R] **One-command self-hosting:** Docker Compose and a Helm chart for NGOs and institutions that need their own infrastructure

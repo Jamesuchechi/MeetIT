@@ -68,9 +68,9 @@ export const Phase13IntelligenceModal: React.FC<
   onDismissNudge,
   onToast,
 }) => {
-  const [tab, setTab] = useState<
-    'moderator' | 'artifacts' | 'memory' | 'proxy' | 'tier2'
-  >('moderator');
+  const [tab, setTab] = useState<'moderator' | 'artifacts' | 'proxy' | 'tier2'>(
+    'moderator',
+  );
   const [tangentInput, setTangentInput] = useState('');
 
   // Artifacts state
@@ -79,13 +79,6 @@ export const Phase13IntelligenceModal: React.FC<
   >('spec');
   const [artifactMarkdown, setArtifactMarkdown] = useState('');
   const [loadingArtifact, setLoadingArtifact] = useState(false);
-
-  // Memory graph state
-  const [memoryQuery, setMemoryQuery] = useState('');
-  const [memoryResults, setMemoryResults] = useState<
-    Array<{ id: string; meetingTitle: string; kind: string; summary: string }>
-  >([]);
-  const [loadingMemory, setLoadingMemory] = useState(false);
 
   // AI Proxy state
   const [proxyTopics, setProxyTopics] = useState('release, schedule, api');
@@ -118,29 +111,6 @@ export const Phase13IntelligenceModal: React.FC<
       onToast('Failed to generate meeting artifact.');
     } finally {
       setLoadingArtifact(false);
-    }
-  };
-
-  const handleSearchMemory = async () => {
-    if (!memoryQuery.trim()) return;
-    setLoadingMemory(true);
-    try {
-      const res = await fetch(
-        `${baseUrl}/memory/query?q=${encodeURIComponent(memoryQuery)}&requesterId=${encodeURIComponent(selfId)}`,
-      );
-      const data = (await res.json()) as {
-        matches?: Array<{
-          id: string;
-          meetingTitle: string;
-          kind: string;
-          summary: string;
-        }>;
-      };
-      setMemoryResults(data.matches ?? []);
-    } catch {
-      onToast('Failed to query memory graph.');
-    } finally {
-      setLoadingMemory(false);
     }
   };
 
@@ -258,7 +228,6 @@ export const Phase13IntelligenceModal: React.FC<
             [
               ['moderator', 'Moderator & Agenda'],
               ['artifacts', 'Spec / Tickets / PR'],
-              ['memory', 'Memory Graph'],
               ['proxy', 'AI Proxy'],
               ['tier2', 'Space / Translate / A11y'],
             ] as const
@@ -525,63 +494,6 @@ export const Phase13IntelligenceModal: React.FC<
                 >
                   {artifactMarkdown}
                 </pre>
-              )}
-            </>
-          )}
-
-          {tab === 'memory' && (
-            <>
-              <div style={{ display: 'flex', gap: 8 }}>
-                <input
-                  value={memoryQuery}
-                  onChange={(e) => setMemoryQuery(e.target.value)}
-                  placeholder="Ask across meetings (e.g. pricing tier, Stripe)"
-                  style={{
-                    flex: 1,
-                    padding: '8px 10px',
-                    borderRadius: 8,
-                    border: '1px solid rgba(255,255,255,0.18)',
-                    background: 'rgba(0,0,0,0.25)',
-                    color: '#fff',
-                  }}
-                />
-                <button
-                  type="button"
-                  onClick={() => void handleSearchMemory()}
-                  disabled={loadingMemory}
-                  style={{
-                    padding: '8px 14px',
-                    borderRadius: 8,
-                    border: 'none',
-                    background: 'var(--accent, #3b82f6)',
-                    color: '#fff',
-                    cursor: 'pointer',
-                  }}
-                >
-                  {loadingMemory ? 'Searching…' : 'Search'}
-                </button>
-              </div>
-              {memoryResults.length === 0 ? (
-                <div style={{ fontSize: 13, opacity: 0.6 }}>
-                  No matching decisions or action items found yet.
-                </div>
-              ) : (
-                memoryResults.map((m) => (
-                  <div
-                    key={m.id}
-                    style={{
-                      padding: 10,
-                      borderRadius: 8,
-                      background: 'rgba(255,255,255,0.06)',
-                      fontSize: 13,
-                    }}
-                  >
-                    <div style={{ fontSize: 11, opacity: 0.7 }}>
-                      [{m.kind}] {m.meetingTitle}
-                    </div>
-                    <div>{m.summary}</div>
-                  </div>
-                ))
               )}
             </>
           )}

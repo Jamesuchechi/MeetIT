@@ -23,6 +23,7 @@ import {
   exportAnalyticsToCsv,
   type MeetingAnalyticsSummary,
 } from '../lib/analyticsService';
+import { WebinarAnalyticsModal } from './WebinarAnalyticsModal';
 
 export interface AnalyticsViewProps {
   initialHistory?: MeetingHistoryItem[];
@@ -36,6 +37,8 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
   const [timeRange, setTimeRange] = useState<'week' | 'month' | 'quarter'>(
     'week',
   );
+  const [webinarRoomInput, setWebinarRoomInput] = useState('');
+  const [showWebinarAnalytics, setShowWebinarAnalytics] = useState(false);
 
   const history = useMemo(() => {
     return initialHistory ?? loadMeetingHistory();
@@ -481,6 +484,65 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
           </div>
         </section>
       </div>
+
+      {/* Webinar Attendee Analytics Lookup */}
+      <section className="analytics-view-card" style={{ padding: 16 }}>
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            flexWrap: 'wrap',
+            gap: 12,
+          }}
+        >
+          <div>
+            <h3 style={{ margin: 0, fontSize: '0.98rem' }}>
+              Webinar Attendee Analytics
+            </h3>
+            <p
+              style={{
+                margin: '4px 0 0',
+                fontSize: '0.8rem',
+                color: 'var(--muted)',
+              }}
+            >
+              Inspect viewer attendance, Q&amp;A, polls, and engagement for any
+              webinar room code.
+            </p>
+          </div>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <input
+              type="text"
+              value={webinarRoomInput}
+              onChange={(e) => setWebinarRoomInput(e.target.value)}
+              placeholder="Room code (e.g. abc-defg-hij)"
+              style={{
+                padding: '6px 10px',
+                borderRadius: 6,
+                border: '1px solid var(--line)',
+                background: 'var(--bg)',
+                color: 'var(--ink)',
+                fontSize: '0.82rem',
+              }}
+            />
+            <button
+              type="button"
+              className="btn primary sm"
+              disabled={!webinarRoomInput.trim()}
+              onClick={() => setShowWebinarAnalytics(true)}
+            >
+              View Report
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <WebinarAnalyticsModal
+        isOpen={showWebinarAnalytics}
+        onClose={() => setShowWebinarAnalytics(false)}
+        roomCode={webinarRoomInput.trim()}
+      />
 
       {/* Privacy Guarantee Footer Pill */}
       <div className="analytics-view-privacy-card">

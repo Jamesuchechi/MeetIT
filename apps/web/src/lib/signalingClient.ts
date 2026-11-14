@@ -274,6 +274,7 @@ export class SignalingClient implements SignalingChannel {
     'space.positions': new Set(),
     'avatar.landmarks': new Set(),
     'xr.pose': new Set(),
+    'slides.sync': new Set(),
     'chat.reaction.updated': new Set(),
     'breakout.updated': new Set(),
     'breakout.broadcast': new Set(),

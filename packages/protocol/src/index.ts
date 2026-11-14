@@ -957,6 +957,19 @@ export const clientMessageSchema = z.discriminatedUnion('type', [
     v: z.literal(1),
     id: z.string().uuid().optional(),
     ts: z.number().optional(),
+    type: z.literal('slides.sync'),
+    payload: z.object({
+      deckId: z.string().min(1),
+      title: z.string().max(200),
+      pageCount: z.number().int().min(1).max(500),
+      currentPage: z.number().int().min(1).max(500),
+      pageUrl: z.string().optional(),
+    }),
+  }),
+  z.object({
+    v: z.literal(1),
+    id: z.string().uuid().optional(),
+    ts: z.number().optional(),
     type: z.literal('ping'),
     payload: z.object({}),
   }),
@@ -1201,6 +1214,14 @@ export interface SignalingEvents {
     peerId: string;
     position: [number, number, number];
     quaternion: [number, number, number, number];
+  };
+  'slides.sync': {
+    presenterId: string;
+    deckId: string;
+    title: string;
+    pageCount: number;
+    currentPage: number;
+    pageUrl?: string;
   };
   'recording.started': {
     startedAt: number;

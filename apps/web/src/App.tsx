@@ -112,6 +112,21 @@ function parseLocationRoute(
   ) {
     return { view: 'dashboard', roomCode: null, dashTab: 'cost' };
   }
+  if (
+    target === 'audit' ||
+    target === 'audit-log' ||
+    target === 'dashboard/audit' ||
+    target === 'dashboard/audit-log'
+  ) {
+    return { view: 'dashboard', roomCode: null, dashTab: 'audit' };
+  }
+  if (
+    target === 'memory' ||
+    target === 'memory-lab' ||
+    target === 'dashboard/memory'
+  ) {
+    return { view: 'dashboard', roomCode: null, dashTab: 'memory' };
+  }
   if (target === 'profile' || target === 'dashboard/profile') {
     return { view: 'dashboard', roomCode: null, dashTab: 'profile' };
   }
