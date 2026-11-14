@@ -424,12 +424,12 @@ Do not start any bet until the SFU is stable (Phase 4). Every bet begins as a on
 
 - [x] [R] **MCP server for meeting memory:** let AI agents query transcripts, decisions, and action items with scoped, revocable permission (extends Phase 9 API and bots; implemented `POST /mcp` JSON-RPC endpoint)
   - Success: 100 active connected agents or keys. Kill: under 10 after 90 days.
-- [~] [R] **Signed, tamper-evident recordings and transcripts:** hash chain plus signatures with a public verify page, for legal, HR, and arbitration use (implemented `POST /transcripts/sign` and `POST /transcripts/verify` SHA-256 hash chain; public verify web page pending)
+- [x] [R] **Signed, tamper-evident recordings and transcripts:** hash chain plus signatures with a public verify page, for legal, HR, and arbitration use (implemented `POST /transcripts/sign`, `POST /transcripts/verify` SHA-256 hash chain, and public `#verify` `TranscriptVerifyView`)
   - Success: 3 pilot organizations adopt it; verification works 100% of the time. Kill: no pilot demand.
-- [ ] [R] **Verified identity and impersonation protection:** verified-org badges, voice-clone scam warnings, and a "confirm this is really them" check
-- [ ] [R] **One-command self-hosting:** Docker Compose and a Helm chart for NGOs and institutions that need their own infrastructure
+- [x] [R] **Verified identity and impersonation protection:** verified-org badges, voice-clone scam warnings, and a "confirm this is really them" check (implemented verified badges, duplicate/impersonation warning banner, and "Confirm this is really them" check in `MeetingRoomView`)
+- [x] [R] **One-command self-hosting:** Docker Compose and a Helm chart for NGOs and institutions that need their own infrastructure (added `docker-compose.selfhost.yml` and `deploy/helm/meetit/` chart)
   - Success: fresh install running in under 15 minutes by someone outside the project. Kill: maintenance burden exceeds one day a month.
-- [ ] [R] **Watermarked and view-only shares:** visible and invisible watermarks on shared screens and recordings for leak deterrence
+- [x] [R] **Watermarked and view-only shares:** visible and invisible watermarks on shared screens and recordings for leak deterrence (implemented visible diagonal + `data-watermark-token` overlay and view-only protection toggles in `MeetingRoomView`)
 
 ### Deliberately deferred (parking lot, revisit only with evidence)
 

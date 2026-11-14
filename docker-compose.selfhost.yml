@@ -1,0 +1,47 @@
+version: '3.9'
+
+services:
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - '6379:6379'
+
+  signaling:
+    image: node:20-alpine
+    working_dir: /app
+    volumes:
+      - .:/app
+    command: sh -c "corepack enable && pnpm --filter @meetit/signaling start"
+    environment:
+      PORT: '4000'
+      REDIS_URL: 'redis://redis:6379'
+      GUEST_TOKEN_SECRET: '${GUEST_TOKEN_SECRET:-change-me-in-production}'
+    ports:
+      - '4000:4000'
+    depends_on:
+      - redis
+    restart: unless-stopped
+
+  web:
+    image: node:20-alpine
+    working_dir: /app
+    volumes:
+      - .:/app
+    command: sh -c "corepack enable && pnpm --filter @meetit/web preview --host 0.0.0.0 --port 4173"
+    environment:
+      VITE_SIGNALING_URL: '${VITE_SIGNALING_URL:-http://localhost:4000}'
+    ports:
+      - '4173:4173'
+    depends_on:
+      - signaling
+    restart: unless-stopped
+
+  coturn:
+    image: coturn/coturn:4.6-alpine
+    restart: unless-stopped
+    ports:
+      - '3478:3478/udp'
+      - '3478:3478/tcp'
+    command:
+      ['-n', '--log-file=stdout', '--lt-cred-mech', '--realm=meetit.local']

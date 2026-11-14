@@ -874,6 +874,12 @@ export function MeetingRoomView({
     useState(false);
   const [showAccessibilityModal, setShowAccessibilityModal] = useState(false);
   const [activeListenChannel, setActiveListenChannel] = useState('floor');
+  const [watermarkShares, setWatermarkShares] = useState(false);
+  const [viewOnlyShare, setViewOnlyShare] = useState(false);
+  const [confirmedIdentityIds, setConfirmedIdentityIds] = useState<
+    Record<string, boolean>
+  >({});
+  const [impersonationDismissed, setImpersonationDismissed] = useState(false);
   const [showLeaveMenu, setShowLeaveMenu] = useState(false);
   const [showMoreActivitiesSheet, setShowMoreActivitiesSheet] = useState(false);
   const [unmutePromptFrom, setUnmutePromptFrom] = useState<string | null>(null);
@@ -5417,6 +5423,89 @@ export function MeetingRoomView({
         </div>
       )}
 
+      {watermarkShares && (
+        <div
+          aria-hidden="true"
+          data-testid="share-watermark-overlay"
+          data-watermark-token={btoa(
+            `${displayName || 'Participant'}|${roomCode}|${new Date().toISOString().slice(0, 10)}`,
+          )}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            pointerEvents: 'none',
+            zIndex: 35,
+            display: 'grid',
+            gridTemplateColumns: 'repeat(3, 1fr)',
+            placeItems: 'center',
+            opacity: 0.08,
+            fontSize: 16,
+            fontWeight: 700,
+            transform: 'rotate(-24deg)',
+            userSelect: 'none',
+          }}
+        >
+          {Array.from({ length: 9 }).map((_, idx) => (
+            <span key={idx}>
+              {displayName || 'Participant'} · {roomCode}
+              {viewOnlyShare ? ' · VIEW-ONLY' : ''}
+            </span>
+          ))}
+        </div>
+      )}
+
+      {(() => {
+        const selfNorm = (displayName || user?.displayName || '')
+          .trim()
+          .toLowerCase();
+        const suspect = !impersonationDismissed
+          ? remoteList.find(
+              (p) =>
+                !p.verified &&
+                !confirmedIdentityIds[p.id] &&
+                selfNorm.length > 0 &&
+                p.displayName.trim().toLowerCase() === selfNorm,
+            )
+          : undefined;
+        if (!suspect) return null;
+        return (
+          <div
+            className="call-waiting-admit-banner"
+            role="alert"
+            data-testid="impersonation-warning-banner"
+          >
+            <div className="waiting-admit-text">
+              <strong>
+                Identity &amp; Voice-Clone Check: unverified participant &quot;
+                {suspect.displayName}&quot; matches your display name.
+              </strong>
+            </div>
+            <div className="waiting-admit-actions">
+              <button
+                type="button"
+                className="btn primary"
+                onClick={() => {
+                  setConfirmedIdentityIds((prev) => ({
+                    ...prev,
+                    [suspect.id]: true,
+                  }));
+                  onToast(`Confirmed identity for ${suspect.displayName}.`);
+                }}
+              >
+                Confirm this is really them
+              </button>
+              <button
+                type="button"
+                className="btn"
+                onClick={() => setImpersonationDismissed(true)}
+              >
+                Dismiss
+              </button>
+            </div>
+          </div>
+        );
+      })()}
+
       {breakoutState?.active && (
         <div className="active-breakout-banner" data-testid="breakout-banner">
           <span
@@ -6239,6 +6328,24 @@ export function MeetingRoomView({
                         }
                       />
                       <span>Allow guest emoji reactions</span>
+                    </label>
+                    <label className="popover-checkbox-row">
+                      <input
+                        type="checkbox"
+                        checked={watermarkShares}
+                        onChange={(e) => setWatermarkShares(e.target.checked)}
+                        data-testid="toggle-watermark-shares"
+                      />
+                      <span>Watermark shared screens &amp; recordings</span>
+                    </label>
+                    <label className="popover-checkbox-row">
+                      <input
+                        type="checkbox"
+                        checked={viewOnlyShare}
+                        onChange={(e) => setViewOnlyShare(e.target.checked)}
+                        data-testid="toggle-view-only-share"
+                      />
+                      <span>View-only share protection</span>
                     </label>
                   </div>
                   <div
@@ -7703,6 +7810,93 @@ export function MeetingRoomView({
                       <span>Breakout Rooms</span>
                       <small>Split into smaller discussion groups</small>
                     </div>
+                    {watermarkShares && (
+                      <div
+                        aria-hidden="true"
+                        data-testid="share-watermark-overlay"
+                        data-watermark-token={btoa(
+                          `${displayName || 'Participant'}|${roomCode}|${new Date().toISOString().slice(0, 10)}`,
+                        )}
+                        style={{
+                          position: 'fixed',
+                          inset: 0,
+                          pointerEvents: 'none',
+                          zIndex: 35,
+                          display: 'grid',
+                          gridTemplateColumns: 'repeat(3, 1fr)',
+                          placeItems: 'center',
+                          opacity: 0.08,
+                          fontSize: 16,
+                          fontWeight: 700,
+                          transform: 'rotate(-24deg)',
+                          userSelect: 'none',
+                        }}
+                      >
+                        {Array.from({ length: 9 }).map((_, idx) => (
+                          <span key={idx}>
+                            {displayName || 'Participant'} · {roomCode}
+                            {viewOnlyShare ? ' · VIEW-ONLY' : ''}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+
+                    {(() => {
+                      const selfNorm = (displayName || user?.displayName || '')
+                        .trim()
+                        .toLowerCase();
+                      const suspect = !impersonationDismissed
+                        ? remoteList.find(
+                            (p) =>
+                              !p.verified &&
+                              !confirmedIdentityIds[p.id] &&
+                              selfNorm.length > 0 &&
+                              p.displayName.trim().toLowerCase() === selfNorm,
+                          )
+                        : undefined;
+                      if (!suspect) return null;
+                      return (
+                        <div
+                          className="call-waiting-admit-banner"
+                          role="alert"
+                          data-testid="impersonation-warning-banner"
+                        >
+                          <div className="waiting-admit-text">
+                            <strong>
+                              Identity &amp; Voice-Clone Check: unverified
+                              participant &quot;
+                              {suspect.displayName}&quot; matches your display
+                              name.
+                            </strong>
+                          </div>
+                          <div className="waiting-admit-actions">
+                            <button
+                              type="button"
+                              className="btn primary"
+                              onClick={() => {
+                                setConfirmedIdentityIds((prev) => ({
+                                  ...prev,
+                                  [suspect.id]: true,
+                                }));
+                                onToast(
+                                  `Confirmed identity for ${suspect.displayName}.`,
+                                );
+                              }}
+                            >
+                              Confirm this is really them
+                            </button>
+                            <button
+                              type="button"
+                              className="btn"
+                              onClick={() => setImpersonationDismissed(true)}
+                            >
+                              Dismiss
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })()}
+
                     {breakoutState?.active && (
                       <span
                         className="unread-chat-badge"
@@ -8213,6 +8407,93 @@ export function MeetingRoomView({
                 >
                   <div className="mobile-activity-icon-wrap">
                     <UsersIcon size={18} />
+                    {watermarkShares && (
+                      <div
+                        aria-hidden="true"
+                        data-testid="share-watermark-overlay"
+                        data-watermark-token={btoa(
+                          `${displayName || 'Participant'}|${roomCode}|${new Date().toISOString().slice(0, 10)}`,
+                        )}
+                        style={{
+                          position: 'fixed',
+                          inset: 0,
+                          pointerEvents: 'none',
+                          zIndex: 35,
+                          display: 'grid',
+                          gridTemplateColumns: 'repeat(3, 1fr)',
+                          placeItems: 'center',
+                          opacity: 0.08,
+                          fontSize: 16,
+                          fontWeight: 700,
+                          transform: 'rotate(-24deg)',
+                          userSelect: 'none',
+                        }}
+                      >
+                        {Array.from({ length: 9 }).map((_, idx) => (
+                          <span key={idx}>
+                            {displayName || 'Participant'} · {roomCode}
+                            {viewOnlyShare ? ' · VIEW-ONLY' : ''}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+
+                    {(() => {
+                      const selfNorm = (displayName || user?.displayName || '')
+                        .trim()
+                        .toLowerCase();
+                      const suspect = !impersonationDismissed
+                        ? remoteList.find(
+                            (p) =>
+                              !p.verified &&
+                              !confirmedIdentityIds[p.id] &&
+                              selfNorm.length > 0 &&
+                              p.displayName.trim().toLowerCase() === selfNorm,
+                          )
+                        : undefined;
+                      if (!suspect) return null;
+                      return (
+                        <div
+                          className="call-waiting-admit-banner"
+                          role="alert"
+                          data-testid="impersonation-warning-banner"
+                        >
+                          <div className="waiting-admit-text">
+                            <strong>
+                              Identity &amp; Voice-Clone Check: unverified
+                              participant &quot;
+                              {suspect.displayName}&quot; matches your display
+                              name.
+                            </strong>
+                          </div>
+                          <div className="waiting-admit-actions">
+                            <button
+                              type="button"
+                              className="btn primary"
+                              onClick={() => {
+                                setConfirmedIdentityIds((prev) => ({
+                                  ...prev,
+                                  [suspect.id]: true,
+                                }));
+                                onToast(
+                                  `Confirmed identity for ${suspect.displayName}.`,
+                                );
+                              }}
+                            >
+                              Confirm this is really them
+                            </button>
+                            <button
+                              type="button"
+                              className="btn"
+                              onClick={() => setImpersonationDismissed(true)}
+                            >
+                              Dismiss
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })()}
+
                     {breakoutState?.active && (
                       <span className="mobile-activity-badge live">On</span>
                     )}

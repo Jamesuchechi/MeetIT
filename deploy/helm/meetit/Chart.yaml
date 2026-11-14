@@ -1,0 +1,6 @@
+apiVersion: v2
+name: meetit
+description: Self-hosted MeetIT video conferencing, signaling, and web stack
+type: application
+version: 0.1.0
+appVersion: '1.0.0'

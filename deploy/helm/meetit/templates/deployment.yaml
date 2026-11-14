@@ -1,0 +1,47 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-signaling
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app: {{ .Release.Name }}-signaling
+  template:
+    metadata:
+      labels:
+        app: {{ .Release.Name }}-signaling
+    spec:
+      containers:
+        - name: signaling
+          image: {{ .Values.signaling.image }}
+          ports:
+            - containerPort: {{ .Values.signaling.port }}
+          env:
+            - name: PORT
+              value: "{{ .Values.signaling.port }}"
+            - name: GUEST_TOKEN_SECRET
+              value: "{{ .Values.signaling.guestTokenSecret }}"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-web
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app: {{ .Release.Name }}-web
+  template:
+    metadata:
+      labels:
+        app: {{ .Release.Name }}-web
+    spec:
+      containers:
+        - name: web
+          image: {{ .Values.web.image }}
+          ports:
+            - containerPort: {{ .Values.web.port }}
+          env:
+            - name: VITE_SIGNALING_URL
+              value: "{{ .Values.web.signalingUrl }}"

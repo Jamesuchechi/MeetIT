@@ -7,6 +7,7 @@ import { AuthView } from './components/AuthView';
 import { MeetingRoomView } from './components/MeetingRoomView';
 import { WebinarRegistrationView } from './components/WebinarRegistrationView';
 import { BookingPageView } from './components/BookingPageView';
+import { TranscriptVerifyView } from './components/TranscriptVerifyView';
 import { EndedView } from './components/EndedView';
 import { NotFoundView } from './components/NotFoundView';
 import { StatusPageView } from './components/StatusPageView';
@@ -168,6 +169,9 @@ function parseLocationRoute(
   }
   if (target === 'status' || target === 'system-status') {
     return { view: 'status', roomCode: null };
+  }
+  if (target === 'verify' || target === 'transcripts/verify') {
+    return { view: 'verify', roomCode: null };
   }
   if (target === '404') {
     return { view: '404', roomCode: null };
@@ -556,6 +560,12 @@ function AppContent() {
 
       {route.view === 'status' && (
         <StatusPageView
+          onBackToApp={() => navigateTo(user ? 'dashboard' : 'home')}
+        />
+      )}
+
+      {route.view === 'verify' && (
+        <TranscriptVerifyView
           onBackToApp={() => navigateTo(user ? 'dashboard' : 'home')}
         />
       )}

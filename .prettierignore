@@ -4,3 +4,4 @@ coverage
 .turbo
 pnpm-lock.yaml
 storybook-static
+deploy/helm/**/templates/*.yaml

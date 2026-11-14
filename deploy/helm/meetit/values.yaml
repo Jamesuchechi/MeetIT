@@ -1,0 +1,14 @@
+replicaCount: 1
+
+signaling:
+  image: ghcr.io/meetit/signaling:latest
+  port: 4000
+  guestTokenSecret: change-me-in-production
+
+web:
+  image: ghcr.io/meetit/web:latest
+  port: 4173
+  signalingUrl: http://meetit-signaling:4000
+
+service:
+  type: ClusterIP
