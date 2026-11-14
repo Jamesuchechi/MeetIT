@@ -5,6 +5,10 @@ import {
   downloadIcsFile,
   type ScheduledMeetingItem,
 } from '../lib/meetingsStore';
+import {
+  loadBookingSettings,
+  type BookingPageSettings,
+} from './BookingStudioView';
 import { normalizeRoomCode } from '../types';
 
 export interface BookingPageViewProps {
@@ -20,17 +24,27 @@ interface TimeSlotOption {
   dayLabel: string;
 }
 
-function buildUpcomingSlots(): TimeSlotOption[] {
+function buildUpcomingSlots(settings: BookingPageSettings): TimeSlotOption[] {
   const slots: TimeSlotOption[] = [];
-  const hours = [9, 11, 14, 16];
+  const stepHours = 2;
+  const hours: number[] = [];
+  for (
+    let h = settings.startHour;
+    h < settings.endHour && hours.length < 4;
+    h += stepHours
+  ) {
+    hours.push(h);
+  }
+  if (hours.length === 0) hours.push(9, 11, 14, 16);
+
   const now = new Date();
   let dayOffset = 1;
-  while (slots.length < 8 && dayOffset <= 7) {
+  while (slots.length < 8 && dayOffset <= 14) {
     const d = new Date(now);
     d.setDate(now.getDate() + dayOffset);
-    const dayOfWeek = d.getDay();
-    if (dayOfWeek !== 0 && dayOfWeek !== 6) {
+    if (settings.availableDays.includes(d.getDay())) {
       for (const h of hours) {
+        if (slots.length >= 8) break;
         const slot = new Date(d);
         slot.setHours(h, 0, 0, 0);
         slots.push({
@@ -79,11 +93,14 @@ export function BookingPageView({
   onNavigateHome,
   onToast,
 }: BookingPageViewProps) {
-  const slots = useMemo(() => buildUpcomingSlots(), []);
+  const settings = useMemo(() => loadBookingSettings(handle), [handle]);
+  const slots = useMemo(() => buildUpcomingSlots(settings), [settings]);
   const [selectedSlot, setSelectedSlot] = useState<string>(
     () => slots[0]?.iso ?? new Date(Date.now() + 86400000).toISOString(),
   );
-  const [durationMinutes, setDurationMinutes] = useState<number>(30);
+  const [durationMinutes, setDurationMinutes] = useState<number>(
+    () => settings.durations[0] ?? 30,
+  );
   const [guestName, setGuestName] = useState('');
   const [guestEmail, setGuestEmail] = useState('');
   const [topic, setTopic] = useState('');
@@ -184,7 +201,20 @@ export function BookingPageView({
             </span>
           </div>
 
-          {confirmed ? (
+          {!settings.enabled ? (
+            <div
+              data-testid="booking-paused-card"
+              style={{ padding: '12px 0' }}
+            >
+              <h1 style={{ margin: '0 0 8px', fontSize: '1.35rem' }}>
+                Bookings are currently paused
+              </h1>
+              <p style={{ margin: 0, color: 'var(--muted, #94a3b8)' }}>
+                @{handle} is not accepting new bookings at the moment. Please
+                check back later.
+              </p>
+            </div>
+          ) : confirmed ? (
             <div data-testid="booking-confirmed-card">
               <div
                 style={{
@@ -246,7 +276,7 @@ export function BookingPageView({
             >
               <div>
                 <h1 style={{ margin: '0 0 6px', fontSize: '1.45rem' }}>
-                  Book a meeting with @{handle}
+                  {settings.headline}
                 </h1>
                 <p
                   style={{
@@ -255,8 +285,7 @@ export function BookingPageView({
                     fontSize: 14,
                   }}
                 >
-                  Select an available time slot below to schedule a free video
-                  meeting.
+                  {settings.welcomeMessage}
                 </p>
               </div>
 
@@ -267,9 +296,11 @@ export function BookingPageView({
                   onChange={(e) => setDurationMinutes(Number(e.target.value))}
                   style={inputControlStyle}
                 >
-                  <option value={15}>15 minutes</option>
-                  <option value={30}>30 minutes</option>
-                  <option value={45}>45 minutes</option>
+                  {settings.durations.map((mins) => (
+                    <option key={mins} value={mins}>
+                      {mins} minutes
+                    </option>
+                  ))}
                 </select>
               </label>
 
