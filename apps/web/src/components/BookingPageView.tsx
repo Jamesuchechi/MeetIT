@@ -72,18 +72,19 @@ const fieldLabelStyle: React.CSSProperties = {
   gap: 6,
   fontSize: 13,
   fontWeight: 600,
-  color: 'var(--text, #e2e8f0)',
+  color: 'var(--ink)',
 };
 
 const inputControlStyle: React.CSSProperties = {
   width: '100%',
   boxSizing: 'border-box',
-  padding: '10px 12px',
+  padding: '10px 13px',
   borderRadius: 10,
-  border: '1px solid var(--border, rgba(148, 163, 184, 0.25))',
-  background: 'var(--bg, rgba(15, 23, 42, 0.55))',
-  color: 'var(--text, #f8fafc)',
+  border: '1px solid var(--line)',
+  background: 'var(--bg)',
+  color: 'var(--ink)',
   fontSize: 14,
+  fontFamily: 'inherit',
   outline: 'none',
 };
 
@@ -160,12 +161,11 @@ export function BookingPageView({
         </button>
 
         <div
+          className="profile-section-card"
           style={{
             padding: 28,
             borderRadius: 18,
-            border: '1px solid var(--border, rgba(148, 163, 184, 0.2))',
-            background: 'var(--surface, #131c2e)',
-            boxShadow: '0 20px 50px rgba(0, 0, 0, 0.25)',
+            boxShadow: '0 20px 50px rgba(0, 0, 0, 0.2)',
           }}
         >
           <div

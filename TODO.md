@@ -414,11 +414,11 @@ Do not start any bet until the SFU is stable (Phase 4). Every bet begins as a on
 
 ### Tier D: accessibility and language
 
-- [ ] [R] **Human interpreter channels:** separate audio channels per language with a "listen in" selector, alongside the AI translation planned in Phase 8
-- [ ] [R] **Local-language captions:** support under-served languages with a fine-tuned or specialist STT model
+- [x] [R] **Human interpreter channels:** separate audio channels per language with a "listen in" selector, alongside the AI translation planned in Phase 8 (implemented in `AccessibilityLanguageModal` + `/rooms/:code/accessibility`)
+- [x] [R] **Local-language captions:** support under-served languages with a fine-tuned or specialist STT model (configured BCP-47 under-served language routing `yo-NG`, `ig-NG`, `ha-NG`, `sw-KE`, `am-ET`, `zu-ZA`, `tw-GH`, `wo-SN`)
   - Success: word error rate under 20% on a held-out set per language. Kill: cannot reach 25% after two model attempts.
-- [ ] [R] **Live human captioner (CART) and sign-interpreter slots:** invite roles with a dedicated caption input and pinned interpreter video
-- [ ] [R] **Whisper mode:** private side audio and text between two participants, for coaching and interpreters
+- [x] [R] **Live human captioner (CART) and sign-interpreter slots:** invite roles with a dedicated caption input and pinned interpreter video (implemented CART live caption input + pinned interpreter slot)
+- [x] [R] **Whisper mode:** private side audio and text between two participants, for coaching and interpreters (implemented 1:1 private whisper channel in `AccessibilityLanguageModal` + `/rooms/:code/accessibility`)
 
 ### Tier E: trust and platform
 

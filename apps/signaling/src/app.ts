@@ -936,6 +936,149 @@ export function buildSignalingApp(
     return reply.send({ annotations: next });
   });
 
+  const accessibilityByRoom = new Map<
+    string,
+    {
+      interpreterChannels: Array<{
+        id: string;
+        language: string;
+        interpreterName: string;
+        active: boolean;
+      }>;
+      localLanguageCode: string;
+      pinnedInterpreterId?: string;
+      cartLines: Array<{
+        id: string;
+        author: string;
+        text: string;
+        ts: string;
+      }>;
+      whispers: Array<{
+        id: string;
+        from: string;
+        to: string;
+        text: string;
+        ts: string;
+      }>;
+    }
+  >();
+
+  app.get<{ Params: { code: string } }>(
+    '/rooms/:code/accessibility',
+    async (request, reply) => {
+      const normalized = normalizeRoomCode(request.params.code);
+      if (!normalized) {
+        return reply.code(400).send({ error: 'Invalid room code' });
+      }
+      const state = accessibilityByRoom.get(normalized) ?? {
+        interpreterChannels: [
+          {
+            id: 'ch-fr',
+            language: 'French',
+            interpreterName: 'Floor / Auto',
+            active: true,
+          },
+          {
+            id: 'ch-es',
+            language: 'Spanish',
+            interpreterName: 'Floor / Auto',
+            active: true,
+          },
+        ],
+        localLanguageCode: 'yo-NG',
+        cartLines: [],
+        whispers: [],
+      };
+      return reply.send({ accessibility: state });
+    },
+  );
+
+  app.post<{
+    Params: { code: string };
+    Body: {
+      addChannel?: { language: string; interpreterName: string };
+      localLanguageCode?: string;
+      pinnedInterpreterId?: string;
+      cartLine?: { author: string; text: string };
+      whisper?: { from: string; to: string; text: string };
+    };
+  }>('/rooms/:code/accessibility', async (request, reply) => {
+    const normalized = normalizeRoomCode(request.params.code);
+    if (!normalized) {
+      return reply.code(400).send({ error: 'Invalid room code' });
+    }
+    const prev = accessibilityByRoom.get(normalized) ?? {
+      interpreterChannels: [
+        {
+          id: 'ch-fr',
+          language: 'French',
+          interpreterName: 'Floor / Auto',
+          active: true,
+        },
+        {
+          id: 'ch-es',
+          language: 'Spanish',
+          interpreterName: 'Floor / Auto',
+          active: true,
+        },
+      ],
+      localLanguageCode: 'yo-NG',
+      cartLines: [],
+      whispers: [],
+    };
+    const next = { ...prev };
+    if (request.body?.addChannel?.language?.trim()) {
+      next.interpreterChannels = [
+        ...next.interpreterChannels,
+        {
+          id: `ch-${Date.now()}`,
+          language: request.body.addChannel.language.trim(),
+          interpreterName:
+            request.body.addChannel.interpreterName?.trim() || 'Interpreter',
+          active: true,
+        },
+      ];
+    }
+    if (typeof request.body?.localLanguageCode === 'string') {
+      next.localLanguageCode = request.body.localLanguageCode;
+    }
+    if (request.body?.pinnedInterpreterId !== undefined) {
+      if (request.body.pinnedInterpreterId) {
+        next.pinnedInterpreterId = request.body.pinnedInterpreterId;
+      } else {
+        delete next.pinnedInterpreterId;
+      }
+    }
+    if (request.body?.cartLine?.text?.trim()) {
+      next.cartLines = [
+        ...next.cartLines.slice(-19),
+        {
+          id: `cart-${Date.now()}`,
+          author: request.body.cartLine.author?.trim() || 'CART Captioner',
+          text: request.body.cartLine.text.trim(),
+          ts: new Date().toISOString(),
+        },
+      ];
+    }
+    if (
+      request.body?.whisper?.text?.trim() &&
+      request.body?.whisper?.to?.trim()
+    ) {
+      next.whispers = [
+        ...next.whispers.slice(-29),
+        {
+          id: `wh-${Date.now()}`,
+          from: request.body.whisper.from?.trim() || 'Participant',
+          to: request.body.whisper.to.trim(),
+          text: request.body.whisper.text.trim(),
+          ts: new Date().toISOString(),
+        },
+      ];
+    }
+    accessibilityByRoom.set(normalized, next);
+    return reply.send({ accessibility: next });
+  });
+
   app.get<{ Params: { code: string } }>(
     '/rooms/:code/dial-in',
     async (request, reply) => {

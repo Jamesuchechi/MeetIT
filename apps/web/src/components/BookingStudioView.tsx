@@ -157,35 +157,32 @@ export function BookingStudioView({
   return (
     <div
       data-testid="dashboard-booking-tab"
-      style={{ display: 'flex', flexDirection: 'column', gap: 18 }}
+      style={{ display: 'flex', flexDirection: 'column', gap: 20 }}
     >
       {/* Top Share Banner */}
       <div
         className="profile-section-card"
         style={{
-          padding: 20,
-          display: 'flex',
+          flexDirection: 'row',
           alignItems: 'center',
           justifyContent: 'space-between',
           flexWrap: 'wrap',
-          gap: 14,
+          gap: 16,
         }}
       >
-        <div style={{ minWidth: 240, flex: 1 }}>
+        <div style={{ minWidth: 260, flex: 1 }}>
           <div
             style={{
               display: 'flex',
               alignItems: 'center',
-              gap: 8,
-              marginBottom: 4,
+              gap: 10,
+              marginBottom: 6,
             }}
           >
-            <h2 style={{ margin: 0, fontSize: '1.15rem' }}>
-              Personal Booking Page
-            </h2>
+            <h3 style={{ margin: 0 }}>Personal Booking Page</h3>
             <span
               style={{
-                padding: '2px 9px',
+                padding: '3px 10px',
                 borderRadius: 999,
                 fontSize: 11,
                 fontWeight: 600,
@@ -198,7 +195,13 @@ export function BookingStudioView({
               {settings.enabled ? 'Live · Free' : 'Paused'}
             </span>
           </div>
-          <code style={{ fontSize: 13, opacity: 0.85, wordBreak: 'break-all' }}>
+          <code
+            style={{
+              fontSize: 13,
+              color: 'var(--muted)',
+              wordBreak: 'break-all',
+            }}
+          >
             {bookingUrl}
           </code>
         </div>
@@ -236,16 +239,13 @@ export function BookingStudioView({
         {/* Left: Availability & Customization */}
         <form
           onSubmit={handleSave}
-          className="profile-section-card profile-form"
-          style={{ padding: 22 }}
+          className="profile-section-card profile-edit-form"
         >
-          <div className="sec-head" style={{ marginBottom: 8 }}>
-            <div>
-              <h3 style={{ margin: 0 }}>Availability &amp; Details</h3>
-              <small style={{ opacity: 0.75 }}>
-                Customize how guests book time with you
-              </small>
-            </div>
+          <div>
+            <h3 style={{ margin: 0 }}>Availability &amp; Details</h3>
+            <p className="profile-card-sub" style={{ margin: '4px 0 0' }}>
+              Customize how guests book time with you.
+            </p>
           </div>
 
           <div className="sw" style={{ paddingBottom: 8 }}>
@@ -375,12 +375,10 @@ export function BookingStudioView({
           </div>
 
           <div
+            className="profile-form-footer"
             style={{
-              display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
-              gap: 10,
-              paddingTop: 6,
             }}
           >
             <span
@@ -389,7 +387,7 @@ export function BookingStudioView({
                 alignItems: 'center',
                 gap: 6,
                 fontSize: 12,
-                opacity: 0.75,
+                color: 'var(--muted)',
               }}
             >
               <Globe size={13} /> {settings.timezone}
@@ -401,32 +399,32 @@ export function BookingStudioView({
         </form>
 
         {/* Right: Upcoming Bookings */}
-        <div className="profile-section-card" style={{ padding: 22 }}>
-          <div className="sec-head" style={{ marginBottom: 12 }}>
-            <div>
-              <h3 style={{ margin: 0 }}>
-                Guest Bookings ({guestBookings.length})
-              </h3>
-              <small style={{ opacity: 0.75 }}>
-                Meetings booked through your public link
-              </small>
-            </div>
+        <div className="profile-section-card">
+          <div>
+            <h3 style={{ margin: 0 }}>
+              Guest Bookings ({guestBookings.length})
+            </h3>
+            <p className="profile-card-sub" style={{ margin: '4px 0 0' }}>
+              Meetings booked through your public link.
+            </p>
           </div>
 
           {guestBookings.length === 0 ? (
             <div
               style={{
-                padding: 24,
+                padding: 28,
                 borderRadius: 12,
-                border: '1px dashed var(--border)',
+                border: '1px dashed var(--line)',
                 textAlign: 'center',
-                opacity: 0.8,
+                color: 'var(--muted)',
                 fontSize: 13,
               }}
             >
-              <Calendar size={24} style={{ marginBottom: 8, opacity: 0.6 }} />
-              <div>No guest bookings yet.</div>
-              <div style={{ marginTop: 4, opacity: 0.75 }}>
+              <Calendar size={24} style={{ marginBottom: 8, opacity: 0.7 }} />
+              <div style={{ color: 'var(--ink)', fontWeight: 600 }}>
+                No guest bookings yet
+              </div>
+              <div style={{ marginTop: 4 }}>
                 Share your booking link or click Preview booking page to test
                 the guest flow.
               </div>
@@ -439,7 +437,7 @@ export function BookingStudioView({
                   style={{
                     padding: 12,
                     borderRadius: 10,
-                    border: '1px solid var(--border)',
+                    border: '1px solid var(--line)',
                     display: 'flex',
                     justifyContent: 'space-between',
                     alignItems: 'center',

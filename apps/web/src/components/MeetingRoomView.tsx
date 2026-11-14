@@ -169,6 +169,7 @@ import { InterviewStudioModal } from './InterviewStudioModal';
 import { TelehealthSessionModal } from './TelehealthSessionModal';
 import { CreatorStudioModal } from './CreatorStudioModal';
 import { SupportCobrowseModal } from './SupportCobrowseModal';
+import { AccessibilityLanguageModal } from './AccessibilityLanguageModal';
 import {
   acquireDisplayMedia,
   acquireUserMedia,
@@ -871,6 +872,8 @@ export function MeetingRoomView({
   const [showCreatorStudioModal, setShowCreatorStudioModal] = useState(false);
   const [showSupportCobrowseModal, setShowSupportCobrowseModal] =
     useState(false);
+  const [showAccessibilityModal, setShowAccessibilityModal] = useState(false);
+  const [activeListenChannel, setActiveListenChannel] = useState('floor');
   const [showLeaveMenu, setShowLeaveMenu] = useState(false);
   const [showMoreActivitiesSheet, setShowMoreActivitiesSheet] = useState(false);
   const [unmutePromptFrom, setUnmutePromptFrom] = useState<string | null>(null);
@@ -7827,6 +7830,25 @@ export function MeetingRoomView({
                     </div>
                   </button>
 
+                  {/* Accessibility & Language (Phase 14 Tier D) */}
+                  <button
+                    type="button"
+                    className="call-more-menu-item"
+                    onClick={() => {
+                      setShowAccessibilityModal(true);
+                      setShowActivitiesPopover(false);
+                    }}
+                    data-testid="call-accessibility-btn"
+                  >
+                    <LanguagesIcon size={16} className="menu-icon-accent" />
+                    <div className="menu-item-text">
+                      <span>Accessibility &amp; Language</span>
+                      <small>
+                        Interpreter channels, local STT, CART &amp; whisper
+                      </small>
+                    </div>
+                  </button>
+
                   {/* Q&A */}
                   <button
                     type="button"
@@ -8870,6 +8892,36 @@ export function MeetingRoomView({
           roomCode={roomCode}
           selfDisplayName={displayName || user?.displayName || 'Agent'}
           onClose={() => setShowSupportCobrowseModal(false)}
+          onToast={onToast}
+        />
+      )}
+
+      {showAccessibilityModal && (
+        <AccessibilityLanguageModal
+          roomCode={roomCode}
+          selfDisplayName={displayName || user?.displayName || 'Participant'}
+          participants={remoteList.map((p) => ({
+            id: p.id,
+            displayName: p.displayName,
+          }))}
+          activeListenChannel={activeListenChannel}
+          onSelectListenChannel={(chId) => setActiveListenChannel(chId)}
+          onPinInterpreter={(peerId) => {
+            setPinnedTargetId(peerId);
+            if (peerId) {
+              onToast('Pinned sign-language interpreter video.');
+            }
+          }}
+          onEmitCaption={(text) => {
+            const cueId = `cart-${Date.now()}`;
+            signalingRef.current?.sendCaption({
+              text,
+              isFinal: true,
+              language: 'en',
+              cueId,
+            });
+          }}
+          onClose={() => setShowAccessibilityModal(false)}
           onToast={onToast}
         />
       )}
