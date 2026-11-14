@@ -19,6 +19,7 @@ export type DashboardTab =
   | 'home'
   | 'meetings'
   | 'schedule'
+  | 'booking'
   | 'notes'
   | 'recordings'
   | 'slides'

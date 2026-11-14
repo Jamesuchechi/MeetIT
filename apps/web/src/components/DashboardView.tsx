@@ -87,6 +87,7 @@ const TAB_LABELS: Record<DashboardTab, string> = {
   home: 'Overview',
   meetings: 'Meetings & History',
   schedule: 'Schedule',
+  booking: 'Booking Page',
   notes: 'Notes & Action Items',
   recordings: 'Recordings',
   slides: 'Slides & Presentations',
@@ -362,6 +363,18 @@ export function DashboardView({
           >
             <CalIcon />
             <span>Schedule</span>
+          </button>
+          <button
+            type="button"
+            aria-current={activeTab === 'booking' ? 'page' : undefined}
+            onClick={() => {
+              selectTab('booking');
+              setIsNavDrawerOpen(false);
+            }}
+            data-testid="sidebar-booking-btn"
+          >
+            <LnkIcon />
+            <span>Booking Page</span>
           </button>
           <button
             type="button"
@@ -810,6 +823,115 @@ export function DashboardView({
               onEnterRoom={onEnterRoom}
               onToast={onToast}
             />
+          ) : activeTab === 'booking' ? (
+            <div
+              className="profile-grid"
+              style={{ maxWidth: 820 }}
+              data-testid="dashboard-booking-tab"
+            >
+              <div className="profile-section-card" style={{ padding: 24 }}>
+                <div className="sec-head" style={{ marginBottom: 12 }}>
+                  <div>
+                    <h2 style={{ margin: 0, fontSize: '1.2rem' }}>
+                      Your Free Booking Page
+                    </h2>
+                    <p
+                      style={{ margin: '4px 0 0', opacity: 0.75, fontSize: 13 }}
+                    >
+                      Share this link so guests can pick a time slot and book a
+                      meeting in your personal room ({personalRoomCode}).
+                    </p>
+                  </div>
+                </div>
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 10,
+                    flexWrap: 'wrap',
+                    padding: 12,
+                    borderRadius: 10,
+                    border: '1px solid var(--border)',
+                    marginBottom: 16,
+                  }}
+                >
+                  <code style={{ flex: 1, fontSize: 13 }}>
+                    {`${window.location.origin}/#book/${personalRoomCode}`}
+                  </code>
+                  <button
+                    type="button"
+                    className="btn"
+                    onClick={() => {
+                      void copyToClipboard(
+                        `${window.location.origin}/#book/${personalRoomCode}`,
+                      ).then(() => onToast('Booking page link copied!'));
+                    }}
+                  >
+                    Copy link
+                  </button>
+                  <button
+                    type="button"
+                    className="btn primary"
+                    onClick={() => {
+                      window.location.hash = `#book/${personalRoomCode}`;
+                    }}
+                  >
+                    Preview booking page
+                  </button>
+                </div>
+
+                <h3 style={{ margin: '0 0 8px', fontSize: '1rem' }}>
+                  Recent Bookings (
+                  {
+                    scheduled.filter((s) => s.description?.includes('#book/'))
+                      .length
+                  }
+                  )
+                </h3>
+                {scheduled.filter((s) => s.description?.includes('#book/'))
+                  .length === 0 ? (
+                  <p style={{ margin: 0, opacity: 0.7, fontSize: 13 }}>
+                    No guest bookings yet. Share your booking link above to
+                    receive bookings.
+                  </p>
+                ) : (
+                  <div
+                    style={{ display: 'flex', flexDirection: 'column', gap: 8 }}
+                  >
+                    {scheduled
+                      .filter((s) => s.description?.includes('#book/'))
+                      .map((b) => (
+                        <div
+                          key={b.id}
+                          style={{
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center',
+                            padding: 10,
+                            borderRadius: 8,
+                            border: '1px solid var(--border)',
+                          }}
+                        >
+                          <div>
+                            <strong>{b.title}</strong>
+                            <div style={{ fontSize: 12, opacity: 0.75 }}>
+                              {new Date(b.startsAt).toLocaleString()} ·{' '}
+                              {b.durationMinutes} min
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            className="btn primary"
+                            onClick={() => onEnterRoom(b.roomCode)}
+                          >
+                            Join
+                          </button>
+                        </div>
+                      ))}
+                  </div>
+                )}
+              </div>
+            </div>
           ) : activeTab === 'notes' ? (
             <NotesView
               user={user ?? null}

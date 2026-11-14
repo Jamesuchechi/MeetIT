@@ -91,6 +91,9 @@ function parseLocationRoute(
   if (target === 'schedule' || target === 'dashboard/schedule') {
     return { view: 'dashboard', roomCode: null, dashTab: 'schedule' };
   }
+  if (target === 'booking' || target === 'dashboard/booking') {
+    return { view: 'dashboard', roomCode: null, dashTab: 'booking' };
+  }
   if (target === 'meetings' || target === 'dashboard/meetings') {
     return { view: 'dashboard', roomCode: null, dashTab: 'meetings' };
   }

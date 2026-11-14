@@ -52,6 +52,27 @@ function buildUpcomingSlots(): TimeSlotOption[] {
   return slots;
 }
 
+const fieldLabelStyle: React.CSSProperties = {
+  display: 'flex',
+  flexDirection: 'column',
+  gap: 6,
+  fontSize: 13,
+  fontWeight: 600,
+  color: 'var(--text, #e2e8f0)',
+};
+
+const inputControlStyle: React.CSSProperties = {
+  width: '100%',
+  boxSizing: 'border-box',
+  padding: '10px 12px',
+  borderRadius: 10,
+  border: '1px solid var(--border, rgba(148, 163, 184, 0.25))',
+  background: 'var(--bg, rgba(15, 23, 42, 0.55))',
+  color: 'var(--text, #f8fafc)',
+  fontSize: 14,
+  outline: 'none',
+};
+
 export function BookingPageView({
   handle,
   onEnterRoom,
@@ -85,7 +106,7 @@ export function BookingPageView({
       title: topic.trim()
         ? `${topic.trim()} (${guestName.trim()})`
         : `Meeting with ${guestName.trim()}`,
-      description: `Booked via free booking page (#book/${handle}) by ${guestName.trim()} (${guestEmail.trim()}).`,
+      description: `Booked via MeetIT booking page (#book/${handle}) by ${guestName.trim()} (${guestEmail.trim()}).`,
       ...(hostRoomCode ? { roomCode: hostRoomCode } : {}),
       startsAt: selectedSlot,
       durationMinutes,
@@ -102,11 +123,15 @@ export function BookingPageView({
       className="lobby-shell"
       data-view="booking-page"
       data-testid="booking-page-view"
+      style={{
+        minHeight: '100vh',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '32px 16px',
+      }}
     >
-      <div
-        className="wrap"
-        style={{ maxWidth: 680, margin: '40px auto', padding: '0 16px' }}
-      >
+      <div style={{ width: '100%', maxWidth: 660 }}>
         <button
           type="button"
           className="btn"
@@ -118,8 +143,13 @@ export function BookingPageView({
         </button>
 
         <div
-          className="profile-section-card"
-          style={{ padding: 24, borderRadius: 16 }}
+          style={{
+            padding: 28,
+            borderRadius: 18,
+            border: '1px solid var(--border, rgba(148, 163, 184, 0.2))',
+            background: 'var(--surface, #131c2e)',
+            boxShadow: '0 20px 50px rgba(0, 0, 0, 0.25)',
+          }}
         >
           <div
             style={{
@@ -128,20 +158,29 @@ export function BookingPageView({
               alignItems: 'center',
               flexWrap: 'wrap',
               gap: 8,
-              marginBottom: 12,
+              marginBottom: 14,
             }}
           >
-            <span className="eyebrow">Booking Page · @{handle}</span>
             <span
-              className="badge"
               style={{
-                padding: '3px 10px',
+                fontSize: 13,
+                fontWeight: 600,
+                color: 'var(--muted, #94a3b8)',
+              }}
+            >
+              Booking Page · @{handle}
+            </span>
+            <span
+              style={{
+                padding: '4px 10px',
                 borderRadius: 999,
                 fontSize: 12,
+                fontWeight: 600,
+                color: '#10b981',
                 background: 'rgba(16, 185, 129, 0.14)',
               }}
             >
-              Free · No payment required
+              Free · Instant Room Link
             </span>
           </div>
 
@@ -153,22 +192,35 @@ export function BookingPageView({
                   alignItems: 'center',
                   gap: 10,
                   marginBottom: 8,
+                  color: '#10b981',
                 }}
               >
-                <CheckCircle2 size={22} />
-                <h1 style={{ margin: 0, fontSize: '1.3rem' }}>
+                <CheckCircle2 size={24} />
+                <h1
+                  style={{
+                    margin: 0,
+                    fontSize: '1.35rem',
+                    color: 'var(--text, #f8fafc)',
+                  }}
+                >
                   Booking Confirmed
                 </h1>
               </div>
-              <p style={{ opacity: 0.85, marginTop: 4 }}>
+              <p style={{ margin: '6px 0', fontSize: 15 }}>
                 <strong>{confirmed.title}</strong> · Room{' '}
                 <code>{confirmed.roomCode}</code>
               </p>
-              <p style={{ opacity: 0.75, fontSize: 13 }}>
+              <p
+                style={{
+                  margin: '4px 0 18px',
+                  color: 'var(--muted, #94a3b8)',
+                  fontSize: 14,
+                }}
+              >
                 {new Date(confirmed.startsAt).toLocaleString()} (
                 {confirmed.durationMinutes} min)
               </p>
-              <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
+              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
                 <button
                   type="button"
                   className="btn"
@@ -188,35 +240,47 @@ export function BookingPageView({
               </div>
             </div>
           ) : (
-            <form onSubmit={handleBook} className="profile-form">
-              <h1 style={{ margin: '0 0 6px', fontSize: '1.4rem' }}>
-                Book a free meeting with @{handle}
-              </h1>
-              <p style={{ margin: '0 0 16px', opacity: 0.75, fontSize: 14 }}>
-                Pick an available time slot. Paid booking tiers are deferred —
-                all bookings are free.
-              </p>
+            <form
+              onSubmit={handleBook}
+              style={{ display: 'flex', flexDirection: 'column', gap: 18 }}
+            >
+              <div>
+                <h1 style={{ margin: '0 0 6px', fontSize: '1.45rem' }}>
+                  Book a meeting with @{handle}
+                </h1>
+                <p
+                  style={{
+                    margin: 0,
+                    color: 'var(--muted, #94a3b8)',
+                    fontSize: 14,
+                  }}
+                >
+                  Select an available time slot below to schedule a free video
+                  meeting.
+                </p>
+              </div>
 
-              <div className="field">
-                <label>Duration</label>
+              <label style={fieldLabelStyle}>
+                <span>Duration</span>
                 <select
                   value={durationMinutes}
                   onChange={(e) => setDurationMinutes(Number(e.target.value))}
+                  style={inputControlStyle}
                 >
                   <option value={15}>15 minutes</option>
                   <option value={30}>30 minutes</option>
                   <option value={45}>45 minutes</option>
                 </select>
-              </div>
+              </label>
 
-              <div className="field">
-                <label>Available slots</label>
+              <div style={fieldLabelStyle}>
+                <span>Available slots</span>
                 <div
                   style={{
                     display: 'grid',
                     gridTemplateColumns:
                       'repeat(auto-fill, minmax(145px, 1fr))',
-                    gap: 8,
+                    gap: 10,
                   }}
                 >
                   {slots.map((slot) => {
@@ -230,17 +294,19 @@ export function BookingPageView({
                         style={{
                           flexDirection: 'column',
                           alignItems: 'flex-start',
-                          padding: '8px 10px',
+                          padding: '10px 12px',
                           fontSize: 12,
+                          borderRadius: 10,
                         }}
                       >
-                        <span style={{ opacity: 0.8 }}>{slot.dayLabel}</span>
+                        <span style={{ opacity: 0.85 }}>{slot.dayLabel}</span>
                         <span
                           style={{
                             display: 'inline-flex',
                             alignItems: 'center',
                             gap: 4,
-                            fontWeight: 600,
+                            fontWeight: 700,
+                            fontSize: 13,
                           }}
                         >
                           <Clock size={12} /> {slot.label}
@@ -251,9 +317,15 @@ export function BookingPageView({
                 </div>
               </div>
 
-              <div className="form-row-2col">
-                <div className="field">
-                  <label htmlFor="book-name">Your name</label>
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+                  gap: 12,
+                }}
+              >
+                <label htmlFor="book-name" style={fieldLabelStyle}>
+                  <span>Your name</span>
                   <input
                     id="book-name"
                     type="text"
@@ -261,10 +333,11 @@ export function BookingPageView({
                     value={guestName}
                     onChange={(e) => setGuestName(e.target.value)}
                     placeholder="Ada Lovelace"
+                    style={inputControlStyle}
                   />
-                </div>
-                <div className="field">
-                  <label htmlFor="book-email">Your email</label>
+                </label>
+                <label htmlFor="book-email" style={fieldLabelStyle}>
+                  <span>Your email</span>
                   <input
                     id="book-email"
                     type="email"
@@ -272,12 +345,13 @@ export function BookingPageView({
                     value={guestEmail}
                     onChange={(e) => setGuestEmail(e.target.value)}
                     placeholder="ada@example.com"
+                    style={inputControlStyle}
                   />
-                </div>
+                </label>
               </div>
 
-              <div className="field">
-                <label htmlFor="book-topic">Topic (optional)</label>
+              <label htmlFor="book-topic" style={fieldLabelStyle}>
+                <span>Topic (optional)</span>
                 <input
                   id="book-topic"
                   type="text"
@@ -285,15 +359,23 @@ export function BookingPageView({
                   onChange={(e) => setTopic(e.target.value)}
                   placeholder="Product intro or architecture sync"
                   maxLength={120}
+                  style={inputControlStyle}
                 />
-              </div>
+              </label>
 
-              <div className="profile-form-footer">
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'flex-end',
+                  paddingTop: 4,
+                }}
+              >
                 <button
                   type="submit"
                   className="btn primary"
                   disabled={booking}
                   data-testid="booking-submit-btn"
+                  style={{ padding: '10px 20px', fontSize: 14 }}
                 >
                   {booking ? 'Booking…' : 'Book free meeting'}
                 </button>
