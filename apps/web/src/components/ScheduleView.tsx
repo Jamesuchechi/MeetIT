@@ -352,6 +352,17 @@ export function ScheduleView({
               <LnkIcon />
               <span>Copy free booking page</span>
             </button>
+            <button
+              type="button"
+              className="btn"
+              data-testid="preview-booking-page-btn"
+              onClick={() => {
+                window.location.hash = `#book/${personalCode}`;
+              }}
+            >
+              <CalIcon />
+              <span>Open booking page</span>
+            </button>
           </div>
         </form>
 

@@ -160,6 +160,15 @@ import {
   SwapIcon,
   PanelRightIcon,
 } from './Icons';
+import { Code2 as Code2Icon } from 'lucide-react';
+import {
+  HeartPulse as HeartPulseIcon,
+  LifeBuoy as LifeBuoyIcon,
+} from 'lucide-react';
+import { InterviewStudioModal } from './InterviewStudioModal';
+import { TelehealthSessionModal } from './TelehealthSessionModal';
+import { CreatorStudioModal } from './CreatorStudioModal';
+import { SupportCobrowseModal } from './SupportCobrowseModal';
 import {
   acquireDisplayMedia,
   acquireUserMedia,
@@ -857,6 +866,11 @@ export function MeetingRoomView({
     'Waiting for the host to admit you…',
   );
   const [showHostPanel, setShowHostPanel] = useState(false);
+  const [showInterviewModal, setShowInterviewModal] = useState(false);
+  const [showTelehealthModal, setShowTelehealthModal] = useState(false);
+  const [showCreatorStudioModal, setShowCreatorStudioModal] = useState(false);
+  const [showSupportCobrowseModal, setShowSupportCobrowseModal] =
+    useState(false);
   const [showLeaveMenu, setShowLeaveMenu] = useState(false);
   const [showMoreActivitiesSheet, setShowMoreActivitiesSheet] = useState(false);
   const [unmutePromptFrom, setUnmutePromptFrom] = useState<string | null>(null);
@@ -7743,6 +7757,76 @@ export function MeetingRoomView({
                     )}
                   </button>
 
+                  {/* Interview Studio (Phase 14 Tier C) */}
+                  <button
+                    type="button"
+                    className="call-more-menu-item"
+                    onClick={() => {
+                      setShowInterviewModal(true);
+                      setShowActivitiesPopover(false);
+                    }}
+                    data-testid="call-interview-studio-btn"
+                  >
+                    <Code2Icon size={16} className="menu-icon-accent" />
+                    <div className="menu-item-text">
+                      <span>Interview Studio</span>
+                      <small>Shared code editor, runner &amp; scorecard</small>
+                    </div>
+                  </button>
+
+                  {/* Telehealth & Tutoring (Phase 14 Tier C) */}
+                  <button
+                    type="button"
+                    className="call-more-menu-item"
+                    onClick={() => {
+                      setShowTelehealthModal(true);
+                      setShowActivitiesPopover(false);
+                    }}
+                    data-testid="call-telehealth-btn"
+                  >
+                    <HeartPulseIcon size={16} className="menu-icon-accent" />
+                    <div className="menu-item-text">
+                      <span>Telehealth &amp; Tutoring</span>
+                      <small>
+                        Digital consent, SOAP/lesson notes &amp; board
+                      </small>
+                    </div>
+                  </button>
+
+                  {/* Creator Studio (Phase 14 Tier C) */}
+                  <button
+                    type="button"
+                    className="call-more-menu-item"
+                    onClick={() => {
+                      setShowCreatorStudioModal(true);
+                      setShowActivitiesPopover(false);
+                    }}
+                    data-testid="call-creator-studio-btn"
+                  >
+                    <RadioIcon size={16} className="menu-icon-accent" />
+                    <div className="menu-item-text">
+                      <span>Creator Studio</span>
+                      <small>Backstage, guest links &amp; multi-stream</small>
+                    </div>
+                  </button>
+
+                  {/* Support Co-Browse (Phase 14 Tier C) */}
+                  <button
+                    type="button"
+                    className="call-more-menu-item"
+                    onClick={() => {
+                      setShowSupportCobrowseModal(true);
+                      setShowActivitiesPopover(false);
+                    }}
+                    data-testid="call-support-cobrowse-btn"
+                  >
+                    <LifeBuoyIcon size={16} className="menu-icon-accent" />
+                    <div className="menu-item-text">
+                      <span>Support &amp; Co-Browse</span>
+                      <small>Click-to-call widget &amp; live annotations</small>
+                    </div>
+                  </button>
+
                   {/* Q&A */}
                   <button
                     type="button"
@@ -8750,6 +8834,45 @@ export function MeetingRoomView({
           onToast(`Attached FormIT survey (${session.slug}) to meeting notes.`);
         }}
       />
+
+      {showInterviewModal && (
+        <InterviewStudioModal
+          roomCode={roomCode}
+          canModerate={canModerate}
+          selfDisplayName={displayName || user?.displayName || 'Participant'}
+          candidateDefaultName={remoteList[0]?.displayName || 'Candidate'}
+          onClose={() => setShowInterviewModal(false)}
+          onToast={onToast}
+        />
+      )}
+
+      {showTelehealthModal && (
+        <TelehealthSessionModal
+          roomCode={roomCode}
+          ownerId={user?.id || 'local-guest'}
+          selfDisplayName={displayName || user?.displayName || 'Participant'}
+          onOpenWhiteboard={() => setShowWhiteboardModal(true)}
+          onClose={() => setShowTelehealthModal(false)}
+          onToast={onToast}
+        />
+      )}
+
+      {showCreatorStudioModal && (
+        <CreatorStudioModal
+          roomCode={roomCode}
+          onClose={() => setShowCreatorStudioModal(false)}
+          onToast={onToast}
+        />
+      )}
+
+      {showSupportCobrowseModal && (
+        <SupportCobrowseModal
+          roomCode={roomCode}
+          selfDisplayName={displayName || user?.displayName || 'Agent'}
+          onClose={() => setShowSupportCobrowseModal(false)}
+          onToast={onToast}
+        />
+      )}
 
       <QAPanel
         isOpen={showQAPanel}

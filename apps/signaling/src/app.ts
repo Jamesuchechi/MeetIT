@@ -693,6 +693,249 @@ export function buildSignalingApp(
     return reply.send({ submission, form });
   });
 
+  const interviewPadsByRoom = new Map<
+    string,
+    {
+      code: string;
+      language: 'javascript' | 'typescript';
+      activeQuestionId?: string;
+      updatedBy?: string;
+      updatedAt: string;
+    }
+  >();
+
+  app.get<{ Params: { code: string } }>(
+    '/rooms/:code/interview-pad',
+    async (request, reply) => {
+      const normalized = normalizeRoomCode(request.params.code);
+      if (!normalized) {
+        return reply.code(400).send({ error: 'Invalid room code' });
+      }
+      const pad = interviewPadsByRoom.get(normalized) ?? {
+        code: '// Write your solution here\nfunction solve(nums) {\n  return nums;\n}\nconsole.log(solve([1, 2, 3]));\n',
+        language: 'javascript' as const,
+        updatedAt: new Date().toISOString(),
+      };
+      return reply.send({ pad });
+    },
+  );
+
+  app.post<{
+    Params: { code: string };
+    Body: {
+      code?: string;
+      language?: 'javascript' | 'typescript';
+      activeQuestionId?: string;
+      updatedBy?: string;
+    };
+  }>('/rooms/:code/interview-pad', async (request, reply) => {
+    const normalized = normalizeRoomCode(request.params.code);
+    if (!normalized) {
+      return reply.code(400).send({ error: 'Invalid room code' });
+    }
+    const prev = interviewPadsByRoom.get(normalized);
+    const next = {
+      code:
+        typeof request.body?.code === 'string'
+          ? request.body.code
+          : (prev?.code ?? ''),
+      language:
+        request.body?.language === 'typescript'
+          ? ('typescript' as const)
+          : request.body?.language === 'javascript'
+            ? ('javascript' as const)
+            : (prev?.language ?? ('javascript' as const)),
+      ...(request.body?.activeQuestionId !== undefined
+        ? { activeQuestionId: request.body.activeQuestionId }
+        : prev?.activeQuestionId
+          ? { activeQuestionId: prev.activeQuestionId }
+          : {}),
+      ...(request.body?.updatedBy
+        ? { updatedBy: request.body.updatedBy }
+        : prev?.updatedBy
+          ? { updatedBy: prev.updatedBy }
+          : {}),
+      updatedAt: new Date().toISOString(),
+    };
+    interviewPadsByRoom.set(normalized, next);
+    return reply.send({ pad: next });
+  });
+
+  const creatorStudioByRoom = new Map<
+    string,
+    {
+      backstageOpen: boolean;
+      isLive: boolean;
+      guestLinks: Array<{
+        id: string;
+        label: string;
+        token: string;
+        createdAt: string;
+      }>;
+      destinations: Array<{
+        id: string;
+        platform: 'YouTube' | 'Twitch' | 'Custom RTMP';
+        rtmpUrl: string;
+        streamKeyMasked: string;
+        enabled: boolean;
+      }>;
+    }
+  >();
+
+  app.get<{ Params: { code: string } }>(
+    '/rooms/:code/creator-studio',
+    async (request, reply) => {
+      const normalized = normalizeRoomCode(request.params.code);
+      if (!normalized) {
+        return reply.code(400).send({ error: 'Invalid room code' });
+      }
+      const state = creatorStudioByRoom.get(normalized) ?? {
+        backstageOpen: true,
+        isLive: false,
+        guestLinks: [],
+        destinations: [],
+      };
+      return reply.send({ studio: state });
+    },
+  );
+
+  app.post<{
+    Params: { code: string };
+    Body: {
+      backstageOpen?: boolean;
+      isLive?: boolean;
+      addGuestLabel?: string;
+      addDestination?: {
+        platform: 'YouTube' | 'Twitch' | 'Custom RTMP';
+        rtmpUrl: string;
+        streamKey: string;
+      };
+      toggleDestinationId?: string;
+    };
+  }>('/rooms/:code/creator-studio', async (request, reply) => {
+    const normalized = normalizeRoomCode(request.params.code);
+    if (!normalized) {
+      return reply.code(400).send({ error: 'Invalid room code' });
+    }
+    const prev = creatorStudioByRoom.get(normalized) ?? {
+      backstageOpen: true,
+      isLive: false,
+      guestLinks: [],
+      destinations: [],
+    };
+    const next = { ...prev };
+    if (typeof request.body?.backstageOpen === 'boolean') {
+      next.backstageOpen = request.body.backstageOpen;
+    }
+    if (typeof request.body?.isLive === 'boolean') {
+      next.isLive = request.body.isLive;
+    }
+    if (request.body?.addGuestLabel?.trim()) {
+      const token = Math.random().toString(36).slice(2, 10);
+      next.guestLinks = [
+        ...next.guestLinks,
+        {
+          id: `gl-${Date.now()}`,
+          label: request.body.addGuestLabel.trim(),
+          token,
+          createdAt: new Date().toISOString(),
+        },
+      ];
+    }
+    if (request.body?.addDestination?.rtmpUrl?.trim()) {
+      const rawKey = request.body.addDestination.streamKey || '';
+      const masked =
+        rawKey.length > 4
+          ? `${'*'.repeat(Math.min(8, rawKey.length - 4))}${rawKey.slice(-4)}`
+          : '****';
+      next.destinations = [
+        ...next.destinations,
+        {
+          id: `dest-${Date.now()}`,
+          platform: request.body.addDestination.platform || 'Custom RTMP',
+          rtmpUrl: request.body.addDestination.rtmpUrl.trim(),
+          streamKeyMasked: masked,
+          enabled: true,
+        },
+      ];
+    }
+    if (request.body?.toggleDestinationId) {
+      next.destinations = next.destinations.map((d) =>
+        d.id === request.body.toggleDestinationId
+          ? { ...d, enabled: !d.enabled }
+          : d,
+      );
+    }
+    creatorStudioByRoom.set(normalized, next);
+    return reply.send({ studio: next });
+  });
+
+  const supportAnnotationsByRoom = new Map<
+    string,
+    Array<{
+      id: string;
+      author: string;
+      kind: 'pin' | 'rect';
+      xPct: number;
+      yPct: number;
+      label?: string;
+      color: string;
+      createdAt: string;
+    }>
+  >();
+
+  app.get<{ Params: { code: string } }>(
+    '/rooms/:code/support-annotations',
+    async (request, reply) => {
+      const normalized = normalizeRoomCode(request.params.code);
+      if (!normalized) {
+        return reply.code(400).send({ error: 'Invalid room code' });
+      }
+      return reply.send({
+        annotations: supportAnnotationsByRoom.get(normalized) ?? [],
+      });
+    },
+  );
+
+  app.post<{
+    Params: { code: string };
+    Body: {
+      clear?: boolean;
+      author?: string;
+      kind?: 'pin' | 'rect';
+      xPct?: number;
+      yPct?: number;
+      label?: string;
+      color?: string;
+    };
+  }>('/rooms/:code/support-annotations', async (request, reply) => {
+    const normalized = normalizeRoomCode(request.params.code);
+    if (!normalized) {
+      return reply.code(400).send({ error: 'Invalid room code' });
+    }
+    if (request.body?.clear) {
+      supportAnnotationsByRoom.set(normalized, []);
+      return reply.send({ annotations: [] });
+    }
+    const existing = supportAnnotationsByRoom.get(normalized) ?? [];
+    const item = {
+      id: `ann-${Date.now()}-${Math.random().toString(36).slice(2, 5)}`,
+      author: request.body?.author?.trim() || 'Agent',
+      kind:
+        request.body?.kind === 'rect' ? ('rect' as const) : ('pin' as const),
+      xPct: Math.max(0, Math.min(100, Number(request.body?.xPct ?? 50))),
+      yPct: Math.max(0, Math.min(100, Number(request.body?.yPct ?? 50))),
+      ...(request.body?.label?.trim()
+        ? { label: request.body.label.trim() }
+        : {}),
+      color: request.body?.color || '#6366f1',
+      createdAt: new Date().toISOString(),
+    };
+    const next = [...existing.slice(-24), item];
+    supportAnnotationsByRoom.set(normalized, next);
+    return reply.send({ annotations: next });
+  });
+
   app.get<{ Params: { code: string } }>(
     '/rooms/:code/dial-in',
     async (request, reply) => {

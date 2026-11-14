@@ -406,10 +406,10 @@ Do not start any bet until the SFU is stable (Phase 4). Every bet begins as a on
 
 ### Tier C: vertical bets (pick at most one, validate with pilots first)
 
-- [ ] [R] **Interviews:** shared code editor with execution, scorecards, question banks, ATS export
-- [ ] [R] **Telehealth and tutoring:** consent flows, session notes, payments, whiteboard
-- [ ] [R] **Creator studio:** backstage rooms, guest links, multi-destination streaming (builds on Phase 7)
-- [ ] [R] **Support:** embeddable click-to-call widget with co-browsing and annotations (builds on Phase 9 SDK)
+- [x] [R] **Interviews:** shared code editor with execution, scorecards, question banks, ATS export (implemented `InterviewStudioModal`, `interviewStore` sandboxed runner + rubric scorecards + ATS JSON/Markdown export, and `/rooms/:code/interview-pad` sync)
+- [~] [R] **Telehealth and tutoring:** consent flows, session notes, payments, whiteboard _(Implemented `TelehealthSessionModal` digital consent, SOAP/lesson-plan notes, and whiteboard launch; payments deferred to keep product 100% free)_
+- [x] [R] **Creator studio:** backstage rooms, guest links, multi-destination streaming (builds on Phase 7; implemented `CreatorStudioModal` and `/rooms/:code/creator-studio` endpoints)
+- [x] [R] **Support:** embeddable click-to-call widget with co-browsing and annotations (builds on Phase 9 SDK; implemented `MeetIt.supportWidget` in `@meetit/sdk`, `SupportCobrowseModal`, and `/rooms/:code/support-annotations` endpoints)
   - Success for any vertical: 10 paying accounts within 90 days of a pilot. Kill: fewer than 3 after the pilot.
 
 ### Tier D: accessibility and language

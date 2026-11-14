@@ -11,4 +11,6 @@ export type {
   MeetItEventName,
   MeetItCommandMessage,
   MeetItInstance,
+  MeetItSupportWidgetOptions,
+  MeetItSupportWidgetInstance,
 } from './types.js';

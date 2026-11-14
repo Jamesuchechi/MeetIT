@@ -1191,6 +1191,21 @@ export function DashboardView({
               >
                 Start in my room
               </button>
+              <button
+                type="button"
+                className="btn"
+                data-testid="open-booking-page-btn"
+                onClick={() => {
+                  window.location.hash = `#book/${personalRoomCode}`;
+                }}
+                style={{
+                  width: '100%',
+                  justifyContent: 'center',
+                  marginTop: 8,
+                }}
+              >
+                Open my free booking page
+              </button>
             </div>
 
             {/* Network & Connection Panel */}

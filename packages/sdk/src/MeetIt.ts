@@ -4,6 +4,8 @@ import type {
   MeetItEvents,
   MeetItInstance,
   MeetItCommandMessage,
+  MeetItSupportWidgetOptions,
+  MeetItSupportWidgetInstance,
 } from './types.js';
 
 /**
@@ -162,6 +164,82 @@ export class MeetIt {
         };
       },
       getIframe: () => iframe,
+    };
+  }
+
+  /**
+   * Mounts an embeddable click-to-call Support Widget (Phase 14 Tier C).
+   */
+  public static supportWidget(
+    options: MeetItSupportWidgetOptions,
+  ): MeetItSupportWidgetInstance {
+    const root = document.createElement('div');
+    root.setAttribute('data-testid', 'meetit-support-widget');
+    root.style.position = 'fixed';
+    root.style.bottom = '20px';
+    root.style[options.position === 'bottom-left' ? 'left' : 'right'] = '20px';
+    root.style.zIndex = '99999';
+
+    const launcher = document.createElement('button');
+    launcher.type = 'button';
+    launcher.textContent = options.buttonText || 'Live Support';
+    launcher.style.padding = '10px 16px';
+    launcher.style.borderRadius = '999px';
+    launcher.style.border = 'none';
+    launcher.style.cursor = 'pointer';
+    launcher.style.fontWeight = '600';
+    launcher.style.color = '#ffffff';
+    launcher.style.background = options.primaryColor || '#6366f1';
+
+    const panel = document.createElement('div');
+    panel.style.display = 'none';
+    panel.style.width = '360px';
+    panel.style.height = '480px';
+    panel.style.marginBottom = '10px';
+    panel.style.borderRadius = '14px';
+    panel.style.overflow = 'hidden';
+    panel.style.boxShadow = '0 12px 32px rgba(0,0,0,0.28)';
+
+    let embedded: MeetItInstance | null = null;
+
+    const open = () => {
+      panel.style.display = 'block';
+      if (!embedded) {
+        embedded = MeetIt.embed(panel, {
+          roomCode: options.roomCode,
+          baseUrl: options.baseUrl,
+          displayName: options.customerName || 'Customer',
+          primaryColor: options.primaryColor,
+          width: '100%',
+          height: '100%',
+        });
+      }
+    };
+
+    const close = () => {
+      panel.style.display = 'none';
+    };
+
+    launcher.addEventListener('click', () => {
+      if (panel.style.display === 'none') {
+        open();
+      } else {
+        close();
+      }
+    });
+
+    root.appendChild(panel);
+    root.appendChild(launcher);
+    document.body.appendChild(root);
+
+    return {
+      open,
+      close,
+      destroy: () => {
+        embedded?.destroy();
+        embedded = null;
+        root.remove();
+      },
     };
   }
 }

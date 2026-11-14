@@ -84,3 +84,27 @@ export interface MeetItInstance {
   /** Returns the underlying iframe element */
   getIframe(): HTMLIFrameElement;
 }
+
+export interface MeetItSupportWidgetOptions {
+  /** Support room code (e.g. abc-defg-hij) */
+  roomCode: string;
+  /** MeetIT base URL */
+  baseUrl?: string | undefined;
+  /** Button label (default: 'Live Support') */
+  buttonText?: string | undefined;
+  /** Customer display name */
+  customerName?: string | undefined;
+  /** Brand color */
+  primaryColor?: string | undefined;
+  /** Position on page */
+  position?: 'bottom-right' | 'bottom-left' | undefined;
+}
+
+export interface MeetItSupportWidgetInstance {
+  /** Open the click-to-call support popover */
+  open(): void;
+  /** Close the support popover */
+  close(): void;
+  /** Remove widget from DOM */
+  destroy(): void;
+}
