@@ -91,7 +91,7 @@ const TAB_LABELS: Record<DashboardTab, string> = {
   developer: 'Developer Platform',
   analytics: 'Meeting Analytics',
   cost: 'Cost & Scale Telemetry',
-  memory: 'Memory & AI Lab',
+  memory: 'Meeting Memory',
   audit: 'Security Audit Log',
   settings: 'Settings',
   profile: 'Public Profile',
@@ -452,7 +452,7 @@ export function DashboardView({
             <span>
               <BrainIcon size={16} />
             </span>
-            <span>Memory &amp; Lab</span>
+            <span>Meeting Memory</span>
           </button>
           <button
             type="button"

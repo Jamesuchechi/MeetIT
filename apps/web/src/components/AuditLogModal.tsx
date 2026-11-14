@@ -1,11 +1,11 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   FileText,
   Download,
-  Filter,
   RefreshCw,
   X,
   Shield,
+  ShieldCheck,
   Video,
   Key,
   Users,
@@ -142,16 +142,77 @@ function AuditLogPanel({
     );
   };
 
-  const filteredLogs = logs.filter((log) => {
-    if (!searchQuery) return true;
-    const q = searchQuery.toLowerCase();
-    return (
-      log.action.toLowerCase().includes(q) ||
-      log.targetType.toLowerCase().includes(q) ||
-      (log.targetId && log.targetId.toLowerCase().includes(q)) ||
-      JSON.stringify(log.metadata).toLowerCase().includes(q)
+  const filteredLogs = useMemo(
+    () =>
+      logs.filter((log) => {
+        if (!searchQuery) return true;
+        const q = searchQuery.toLowerCase();
+        return (
+          log.action.toLowerCase().includes(q) ||
+          log.targetType.toLowerCase().includes(q) ||
+          (log.targetId && log.targetId.toLowerCase().includes(q)) ||
+          JSON.stringify(log.metadata).toLowerCase().includes(q)
+        );
+      }),
+    [logs, searchQuery],
+  );
+
+  const stats = useMemo(() => {
+    let roomAndMod = 0;
+    let recordings = 0;
+    let securityAndKeys = 0;
+    for (const log of filteredLogs) {
+      if (
+        log.action.startsWith('room.') ||
+        log.action.startsWith('participant.')
+      ) {
+        roomAndMod++;
+      } else if (log.action.startsWith('recording.')) {
+        recordings++;
+      } else if (
+        log.action.startsWith('security.') ||
+        log.action.startsWith('apikey.') ||
+        log.action.startsWith('compliance.')
+      ) {
+        securityAndKeys++;
+      }
+    }
+    return {
+      total: filteredLogs.length,
+      roomAndMod,
+      recordings,
+      securityAndKeys,
+    };
+  }, [filteredLogs]);
+
+  const formatMetadata = (metadata: Record<string, unknown>) => {
+    const entries = Object.entries(metadata).filter(
+      ([, val]) => val !== undefined && val !== null && val !== '',
     );
-  });
+    if (entries.length === 0) return null;
+    return entries.slice(0, 3).map(([k, v]) => (
+      <span
+        key={k}
+        style={{
+          display: 'inline-block',
+          fontSize: '0.72rem',
+          padding: '2px 7px',
+          borderRadius: 6,
+          background: 'var(--soft)',
+          border: '1px solid var(--line)',
+          color: 'var(--ink)',
+          marginRight: 4,
+        }}
+      >
+        <strong style={{ color: 'var(--muted)', fontWeight: 500 }}>{k}:</strong>{' '}
+        {typeof v === 'string' ||
+        typeof v === 'number' ||
+        typeof v === 'boolean'
+          ? String(v)
+          : JSON.stringify(v)}
+      </span>
+    ));
+  };
 
   const getActionIcon = (action: string) => {
     if (action.startsWith('room.'))
@@ -213,6 +274,69 @@ function AuditLogPanel({
         )}
       </div>
 
+      {/* Summary KPI Row */}
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
+          gap: 10,
+          margin: '12px 0 4px',
+        }}
+      >
+        {[
+          { label: 'Total Events', value: stats.total },
+          { label: 'Room & Moderation', value: stats.roomAndMod },
+          { label: 'Recording Events', value: stats.recordings },
+          { label: 'Security & API Keys', value: stats.securityAndKeys },
+        ].map((kpi) => (
+          <div
+            key={kpi.label}
+            style={{
+              padding: '10px 12px',
+              borderRadius: 8,
+              border: '1px solid var(--line)',
+              background: 'var(--bg)',
+            }}
+          >
+            <div style={{ fontSize: '0.72rem', color: 'var(--muted)' }}>
+              {kpi.label}
+            </div>
+            <div
+              style={{
+                fontSize: '1.15rem',
+                fontWeight: 700,
+                color: 'var(--ink)',
+                marginTop: 2,
+              }}
+            >
+              {kpi.value}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Category Filter Pills */}
+      <div
+        style={{
+          display: 'flex',
+          gap: 6,
+          flexWrap: 'wrap',
+          marginTop: 10,
+        }}
+      >
+        {ACTION_FILTERS.map((f) => (
+          <button
+            key={f.value}
+            type="button"
+            className={`btn sm ${selectedFilter === f.value ? 'primary' : 'secondary'}`}
+            onClick={() => setSelectedFilter(f.value)}
+            style={{ fontSize: '0.74rem', padding: '4px 10px' }}
+          >
+            {f.label}
+          </button>
+        ))}
+      </div>
+
       {/* Controls Bar */}
       <div
         style={{
@@ -221,7 +345,7 @@ function AuditLogPanel({
           flexWrap: 'wrap',
           alignItems: 'center',
           justifyContent: 'space-between',
-          margin: '14px 0 10px',
+          margin: '12px 0 12px',
         }}
       >
         <div
@@ -235,41 +359,22 @@ function AuditLogPanel({
         >
           <input
             type="text"
-            placeholder="Search audit trail..."
+            placeholder="Search by action, target, or metadata…"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             style={{
               width: '100%',
-              padding: '6px 12px',
-              borderRadius: 6,
+              padding: '7px 12px',
+              borderRadius: 8,
               border: '1px solid var(--line)',
               background: 'var(--bg)',
               color: 'var(--ink)',
-              fontSize: '0.82rem',
+              fontSize: '0.84rem',
             }}
           />
         </div>
 
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          <select
-            value={selectedFilter}
-            onChange={(e) => setSelectedFilter(e.target.value as any)}
-            style={{
-              padding: '6px 10px',
-              borderRadius: 6,
-              border: '1px solid var(--line)',
-              background: 'var(--surface)',
-              color: 'var(--ink)',
-              fontSize: '0.82rem',
-            }}
-          >
-            {ACTION_FILTERS.map((f) => (
-              <option key={f.value} value={f.value}>
-                {f.label}
-              </option>
-            ))}
-          </select>
-
           <button
             type="button"
             className="btn secondary sm"
@@ -277,6 +382,7 @@ function AuditLogPanel({
             title="Refresh logs"
           >
             <RefreshCw size={13} className={loading ? 'spinning' : ''} />
+            <span>Refresh</span>
           </button>
 
           <button
@@ -326,13 +432,27 @@ function AuditLogPanel({
         {filteredLogs.length === 0 ? (
           <div
             style={{
-              padding: '36px 16px',
+              padding: '44px 16px',
               textAlign: 'center',
               color: 'var(--muted)',
               fontSize: '0.85rem',
             }}
           >
-            {loading ? 'Loading audit trail...' : 'No audit events found.'}
+            <ShieldCheck
+              size={22}
+              style={{ color: 'var(--accent)', marginBottom: 8 }}
+            />
+            <div
+              style={{ fontWeight: 600, color: 'var(--ink)', marginBottom: 4 }}
+            >
+              {loading
+                ? 'Loading audit trail…'
+                : 'No audit events match your filter'}
+            </div>
+            <div style={{ fontSize: '0.78rem' }}>
+              Room locks, recordings, participant moderation, and API key events
+              appear here automatically.
+            </div>
           </div>
         ) : (
           <table
@@ -354,10 +474,10 @@ function AuditLogPanel({
                   letterSpacing: '0.04em',
                 }}
               >
-                <th style={{ padding: '8px 12px' }}>Timestamp</th>
-                <th style={{ padding: '8px 12px' }}>Action</th>
-                <th style={{ padding: '8px 12px' }}>Target</th>
-                <th style={{ padding: '8px 12px' }}>Details</th>
+                <th style={{ padding: '10px 12px' }}>Date &amp; Time</th>
+                <th style={{ padding: '10px 12px' }}>Action</th>
+                <th style={{ padding: '10px 12px' }}>Target</th>
+                <th style={{ padding: '10px 12px' }}>Details</th>
               </tr>
             </thead>
             <tbody>
@@ -368,20 +488,24 @@ function AuditLogPanel({
                 >
                   <td
                     style={{
-                      padding: '8px 12px',
+                      padding: '10px 12px',
                       whiteSpace: 'nowrap',
                       color: 'var(--muted)',
                       fontSize: '0.75rem',
                       fontFamily: 'monospace',
                     }}
                   >
+                    {new Date(log.createdAt).toLocaleDateString([], {
+                      month: 'short',
+                      day: 'numeric',
+                    })}{' '}
                     {new Date(log.createdAt).toLocaleTimeString([], {
                       hour: '2-digit',
                       minute: '2-digit',
                       second: '2-digit',
                     })}
                   </td>
-                  <td style={{ padding: '8px 12px', whiteSpace: 'nowrap' }}>
+                  <td style={{ padding: '10px 12px', whiteSpace: 'nowrap' }}>
                     <div
                       style={{
                         display: 'flex',
@@ -394,32 +518,21 @@ function AuditLogPanel({
                       <span>{log.action}</span>
                     </div>
                   </td>
-                  <td style={{ padding: '8px 12px', color: 'var(--ink)' }}>
+                  <td style={{ padding: '10px 12px', color: 'var(--ink)' }}>
                     <span
                       style={{
                         fontSize: '0.75rem',
-                        padding: '2px 6px',
+                        padding: '2px 7px',
                         background: 'var(--soft)',
-                        borderRadius: 4,
+                        borderRadius: 6,
                       }}
                     >
                       {log.targetType}
                       {log.targetId ? `: ${log.targetId}` : ''}
                     </span>
                   </td>
-                  <td
-                    style={{
-                      padding: '8px 12px',
-                      color: 'var(--muted)',
-                      maxWidth: 220,
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    {Object.keys(log.metadata).length > 0
-                      ? JSON.stringify(log.metadata)
-                      : '—'}
+                  <td style={{ padding: '10px 12px', color: 'var(--muted)' }}>
+                    {formatMetadata(log.metadata) ?? '—'}
                   </td>
                 </tr>
               ))}
@@ -434,13 +547,16 @@ function AuditLogPanel({
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
+          flexWrap: 'wrap',
+          gap: 8,
           fontSize: '0.78rem',
           color: 'var(--muted)',
         }}
       >
-        <span>
-          Showing {filteredLogs.length} events (retained up to 90 days for
-          compliance)
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+          <ShieldCheck size={14} style={{ color: 'var(--accent)' }} />
+          Showing {filteredLogs.length} events · 90-day immutable compliance
+          retention
         </span>
         {onClose && (
           <button type="button" className="btn secondary sm" onClick={onClose}>
