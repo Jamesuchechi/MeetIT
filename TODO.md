@@ -393,15 +393,15 @@ Do not start any bet until the SFU is stable (Phase 4). Every bet begins as a on
 
 ### Tier B: revenue and workflow
 
-- [ ] [R] **Booking pages with payments:** Calendly-style page where clients pick a slot and pay to book (Stripe, Paystack, Flutterwave); reuses Phase 3 scheduling and Phase 7 payments
+- [~] [R] **Booking pages with payments:** Calendly-style page where clients pick a slot and pay to book (Stripe, Paystack, Flutterwave); reuses Phase 3 scheduling and Phase 7 payments _(Free booking page `#book/:handle` / `BookingPageView` + `.ics` implemented; payment checkout deferred to keep product 100% free)_
   - Success: 15% of Pro hosts publish a page; paid-booking conversion above 20%. Kill: under 3% adoption.
-- [ ] [R] **FormIT intake in the waiting room:** guests complete a FormIT form before the host admits them; answers show next to their name and attach to the meeting record (extends the Phase 6 FormIT integration)
+- [x] [R] **FormIT intake in the waiting room:** guests complete a FormIT form before the host admits them; answers show next to their name and attach to the meeting record (extends the Phase 6 FormIT integration; implemented `/rooms/:code/waiting-intake*` endpoints and waiting-room/host-panel UI)
   - Success: 20% of hosts using a waiting room attach a form. Kill: under 5%.
 - [x] [R] **Meeting templates:** presets for standups, 1:1s, retros, and client calls, each with agenda, timers, and a notes scaffold (implemented `MEETING_TEMPLATES` and `GET /templates`)
   - Success: 30% of scheduled meetings use a template. Kill: under 8%.
-- [ ] [R] **Action-item tracking across meetings:** the next meeting with the same people opens with the unfinished items from the last one
+- [x] [R] **Action-item tracking across meetings:** the next meeting with the same people opens with the unfinished items from the last one (implemented `getCarryOverActionItems` + dismissible room carry-over banner)
   - Success: 50% of action items are acknowledged or closed within 7 days. Kill: under 15% of items ever touched.
-- [ ] [R] **Meeting analytics:** talk-time balance, meeting load per person, total time spent, and a "should this be a meeting?" nudge when scheduling
+- [x] [R] **Meeting analytics:** talk-time balance, meeting load per person, total time spent, and a "should this be a meeting?" nudge when scheduling (implemented Meeting Load & Talk-Time Balance card in `AnalyticsView` + dismissible Async Update nudge in `ScheduleView`)
   - Success: 30% of hosts view analytics monthly; nudge accepted above 10% of the time. Kill: under 5% view it.
 
 ### Tier C: vertical bets (pick at most one, validate with pilots first)
@@ -478,12 +478,3 @@ Do not start any bet until the SFU is stable (Phase 4). Every bet begins as a on
 - [ ] Public changelog, roadmap page, ADR log
 
 ---
-
-## Immediate next actions (this week)
-
-1. [ ] Push repo skeleton and CI (Phase 0) - local files and workflow are in place
-2. [x] Write `packages/protocol` schemas first; everything else builds on it
-3. [ ] Stand up coturn locally and verify relay candidates
-4. [ ] Build signaling join/relay with an integration test before touching UI
-5. [ ] Get a raw two-tab call working with ugly UI, then iterate
-6. [~] License decision recorded in ADR-0001; defer SFU deployment choice to ADR-0003.

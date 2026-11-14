@@ -485,6 +485,61 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
         </section>
       </div>
 
+      {/* Meeting Load & Talk-Time Insights (Phase 14 Tier B) */}
+      <section
+        className="analytics-view-card"
+        style={{ padding: 16 }}
+        data-testid="meeting-load-insights-card"
+      >
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            flexWrap: 'wrap',
+            gap: 12,
+          }}
+        >
+          <div>
+            <h3 style={{ margin: 0, fontSize: '0.98rem' }}>
+              Meeting Load &amp; Talk-Time Balance
+            </h3>
+            <p
+              style={{
+                margin: '4px 0 0',
+                fontSize: '0.8rem',
+                color: 'var(--muted)',
+              }}
+            >
+              Total time spent:{' '}
+              {Math.round((summary.totalMinutes / 60) * 10) / 10}h across{' '}
+              {summary.totalMeetings} meetings · Estimated even talk-time share:{' '}
+              {Math.round(100 / Math.max(1, summary.averageParticipants))}% per
+              person
+            </p>
+          </div>
+          <span
+            className="badge"
+            style={{
+              padding: '4px 10px',
+              borderRadius: 999,
+              fontSize: 12,
+              fontWeight: 600,
+              background:
+                summary.totalMinutes > 600
+                  ? 'rgba(239, 68, 68, 0.14)'
+                  : 'rgba(16, 185, 129, 0.14)',
+            }}
+          >
+            {summary.totalMinutes > 600
+              ? 'Heavy load · Try Async Updates'
+              : summary.totalMinutes > 240
+                ? 'Balanced load'
+                : 'Light load'}
+          </span>
+        </div>
+      </section>
+
       {/* Webinar Attendee Analytics Lookup */}
       <section className="analytics-view-card" style={{ padding: 16 }}>
         <div

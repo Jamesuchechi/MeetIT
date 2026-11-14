@@ -190,7 +190,10 @@ import {
 } from '../lib/meetingsStore';
 import {
   ensureNoteForCompletedMeeting,
+  getCarryOverActionItems,
   regenerateNoteWithAI,
+  toggleActionItem,
+  type MeetingActionItem,
 } from '../lib/notesStore';
 import {
   recordCallJoinAttempt,
@@ -857,6 +860,54 @@ export function MeetingRoomView({
   const [showLeaveMenu, setShowLeaveMenu] = useState(false);
   const [showMoreActivitiesSheet, setShowMoreActivitiesSheet] = useState(false);
   const [unmutePromptFrom, setUnmutePromptFrom] = useState<string | null>(null);
+  const [carryOverItems, setCarryOverItems] = useState<MeetingActionItem[]>(
+    () => getCarryOverActionItems(roomCode, user?.id),
+  );
+  const [carryOverDismissed, setCarryOverDismissed] = useState(false);
+  const [waitingIntakeForm, setWaitingIntakeForm] = useState<{
+    title: string;
+    questions: string[];
+    submissions: Array<{
+      peerName: string;
+      answers: Record<string, string>;
+      submittedAt: string;
+    }>;
+  } | null>(null);
+  const [waitingIntakeDraft, setWaitingIntakeDraft] = useState(
+    'What is your role or company?\nWhat would you like to cover today?',
+  );
+  const [waitingIntakeAnswers, setWaitingIntakeAnswers] = useState<
+    Record<string, string>
+  >({});
+  const [waitingIntakeSubmitted, setWaitingIntakeSubmitted] = useState(false);
+
+  useEffect(() => {
+    if (
+      stage !== 'waiting_room' &&
+      !(showHostPanel || waitingPeers.length > 0)
+    ) {
+      return;
+    }
+    let cancelled = false;
+    const baseUrl =
+      (import.meta.env.VITE_SIGNALING_URL as string | undefined)?.replace(
+        /\/$/,
+        '',
+      ) ?? 'http://localhost:4000';
+    void fetch(
+      `${baseUrl}/rooms/${encodeURIComponent(roomCode)}/waiting-intake`,
+    )
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (!cancelled && data?.form) {
+          setWaitingIntakeForm(data.form);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [roomCode, stage, showHostPanel, waitingPeers.length]);
   const [displayName, setDisplayName] = useState<string>(() => {
     if (user?.displayName) return user.displayName;
     try {
@@ -4251,6 +4302,94 @@ export function MeetingRoomView({
             <span className="eyebrow">Waiting Room · {roomCode}</span>
             <h1>{roomTitle}</h1>
             <p>{waitingRoomMessage}</p>
+            {waitingIntakeForm && waitingIntakeForm.questions.length > 0 && (
+              <div
+                data-testid="waiting-room-intake-form"
+                style={{
+                  textAlign: 'left',
+                  margin: '16px 0',
+                  padding: 14,
+                  borderRadius: 10,
+                  border: '1px solid var(--border)',
+                  background: 'var(--bg-elevated, rgba(255,255,255,0.03))',
+                }}
+              >
+                <strong style={{ display: 'block', marginBottom: 8 }}>
+                  {waitingIntakeForm.title}
+                </strong>
+                {waitingIntakeSubmitted ? (
+                  <p style={{ margin: 0, fontSize: 13, opacity: 0.85 }}>
+                    Intake submitted. The host can see your answers while
+                    admitting you.
+                  </p>
+                ) : (
+                  <form
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      const baseUrl =
+                        (
+                          import.meta.env.VITE_SIGNALING_URL as
+                            string | undefined
+                        )?.replace(/\/$/, '') ?? 'http://localhost:4000';
+                      void fetch(
+                        `${baseUrl}/rooms/${encodeURIComponent(roomCode)}/waiting-intake/submit`,
+                        {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({
+                            peerName: displayName || 'Guest',
+                            answers: waitingIntakeAnswers,
+                          }),
+                        },
+                      )
+                        .then((r) => (r.ok ? r.json() : null))
+                        .then((data) => {
+                          if (data?.form) setWaitingIntakeForm(data.form);
+                          setWaitingIntakeSubmitted(true);
+                          onToast('Intake answers sent to host.');
+                        })
+                        .catch(() => {
+                          onToast('Could not submit intake answers.');
+                        });
+                    }}
+                    style={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: 10,
+                    }}
+                  >
+                    {waitingIntakeForm.questions.map((q) => (
+                      <label
+                        key={q}
+                        style={{
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: 4,
+                          fontSize: 13,
+                        }}
+                      >
+                        <span>{q}</span>
+                        <input
+                          type="text"
+                          value={waitingIntakeAnswers[q] ?? ''}
+                          onChange={(e) =>
+                            setWaitingIntakeAnswers((prev) => ({
+                              ...prev,
+                              [q]: e.target.value,
+                            }))
+                          }
+                          placeholder="Your answer…"
+                          required
+                        />
+                      </label>
+                    ))}
+                    <button type="submit" className="btn primary">
+                      Submit intake
+                    </button>
+                  </form>
+                )}
+              </div>
+            )}
             <div className="status-actions">
               <button
                 type="button"
@@ -5327,6 +5466,82 @@ export function MeetingRoomView({
             </div>
           )}
 
+          {/* Carry-Over Action Items Banner (Phase 14 Tier B) */}
+          {!carryOverDismissed && carryOverItems.length > 0 && (
+            <div
+              className="call-waiting-admit-banner"
+              role="region"
+              aria-label="Open items from last meeting"
+              data-testid="carry-over-items-banner"
+              style={{
+                flexDirection: 'column',
+                alignItems: 'stretch',
+                gap: 8,
+              }}
+            >
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: 12,
+                }}
+              >
+                <strong>
+                  Open items from last meeting ({carryOverItems.length})
+                </strong>
+                <button
+                  type="button"
+                  className="btn"
+                  style={{ padding: '3px 9px', fontSize: 12 }}
+                  onClick={() => setCarryOverDismissed(true)}
+                  data-testid="dismiss-carry-over-btn"
+                >
+                  Dismiss
+                </button>
+              </div>
+              <div
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 4,
+                  maxHeight: 130,
+                  overflowY: 'auto',
+                }}
+              >
+                {carryOverItems.slice(0, 5).map((item) => (
+                  <label
+                    key={item.id}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 8,
+                      fontSize: 13,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={item.done}
+                      onChange={() => {
+                        void toggleActionItem(item.id).then((updated) => {
+                          if (!updated) return;
+                          setCarryOverItems((prev) =>
+                            prev.filter((p) => p.id !== item.id),
+                          );
+                        });
+                      }}
+                    />
+                    <span>{item.text}</span>
+                    {item.assignee && (
+                      <small style={{ opacity: 0.75 }}>@{item.assignee}</small>
+                    )}
+                  </label>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Host Waiting Room Admission Floating Banner */}
           {canModerate && waitingPeers.length > 0 && (
             <div
@@ -6009,6 +6224,67 @@ export function MeetingRoomView({
                       <span>Allow guest emoji reactions</span>
                     </label>
                   </div>
+                  <div
+                    style={{
+                      marginTop: 12,
+                      paddingTop: 10,
+                      borderTop: '1px solid var(--border)',
+                    }}
+                    data-testid="host-waiting-intake-config"
+                  >
+                    <small
+                      style={{
+                        display: 'block',
+                        marginBottom: 6,
+                        fontWeight: 600,
+                      }}
+                    >
+                      Waiting Room FormIT Intake Questions (one per line)
+                    </small>
+                    <textarea
+                      rows={2}
+                      value={waitingIntakeDraft}
+                      onChange={(e) => setWaitingIntakeDraft(e.target.value)}
+                      style={{ width: '100%', fontSize: 12, marginBottom: 6 }}
+                    />
+                    <button
+                      type="button"
+                      className="btn"
+                      style={{ padding: '4px 10px', fontSize: 12 }}
+                      onClick={() => {
+                        const questions = waitingIntakeDraft
+                          .split('\n')
+                          .map((s) => s.trim())
+                          .filter(Boolean);
+                        const baseUrl =
+                          (
+                            import.meta.env.VITE_SIGNALING_URL as
+                              string | undefined
+                          )?.replace(/\/$/, '') ?? 'http://localhost:4000';
+                        void fetch(
+                          `${baseUrl}/rooms/${encodeURIComponent(roomCode)}/waiting-intake/form`,
+                          {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                              title: `${roomTitle} Intake`,
+                              questions,
+                            }),
+                          },
+                        )
+                          .then((r) => (r.ok ? r.json() : null))
+                          .then((data) => {
+                            if (data?.form) setWaitingIntakeForm(data.form);
+                            onToast('Waiting room intake form attached.');
+                          })
+                          .catch(() => {
+                            onToast('Could not save waiting room intake form.');
+                          });
+                      }}
+                    >
+                      Attach waiting room intake
+                    </button>
+                  </div>
                 </section>
               )}
 
@@ -6030,51 +6306,79 @@ export function MeetingRoomView({
                     </button>
                   </div>
                   <div className="host-peer-list">
-                    {waitingPeers.map((wp) => (
-                      <div key={wp.id} className="host-peer-row">
-                        <div className="host-peer-info">
-                          <strong>{wp.displayName}</strong>
-                          <small
-                            style={{
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              gap: 4,
-                            }}
-                          >
-                            {wp.verified ? (
-                              <span
+                    {waitingPeers.map((wp) => {
+                      const intakeSub = waitingIntakeForm?.submissions.find(
+                        (s) =>
+                          s.peerName.toLowerCase() ===
+                          wp.displayName.toLowerCase(),
+                      );
+                      return (
+                        <div key={wp.id} className="host-peer-row">
+                          <div className="host-peer-info">
+                            <strong>{wp.displayName}</strong>
+                            <small
+                              style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: 4,
+                              }}
+                            >
+                              {wp.verified ? (
+                                <span
+                                  style={{
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: 2,
+                                  }}
+                                >
+                                  <LucideCheckIcon size={11} /> Verified
+                                </span>
+                              ) : (
+                                'Guest'
+                              )}{' '}
+                              · Waiting
+                            </small>
+                            {intakeSub && (
+                              <div
+                                data-testid="waiting-peer-intake-answers"
                                 style={{
-                                  display: 'inline-flex',
-                                  alignItems: 'center',
+                                  marginTop: 4,
+                                  fontSize: 11,
+                                  opacity: 0.85,
+                                  display: 'flex',
+                                  flexDirection: 'column',
                                   gap: 2,
                                 }}
                               >
-                                <LucideCheckIcon size={11} /> Verified
-                              </span>
-                            ) : (
-                              'Guest'
-                            )}{' '}
-                            · Waiting
-                          </small>
+                                {Object.entries(intakeSub.answers).map(
+                                  ([q, a]) => (
+                                    <span key={q}>
+                                      <em>{q}:</em> {a}
+                                    </span>
+                                  ),
+                                )}
+                              </div>
+                            )}
+                          </div>
+                          <div className="host-peer-actions">
+                            <button
+                              type="button"
+                              className="btn"
+                              onClick={() => handleHostDeny(wp.id)}
+                            >
+                              Deny
+                            </button>
+                            <button
+                              type="button"
+                              className="btn primary"
+                              onClick={() => handleHostAdmit(wp.id)}
+                            >
+                              Admit
+                            </button>
+                          </div>
                         </div>
-                        <div className="host-peer-actions">
-                          <button
-                            type="button"
-                            className="btn"
-                            onClick={() => handleHostDeny(wp.id)}
-                          >
-                            Deny
-                          </button>
-                          <button
-                            type="button"
-                            className="btn primary"
-                            onClick={() => handleHostAdmit(wp.id)}
-                          >
-                            Admit
-                          </button>
-                        </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </section>
               )}

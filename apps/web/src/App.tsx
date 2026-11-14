@@ -6,6 +6,7 @@ import { DashboardView } from './components/DashboardView';
 import { AuthView } from './components/AuthView';
 import { MeetingRoomView } from './components/MeetingRoomView';
 import { WebinarRegistrationView } from './components/WebinarRegistrationView';
+import { BookingPageView } from './components/BookingPageView';
 import { EndedView } from './components/EndedView';
 import { NotFoundView } from './components/NotFoundView';
 import { StatusPageView } from './components/StatusPageView';
@@ -184,6 +185,14 @@ function parseLocationRoute(
     const normalized = normalizeRoomCode(rawCode);
     if (normalized) {
       return { view: 'webinar-register', roomCode: normalized };
+    }
+  }
+
+  // Support Free Booking Page: /book/:handle or #book/:handle
+  if (target.startsWith('book/')) {
+    const handle = target.slice('book/'.length).trim();
+    if (handle) {
+      return { view: 'booking', roomCode: handle };
     }
   }
 
@@ -518,6 +527,15 @@ function AppContent() {
           onJoinDirectly={(token) => {
             window.location.href = `/m/${route.roomCode}?webinarToken=${encodeURIComponent(token)}`;
           }}
+        />
+      )}
+
+      {route.view === 'booking' && route.roomCode && (
+        <BookingPageView
+          handle={route.roomCode}
+          onEnterRoom={handleEnterRoom}
+          onNavigateHome={() => navigateTo('home')}
+          onToast={showToast}
         />
       )}
 

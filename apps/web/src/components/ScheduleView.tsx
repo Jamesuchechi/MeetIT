@@ -49,6 +49,10 @@ export function ScheduleView({
   const [inviteesRaw, setInviteesRaw] = useState('');
   const [creating, setCreating] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [nudgeDismissed, setNudgeDismissed] = useState(false);
+
+  const showAsyncNudge =
+    !nudgeDismissed && (durationMinutes <= 30 || scheduled.length >= 3);
 
   const personalCode = personalRoomCodeForUser(user?.id ?? '');
 
@@ -262,7 +266,69 @@ export function ScheduleView({
             />
           </div>
 
-          <div className="profile-form-footer">
+          {showAsyncNudge && (
+            <div
+              data-testid="should-this-be-meeting-nudge"
+              style={{
+                marginTop: 10,
+                padding: '10px 12px',
+                borderRadius: 10,
+                border: '1px solid var(--border)',
+                background: 'var(--bg-elevated, rgba(99, 102, 241, 0.08))',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 6,
+                fontSize: 13,
+              }}
+            >
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  gap: 8,
+                }}
+              >
+                <strong>Should this be a meeting?</strong>
+                <button
+                  type="button"
+                  className="btn"
+                  style={{ padding: '2px 8px', fontSize: 12 }}
+                  onClick={() => setNudgeDismissed(true)}
+                  data-testid="dismiss-meeting-nudge-btn"
+                >
+                  Dismiss
+                </button>
+              </div>
+              <span style={{ opacity: 0.85 }}>
+                {scheduled.length >= 3
+                  ? `You already have ${scheduled.length} upcoming meetings. Consider sharing a quick async update instead.`
+                  : 'Short 15–30 min syncs can often be handled faster with a 2-minute async voice/video update.'}
+              </span>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button
+                  type="button"
+                  className="btn"
+                  style={{ padding: '4px 10px', fontSize: 12 }}
+                  onClick={() => {
+                    const targetRoom = usePersonalRoom
+                      ? personalCode
+                      : `async-${Math.random().toString(36).slice(2, 6)}`;
+                    onToast('Opening room for an Async Update instead.');
+                    onEnterRoom(targetRoom);
+                  }}
+                  data-testid="use-async-update-btn"
+                >
+                  Send Async Update instead
+                </button>
+              </div>
+            </div>
+          )}
+
+          <div
+            className="profile-form-footer"
+            style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}
+          >
             <button
               type="submit"
               className="btn primary"
@@ -271,6 +337,20 @@ export function ScheduleView({
             >
               <PlusIcon />
               <span>{creating ? 'Scheduling…' : 'Schedule meeting'}</span>
+            </button>
+            <button
+              type="button"
+              className="btn"
+              data-testid="copy-booking-link-btn"
+              onClick={() => {
+                const url = `${window.location.origin}/#book/${personalCode}`;
+                void copyToClipboard(url).then(() =>
+                  onToast('Free booking page link copied!'),
+                );
+              }}
+            >
+              <LnkIcon />
+              <span>Copy free booking page</span>
             </button>
           </div>
         </form>

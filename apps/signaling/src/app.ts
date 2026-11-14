@@ -621,6 +621,77 @@ export function buildSignalingApp(
 
   const asyncMeetingStore = new AsyncMeetingStore();
   const doubleEnderUploads = new Map<string, DoubleEnderUploadRecord[]>();
+  const waitingIntakeByRoom = new Map<
+    string,
+    {
+      title: string;
+      questions: string[];
+      submissions: Array<{
+        peerName: string;
+        answers: Record<string, string>;
+        submittedAt: string;
+      }>;
+    }
+  >();
+
+  app.get<{ Params: { code: string } }>(
+    '/rooms/:code/waiting-intake',
+    async (request, reply) => {
+      const normalized = normalizeRoomCode(request.params.code);
+      if (!normalized) {
+        return reply.code(400).send({ error: 'Invalid room code' });
+      }
+      return reply.send({ form: waitingIntakeByRoom.get(normalized) ?? null });
+    },
+  );
+
+  app.post<{
+    Params: { code: string };
+    Body: { title?: string; questions?: string[] };
+  }>('/rooms/:code/waiting-intake/form', async (request, reply) => {
+    const normalized = normalizeRoomCode(request.params.code);
+    if (!normalized) {
+      return reply.code(400).send({ error: 'Invalid room code' });
+    }
+    const questions = Array.isArray(request.body?.questions)
+      ? request.body.questions.map((q) => String(q).trim()).filter(Boolean)
+      : [];
+    const existing = waitingIntakeByRoom.get(normalized);
+    const form = {
+      title: request.body?.title?.trim() || 'Waiting Room Intake',
+      questions,
+      submissions: existing?.submissions ?? [],
+    };
+    waitingIntakeByRoom.set(normalized, form);
+    return reply.send({ form });
+  });
+
+  app.post<{
+    Params: { code: string };
+    Body: { peerName?: string; answers?: Record<string, string> };
+  }>('/rooms/:code/waiting-intake/submit', async (request, reply) => {
+    const normalized = normalizeRoomCode(request.params.code);
+    if (!normalized) {
+      return reply.code(400).send({ error: 'Invalid room code' });
+    }
+    const form = waitingIntakeByRoom.get(normalized);
+    if (!form) {
+      return reply.code(404).send({ error: 'INTAKE_NOT_CONFIGURED' });
+    }
+    const peerName = request.body?.peerName?.trim() || 'Guest';
+    const submission = {
+      peerName,
+      answers: request.body?.answers ?? {},
+      submittedAt: new Date().toISOString(),
+    };
+    form.submissions = [
+      ...form.submissions.filter(
+        (s) => s.peerName.toLowerCase() !== peerName.toLowerCase(),
+      ),
+      submission,
+    ];
+    return reply.send({ submission, form });
+  });
 
   app.get<{ Params: { code: string } }>(
     '/rooms/:code/dial-in',

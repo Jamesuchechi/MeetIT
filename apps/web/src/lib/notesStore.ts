@@ -423,6 +423,18 @@ export async function deleteActionItem(itemId: string): Promise<void> {
   }
 }
 
+export function getCarryOverActionItems(
+  roomCode: string,
+  ownerId?: string,
+): MeetingActionItem[] {
+  const normalizedRoom = roomCode.trim().toUpperCase();
+  if (!normalizedRoom) return [];
+  return loadActionItems(ownerId).filter(
+    (item) =>
+      !item.done && item.roomCode.trim().toUpperCase() === normalizedRoom,
+  );
+}
+
 export function ensureNoteForCompletedMeeting(params: {
   ownerId: string;
   historyItem: MeetingHistoryItem;
