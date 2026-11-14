@@ -235,7 +235,9 @@ export function VideoEffectsModal({
             style={{
               position: 'relative',
               width: '100%',
+              flexShrink: 0,
               aspectRatio: '16/9',
+              minHeight: '220px',
               borderRadius: '12px',
               overflow: 'hidden',
               background: '#090d16',
@@ -414,12 +416,22 @@ export function VideoEffectsModal({
                       border: isSelected
                         ? '2px solid var(--accent)'
                         : '1px solid var(--line)',
-                      backgroundImage: `url("${bg.thumbnail}")`,
-                      backgroundSize: 'cover',
-                      backgroundPosition: 'center',
+                      background: '#0f172a',
                     }}
                     data-testid={`effect-bg-${bg.id}`}
                   >
+                    <img
+                      src={bg.thumbnail}
+                      alt={bg.name}
+                      style={{
+                        position: 'absolute',
+                        inset: 0,
+                        width: '100%',
+                        height: '100%',
+                        objectFit: 'cover',
+                        pointerEvents: 'none',
+                      }}
+                    />
                     <div
                       style={{
                         position: 'absolute',

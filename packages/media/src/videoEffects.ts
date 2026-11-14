@@ -31,38 +31,50 @@ export interface GestureDetectionResult {
 
 export type GestureListener = (gesture: GestureType) => void;
 
+function svgDataUrl(svg: string): string {
+  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+}
+
 export const DEFAULT_VIRTUAL_BACKGROUNDS = [
   {
     id: 'office',
     name: 'Modern Office',
-    thumbnail:
-      'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="320" height="180" viewBox="0 0 320 180"><defs><linearGradient id="g1" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="%231e293b"/><stop offset="100%" stop-color="%230f172a"/></linearGradient></defs><rect width="320" height="180" fill="url(%23g1)"/><rect x="20" y="20" width="120" height="90" rx="6" fill="%23334155" opacity="0.4"/><line x1="80" y1="20" x2="80" y2="110" stroke="%2364748b" stroke-width="2"/><line x1="20" y1="65" x2="140" y2="65" stroke="%2364748b" stroke-width="2"/><circle cx="260" cy="50" r="16" fill="%23fbbf24" opacity="0.8"/><rect x="230" y="110" width="60" height="70" rx="4" fill="%2310b981" opacity="0.3"/></svg>',
-    dataUrl:
-      'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720"><defs><linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="%231e293b"/><stop offset="100%" stop-color="%230f172a"/></linearGradient><linearGradient id="win" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="%2393c5fd" stop-opacity="0.3"/><stop offset="100%" stop-color="%231e3a8a" stop-opacity="0.6"/></linearGradient></defs><rect width="1280" height="720" fill="url(%23bg)"/><rect x="80" y="80" width="460" height="380" rx="12" fill="url(%23win)" stroke="%23475569" stroke-width="6"/><line x1="310" y1="80" x2="310" y2="460" stroke="%23475569" stroke-width="6"/><line x1="80" y1="270" x2="540" y2="270" stroke="%23475569" stroke-width="6"/><circle cx="1060" cy="180" r="48" fill="%23fef08a" opacity="0.25"/><rect x="940" y="440" width="260" height="280" rx="16" fill="%23059669" opacity="0.35"/></svg>',
+    thumbnail: svgDataUrl(
+      '<svg xmlns="http://www.w3.org/2000/svg" width="320" height="180" viewBox="0 0 320 180"><defs><linearGradient id="g1" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#1e293b"/><stop offset="100%" stop-color="#0f172a"/></linearGradient><linearGradient id="win" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#60a5fa" stop-opacity="0.45"/><stop offset="100%" stop-color="#1d4ed8" stop-opacity="0.2"/></linearGradient></defs><rect width="320" height="180" fill="url(#g1)"/><rect x="18" y="18" width="128" height="92" rx="8" fill="url(#win)" stroke="#475569" stroke-width="2"/><line x1="82" y1="18" x2="82" y2="110" stroke="#475569" stroke-width="2"/><line x1="18" y1="64" x2="146" y2="64" stroke="#475569" stroke-width="2"/><circle cx="262" cy="48" r="18" fill="#fbbf24" opacity="0.65"/><rect x="220" y="108" width="76" height="72" rx="6" fill="#059669" opacity="0.45"/></svg>',
+    ),
+    dataUrl: svgDataUrl(
+      '<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720"><defs><linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#1e293b"/><stop offset="100%" stop-color="#0f172a"/></linearGradient><linearGradient id="win" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#93c5fd" stop-opacity="0.35"/><stop offset="100%" stop-color="#1e3a8a" stop-opacity="0.55"/></linearGradient></defs><rect width="1280" height="720" fill="url(#bg)"/><rect x="80" y="80" width="460" height="380" rx="14" fill="url(#win)" stroke="#475569" stroke-width="6"/><line x1="310" y1="80" x2="310" y2="460" stroke="#475569" stroke-width="6"/><line x1="80" y1="270" x2="540" y2="270" stroke="#475569" stroke-width="6"/><circle cx="1060" cy="180" r="56" fill="#fef08a" opacity="0.3"/><rect x="920" y="430" width="270" height="290" rx="18" fill="#059669" opacity="0.35"/></svg>',
+    ),
   },
   {
     id: 'studio',
     name: 'Warm Studio',
-    thumbnail:
-      'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="320" height="180" viewBox="0 0 320 180"><defs><linearGradient id="g2" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="%23451a03"/><stop offset="100%" stop-color="%231c1917"/></linearGradient></defs><rect width="320" height="180" fill="url(%23g2)"/><circle cx="160" cy="90" r="70" fill="%23f97316" opacity="0.25"/><circle cx="270" cy="40" r="14" fill="%23fbbf24" opacity="0.6"/><rect x="30" y="90" width="50" height="90" rx="4" fill="%2378350f" opacity="0.5"/></svg>',
-    dataUrl:
-      'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720"><defs><linearGradient id="g2" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="%23451a03"/><stop offset="100%" stop-color="%231c1917"/></linearGradient><radialGradient id="lamp" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="%23fed7aa" stop-opacity="0.6"/><stop offset="100%" stop-color="%23ea580c" stop-opacity="0"/></radialGradient></defs><rect width="1280" height="720" fill="url(%23g2)"/><circle cx="640" cy="360" r="380" fill="url(%23lamp)"/><rect x="120" y="240" width="220" height="480" rx="12" fill="%2378350f" opacity="0.45"/><circle cx="1080" cy="180" r="32" fill="%23fbbf24" opacity="0.5"/></svg>',
+    thumbnail: svgDataUrl(
+      '<svg xmlns="http://www.w3.org/2000/svg" width="320" height="180" viewBox="0 0 320 180"><defs><linearGradient id="g2" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#451a03"/><stop offset="100%" stop-color="#1c1917"/></linearGradient><radialGradient id="lamp" cx="50%" cy="45%" r="55%"><stop offset="0%" stop-color="#fdba74" stop-opacity="0.65"/><stop offset="100%" stop-color="#ea580c" stop-opacity="0"/></radialGradient></defs><rect width="320" height="180" fill="url(#g2)"/><circle cx="160" cy="82" r="95" fill="url(#lamp)"/><circle cx="268" cy="42" r="14" fill="#fbbf24" opacity="0.75"/><rect x="26" y="76" width="54" height="104" rx="6" fill="#78350f" opacity="0.55"/></svg>',
+    ),
+    dataUrl: svgDataUrl(
+      '<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720"><defs><linearGradient id="g2" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#451a03"/><stop offset="100%" stop-color="#1c1917"/></linearGradient><radialGradient id="lamp" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#fed7aa" stop-opacity="0.6"/><stop offset="100%" stop-color="#ea580c" stop-opacity="0"/></radialGradient></defs><rect width="1280" height="720" fill="url(#g2)"/><circle cx="640" cy="360" r="380" fill="url(#lamp)"/><rect x="120" y="240" width="220" height="480" rx="12" fill="#78350f" opacity="0.45"/><circle cx="1080" cy="180" r="36" fill="#fbbf24" opacity="0.5"/></svg>',
+    ),
   },
   {
     id: 'gradient',
     name: 'Cyber Aura',
-    thumbnail:
-      'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="320" height="180" viewBox="0 0 320 180"><defs><linearGradient id="g3" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="%234f46e5"/><stop offset="50%" stop-color="%237c3aed"/><stop offset="100%" stop-color="%2306b6d4"/></linearGradient></defs><rect width="320" height="180" fill="url(%23g3)"/></svg>',
-    dataUrl:
-      'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720"><defs><linearGradient id="g3" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="%23312e81"/><stop offset="45%" stop-color="%23581c87"/><stop offset="100%" stop-color="%230e7490"/></linearGradient><radialGradient id="glow" cx="40%" cy="40%" r="60%"><stop offset="0%" stop-color="%23818cf8" stop-opacity="0.3"/><stop offset="100%" stop-color="%23312e81" stop-opacity="0"/></radialGradient></defs><rect width="1280" height="720" fill="url(%23g3)"/><circle cx="500" cy="300" r="400" fill="url(%23glow)"/></svg>',
+    thumbnail: svgDataUrl(
+      '<svg xmlns="http://www.w3.org/2000/svg" width="320" height="180" viewBox="0 0 320 180"><defs><linearGradient id="g3" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#4f46e5"/><stop offset="50%" stop-color="#7c3aed"/><stop offset="100%" stop-color="#06b6d4"/></linearGradient><radialGradient id="cglow" cx="35%" cy="35%" r="60%"><stop offset="0%" stop-color="#e0e7ff" stop-opacity="0.4"/><stop offset="100%" stop-color="#4f46e5" stop-opacity="0"/></radialGradient></defs><rect width="320" height="180" fill="url(#g3)"/><circle cx="110" cy="60" r="90" fill="url(#cglow)"/></svg>',
+    ),
+    dataUrl: svgDataUrl(
+      '<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720"><defs><linearGradient id="g3" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#312e81"/><stop offset="45%" stop-color="#581c87"/><stop offset="100%" stop-color="#0e7490"/></linearGradient><radialGradient id="glow" cx="40%" cy="40%" r="60%"><stop offset="0%" stop-color="#818cf8" stop-opacity="0.35"/><stop offset="100%" stop-color="#312e81" stop-opacity="0"/></radialGradient></defs><rect width="1280" height="720" fill="url(#g3)"/><circle cx="500" cy="300" r="420" fill="url(#glow)"/></svg>',
+    ),
   },
   {
     id: 'nature',
     name: 'Nordic Forest',
-    thumbnail:
-      'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="320" height="180" viewBox="0 0 320 180"><defs><linearGradient id="g4" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="%23064e3b"/><stop offset="100%" stop-color="%23022c22"/></linearGradient></defs><rect width="320" height="180" fill="url(%23g4)"/><polygon points="160,30 200,120 120,120" fill="%23047857" opacity="0.6"/><polygon points="230,60 260,140 200,140" fill="%23059669" opacity="0.4"/><polygon points="90,70 120,150 60,150" fill="%2310b981" opacity="0.3"/></svg>',
-    dataUrl:
-      'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720"><defs><linearGradient id="g4" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="%23064e3b"/><stop offset="100%" stop-color="%23022c22"/></linearGradient></defs><rect width="1280" height="720" fill="url(%23g4)"/><polygon points="640,120 800,520 480,520" fill="%23047857" opacity="0.6"/><polygon points="940,240 1080,600 800,600" fill="%23059669" opacity="0.4"/><polygon points="340,280 480,640 200,640" fill="%2310b981" opacity="0.35"/></svg>',
+    thumbnail: svgDataUrl(
+      '<svg xmlns="http://www.w3.org/2000/svg" width="320" height="180" viewBox="0 0 320 180"><defs><linearGradient id="g4" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#065f46"/><stop offset="100%" stop-color="#022c22"/></linearGradient></defs><rect width="320" height="180" fill="url(#g4)"/><polygon points="160,26 208,132 112,132" fill="#059669" opacity="0.75"/><polygon points="236,52 274,150 198,150" fill="#10b981" opacity="0.45"/><polygon points="84,64 122,156 46,156" fill="#34d399" opacity="0.35"/></svg>',
+    ),
+    dataUrl: svgDataUrl(
+      '<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720"><defs><linearGradient id="g4" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#064e3b"/><stop offset="100%" stop-color="#022c22"/></linearGradient></defs><rect width="1280" height="720" fill="url(#g4)"/><polygon points="640,120 800,520 480,520" fill="#047857" opacity="0.65"/><polygon points="940,240 1080,600 800,600" fill="#059669" opacity="0.45"/><polygon points="340,280 480,640 200,640" fill="#10b981" opacity="0.35"/></svg>',
+    ),
   },
 ];
 
@@ -314,6 +326,9 @@ export class VideoEffectProcessor {
     this.animFrameId = requestAnimationFrame(render);
   }
 
+  private fgCanvas: HTMLCanvasElement | null = null;
+  private maskCanvas: HTMLCanvasElement | null = null;
+
   private drawForegroundSubject(
     ctx: CanvasRenderingContext2D,
     video: HTMLVideoElement,
@@ -325,20 +340,51 @@ export class VideoEffectProcessor {
     h: number,
     filterStr: string,
   ): void {
-    // High-performance elliptical soft mask for human silhouette
-    ctx.save();
-    ctx.beginPath();
-    // Center ellipse on lower middle (head + upper body torso)
-    const centerX = w / 2;
-    const centerY = h * 0.65;
-    const radiusX = w * 0.38;
-    const radiusY = h * 0.48;
-    ctx.ellipse(centerX, centerY, radiusX, radiusY, 0, 0, Math.PI * 2);
-    ctx.clip();
+    // Soft-feathered portrait silhouette mask (no hard oval edge)
+    if (!this.fgCanvas) {
+      this.fgCanvas = document.createElement('canvas');
+    }
+    if (!this.maskCanvas) {
+      this.maskCanvas = document.createElement('canvas');
+    }
+    if (this.fgCanvas.width !== w || this.fgCanvas.height !== h) {
+      this.fgCanvas.width = w;
+      this.fgCanvas.height = h;
+      this.maskCanvas.width = w;
+      this.maskCanvas.height = h;
+    }
 
-    ctx.filter = filterStr;
-    ctx.drawImage(video, sx, sy, sw, sh, 0, 0, w, h);
-    ctx.restore();
+    const fgCtx = this.fgCanvas.getContext('2d');
+    const mCtx = this.maskCanvas.getContext('2d');
+    if (!fgCtx || !mCtx) return;
+
+    fgCtx.clearRect(0, 0, w, h);
+    fgCtx.save();
+    fgCtx.filter = filterStr;
+    fgCtx.drawImage(video, sx, sy, sw, sh, 0, 0, w, h);
+    fgCtx.restore();
+
+    // Build feathered head + shoulders alpha mask
+    mCtx.clearRect(0, 0, w, h);
+    mCtx.save();
+    mCtx.filter = 'blur(22px)';
+    mCtx.fillStyle = '#ffffff';
+    // Head
+    mCtx.beginPath();
+    mCtx.ellipse(w * 0.5, h * 0.38, w * 0.17, h * 0.24, 0, 0, Math.PI * 2);
+    mCtx.fill();
+    // Shoulders / torso
+    mCtx.beginPath();
+    mCtx.ellipse(w * 0.5, h * 0.88, w * 0.36, h * 0.38, 0, 0, Math.PI * 2);
+    mCtx.fill();
+    mCtx.restore();
+
+    fgCtx.save();
+    fgCtx.globalCompositeOperation = 'destination-in';
+    fgCtx.drawImage(this.maskCanvas, 0, 0);
+    fgCtx.restore();
+
+    ctx.drawImage(this.fgCanvas, 0, 0);
   }
 
   private applyEyeContactCorrection(
