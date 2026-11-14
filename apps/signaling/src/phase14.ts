@@ -292,3 +292,124 @@ export function handleMcpRequest(
     error: { code: -32601, message: `Unsupported MCP method: ${rpc.method}` },
   };
 }
+
+// ---------------------------------------------------------------------------
+// Phase 14 Tier A: Dial-in / Call-me-back, Async-First Meetings, Double-Ender
+// ---------------------------------------------------------------------------
+
+export function computeRoomDialInInfo(
+  roomCode: string,
+  configuredNumber?: string,
+  sipTrunkId?: string,
+): {
+  roomCode: string;
+  dialInNumber: string;
+  pin: string;
+  sipUri: string;
+  sipConfigured: boolean;
+} {
+  const digest = createHash('sha256').update(roomCode).digest();
+  const num =
+    (((digest[0]! << 16) | (digest[1]! << 8) | digest[2]!) % 900000) + 100000;
+  const cleanNumber = configuredNumber?.trim() || '+1-555-019-2834';
+  const sipConfigured = Boolean(configuredNumber?.trim() && sipTrunkId?.trim());
+  return {
+    roomCode,
+    dialInNumber: cleanNumber,
+    pin: String(num),
+    sipUri: `sip:${roomCode}@sip.meetit.local`,
+    sipConfigured,
+  };
+}
+
+export interface AsyncMeetingReply {
+  id: string;
+  authorName: string;
+  text: string;
+  reaction?: string;
+  videoUrl?: string;
+  transcriptTimestampMs: number;
+  createdAt: number;
+}
+
+export interface AsyncMeetingMessage {
+  id: string;
+  roomCode?: string;
+  title: string;
+  authorName: string;
+  mediaUrl: string;
+  durationSeconds: number;
+  transcriptCues: Array<{ tsMs: number; speaker: string; text: string }>;
+  replies: AsyncMeetingReply[];
+  createdAt: number;
+}
+
+export class AsyncMeetingStore {
+  private messages = new Map<string, AsyncMeetingMessage>();
+
+  public createMessage(input: {
+    roomCode?: string;
+    title: string;
+    authorName: string;
+    mediaUrl: string;
+    durationSeconds: number;
+    transcriptCues?: Array<{ tsMs: number; speaker: string; text: string }>;
+  }): AsyncMeetingMessage {
+    const id = `async_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const msg: AsyncMeetingMessage = {
+      id,
+      ...(input.roomCode ? { roomCode: input.roomCode } : {}),
+      title: input.title,
+      authorName: input.authorName,
+      mediaUrl: input.mediaUrl,
+      durationSeconds: input.durationSeconds,
+      transcriptCues: input.transcriptCues ?? [],
+      replies: [],
+      createdAt: Date.now(),
+    };
+    this.messages.set(id, msg);
+    return msg;
+  }
+
+  public listMessages(): AsyncMeetingMessage[] {
+    return Array.from(this.messages.values()).sort(
+      (a, b) => b.createdAt - a.createdAt,
+    );
+  }
+
+  public addReply(
+    messageId: string,
+    input: {
+      authorName: string;
+      text: string;
+      reaction?: string;
+      videoUrl?: string;
+      transcriptTimestampMs: number;
+    },
+  ): AsyncMeetingReply | null {
+    const msg = this.messages.get(messageId);
+    if (!msg) return null;
+    const reply: AsyncMeetingReply = {
+      id: `reply_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+      authorName: input.authorName,
+      text: input.text,
+      ...(input.reaction ? { reaction: input.reaction } : {}),
+      ...(input.videoUrl ? { videoUrl: input.videoUrl } : {}),
+      transcriptTimestampMs: Math.max(0, input.transcriptTimestampMs),
+      createdAt: Date.now(),
+    };
+    msg.replies.push(reply);
+    return reply;
+  }
+}
+
+export interface DoubleEnderUploadRecord {
+  id: string;
+  roomCode: string;
+  participantId: string;
+  displayName: string;
+  mimeType: string;
+  bytes: number;
+  durationMs: number;
+  uploadedAt: number;
+}

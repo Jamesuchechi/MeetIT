@@ -380,15 +380,15 @@ Do not start any bet until the SFU is stable (Phase 4). Every bet begins as a on
 
 ### Tier A: reinforce reliability (the differentiator)
 
-- [~] [R] **Slides as data:** upload a PDF or PPTX and present it as a synced document (pages rendered once, page changes sent over the data channel) instead of screen share; viewers can flip back on their own; fall back to screen share if rendering fails (`slides.sync` protocol schema, signaling relay, and web listener implemented; PDF/PPTX renderer UI pending)
+- [x] [R] **Slides as data:** upload a PDF or PPTX and present it as a synced document (pages rendered once, page changes sent over the data channel) instead of screen share; viewers can flip back on their own; fall back to screen share if rendering fails (`slides.sync` protocol relay + `SlidesDeckModal` viewer/presenter sync & screen-share fallback)
   - Success: 40% of presenter sessions with a deck use it; page-change latency under 300 ms. Kill: under 10% adoption after 90 days.
 - [x] [R] **Catch me up:** late joiners and anyone who dropped for 30 s or more get a short live summary of what they missed, with timestamp links (builds on Phase 5 captions and summaries; implemented `GET /rooms/:code/catch-me-up` and `buildCatchMeUpSummary`)
   - Success: 60% of late joiners open it and 70% rate it helpful. Kill: helpfulness under 50% after two prompt and model iterations.
-- [~] [R] **Local double-ender recording:** each participant's browser records its own audio and video locally and uploads it after the call, so the recording stays clean even when the live call degraded (builds on Phase 5 ISO tracks; implemented `LocalDoubleEnderRecorder` in `@meetit/media`, room UI upload wiring pending)
+- [x] [R] **Local double-ender recording:** each participant's browser records its own audio and video locally and uploads it after the call, so the recording stays clean even when the live call degraded (builds on Phase 5 ISO tracks; `LocalDoubleEnderRecorder` wired in `MeetingRoomView` + `POST /rooms/:code/double-ender`)
   - Success: upload success above 95%; used for 20% of recordings. Kill: upload failures above 15% or support load too high.
-- [ ] [R] **Dial-in and call-me-back:** phone number for audio-only participants (SIP trunk into LiveKit) plus a "call me" option when data fails
+- [x] [R] **Dial-in and call-me-back:** phone number for audio-only participants (SIP trunk into LiveKit) plus a "call me" option when data fails (`GET /rooms/:code/dial-in`, `POST /rooms/:code/call-me-back`, `DialInModal`)
   - Success: 5% of meetings include a phone participant; cost per dial-in minute stays under what it earns. Kill: under 1% usage or cost per minute above revenue.
-- [ ] [R] **Async-first meetings:** record a short video message or a meeting, then let people reply with video comments and reactions pinned to transcript moments
+- [x] [R] **Async-first meetings:** record a short video message or a meeting, then let people reply with video comments and reactions pinned to transcript moments (`AsyncMeetingStore`, `/async-meetings` endpoints, `AsyncMeetingsPanel` in `RecordingsView`)
   - Success: 25% of hosts send an async message monthly; reply rate above 50%. Kill: under 5% of hosts try it within 60 days.
 
 ### Tier B: revenue and workflow

@@ -36,11 +36,14 @@ import {
 import { MeetingMemoryGraph } from './memoryGraph.js';
 import { AiProxySession } from './aiProxy.js';
 import {
+  AsyncMeetingStore,
   MEETING_TEMPLATES,
   buildCatchMeUpSummary,
   buildTranscriptHashChain,
+  computeRoomDialInInfo,
   handleMcpRequest,
   verifyTranscriptHashChain,
+  type DoubleEnderUploadRecord,
   type SignedTranscriptEntry,
 } from './phase14.js';
 import {
@@ -614,6 +617,158 @@ export function buildSignalingApp(
     return reply
       .code(200)
       .send(handleMcpRequest(request.body ?? {}, memoryGraph));
+  });
+
+  const asyncMeetingStore = new AsyncMeetingStore();
+  const doubleEnderUploads = new Map<string, DoubleEnderUploadRecord[]>();
+
+  app.get<{ Params: { code: string } }>(
+    '/rooms/:code/dial-in',
+    async (request, reply) => {
+      const normalized = normalizeRoomCode(request.params.code);
+      if (!normalized) {
+        return reply.code(400).send({ error: 'Invalid room code' });
+      }
+      return reply.send(
+        computeRoomDialInInfo(
+          normalized,
+          process.env.SIP_DIAL_IN_NUMBER,
+          process.env.LIVEKIT_SIP_TRUNK_ID,
+        ),
+      );
+    },
+  );
+
+  app.post<{
+    Params: { code: string };
+    Body: { phoneNumber?: string; displayName?: string };
+  }>('/rooms/:code/call-me-back', async (request, reply) => {
+    const normalized = normalizeRoomCode(request.params.code);
+    const phone = request.body?.phoneNumber?.trim() ?? '';
+    if (!normalized || phone.length < 7) {
+      return reply
+        .code(400)
+        .send({ error: 'Valid room code and phoneNumber are required' });
+    }
+    const dialIn = computeRoomDialInInfo(
+      normalized,
+      process.env.SIP_DIAL_IN_NUMBER,
+      process.env.LIVEKIT_SIP_TRUNK_ID,
+    );
+    const callId = `sip_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+    return reply.code(202).send({
+      callId,
+      roomCode: normalized,
+      phoneNumber: phone,
+      status: dialIn.sipConfigured ? 'dialing' : 'queued',
+      message: dialIn.sipConfigured
+        ? `Calling ${phone} into room ${normalized}`
+        : `Call-me-back queued for ${phone} (dial ${dialIn.dialInNumber}, PIN ${dialIn.pin} if SIP trunk is offline)`,
+    });
+  });
+
+  app.post<{
+    Params: { code: string };
+    Body: {
+      participantId?: string;
+      displayName?: string;
+      mimeType?: string;
+      bytes?: number;
+      durationMs?: number;
+    };
+  }>('/rooms/:code/double-ender', async (request, reply) => {
+    const normalized = normalizeRoomCode(request.params.code);
+    if (!normalized) {
+      return reply.code(400).send({ error: 'Invalid room code' });
+    }
+    const record: DoubleEnderUploadRecord = {
+      id: `de_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+      roomCode: normalized,
+      participantId: request.body?.participantId ?? 'local',
+      displayName: request.body?.displayName ?? 'Participant',
+      mimeType: request.body?.mimeType ?? 'video/webm',
+      bytes: Number(request.body?.bytes ?? 0),
+      durationMs: Number(request.body?.durationMs ?? 0),
+      uploadedAt: Date.now(),
+    };
+    const existing = doubleEnderUploads.get(normalized) ?? [];
+    existing.push(record);
+    doubleEnderUploads.set(normalized, existing);
+    return reply.code(201).send({ upload: record });
+  });
+
+  app.get<{ Params: { code: string } }>(
+    '/rooms/:code/double-ender',
+    async (request, reply) => {
+      const normalized = normalizeRoomCode(request.params.code);
+      if (!normalized) {
+        return reply.code(400).send({ error: 'Invalid room code' });
+      }
+      return reply.send({ uploads: doubleEnderUploads.get(normalized) ?? [] });
+    },
+  );
+
+  app.get('/async-meetings', async () => ({
+    messages: asyncMeetingStore.listMessages(),
+  }));
+
+  app.post<{
+    Body: {
+      roomCode?: string;
+      title?: string;
+      authorName?: string;
+      mediaUrl?: string;
+      durationSeconds?: number;
+      transcriptCues?: Array<{ tsMs: number; speaker: string; text: string }>;
+    };
+  }>('/async-meetings', async (request, reply) => {
+    const title = request.body?.title?.trim();
+    const authorName = request.body?.authorName?.trim() || 'Host';
+    const mediaUrl =
+      request.body?.mediaUrl?.trim() || 'local://async-recording';
+    if (!title) {
+      return reply.code(400).send({ error: 'title is required' });
+    }
+    const msg = asyncMeetingStore.createMessage({
+      ...(request.body?.roomCode ? { roomCode: request.body.roomCode } : {}),
+      title,
+      authorName,
+      mediaUrl,
+      durationSeconds: Number(request.body?.durationSeconds ?? 0),
+      ...(request.body?.transcriptCues
+        ? { transcriptCues: request.body.transcriptCues }
+        : {}),
+    });
+    return reply.code(201).send({ message: msg });
+  });
+
+  app.post<{
+    Params: { id: string };
+    Body: {
+      authorName?: string;
+      text?: string;
+      reaction?: string;
+      videoUrl?: string;
+      transcriptTimestampMs?: number;
+    };
+  }>('/async-meetings/:id/replies', async (request, reply) => {
+    const text = request.body?.text?.trim() ?? '';
+    if (!text && !request.body?.reaction && !request.body?.videoUrl) {
+      return reply
+        .code(400)
+        .send({ error: 'text, reaction, or videoUrl is required' });
+    }
+    const added = asyncMeetingStore.addReply(request.params.id, {
+      authorName: request.body?.authorName?.trim() || 'Participant',
+      text,
+      ...(request.body?.reaction ? { reaction: request.body.reaction } : {}),
+      ...(request.body?.videoUrl ? { videoUrl: request.body.videoUrl } : {}),
+      transcriptTimestampMs: Number(request.body?.transcriptTimestampMs ?? 0),
+    });
+    if (!added) {
+      return reply.code(404).send({ error: 'Async meeting message not found' });
+    }
+    return reply.code(201).send({ reply: added });
   });
 
   app.get('/meetings/history', async () => ({

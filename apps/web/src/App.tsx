@@ -127,6 +127,13 @@ function parseLocationRoute(
   ) {
     return { view: 'dashboard', roomCode: null, dashTab: 'memory' };
   }
+  if (
+    target === 'slides' ||
+    target === 'presentations' ||
+    target === 'dashboard/slides'
+  ) {
+    return { view: 'dashboard', roomCode: null, dashTab: 'slides' };
+  }
   if (target === 'profile' || target === 'dashboard/profile') {
     return { view: 'dashboard', roomCode: null, dashTab: 'profile' };
   }

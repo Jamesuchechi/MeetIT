@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { MeetingMemoryGraph } from './memoryGraph.js';
 import {
+  AsyncMeetingStore,
   MEETING_TEMPLATES,
   buildCatchMeUpSummary,
   buildTranscriptHashChain,
+  computeRoomDialInInfo,
   handleMcpRequest,
   verifyTranscriptHashChain,
 } from './phase14.js';
@@ -69,5 +71,32 @@ describe('Phase 14 expansion primitives', () => {
     const text = (callRes.result as { content: Array<{ text: string }> })
       .content[0]?.text;
     expect(text).toContain('LiveKit');
+  });
+
+  it('computes deterministic dial-in info and manages async meeting replies', () => {
+    const info1 = computeRoomDialInInfo('abc-defg-hij');
+    const info2 = computeRoomDialInInfo('abc-defg-hij');
+    expect(info1.pin).toHaveLength(6);
+    expect(info1.pin).toBe(info2.pin);
+    expect(info1.sipConfigured).toBe(false);
+
+    const store = new AsyncMeetingStore();
+    const msg = store.createMessage({
+      title: 'Weekly Product Walkthrough',
+      authorName: 'James',
+      mediaUrl: 'local://video-1',
+      durationSeconds: 45,
+      transcriptCues: [
+        { tsMs: 12000, speaker: 'James', text: 'Shipping Friday' },
+      ],
+    });
+    const reply = store.addReply(msg.id, {
+      authorName: 'Ada',
+      text: 'Looks great!',
+      reaction: '👍',
+      transcriptTimestampMs: 12000,
+    });
+    expect(reply?.transcriptTimestampMs).toBe(12000);
+    expect(store.listMessages()[0]?.replies).toHaveLength(1);
   });
 });

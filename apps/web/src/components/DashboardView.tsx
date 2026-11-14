@@ -7,6 +7,7 @@ import {
   BarChart3 as BarChartIcon,
   Shield as ShieldIcon,
   Brain as BrainIcon,
+  Layers as LayersIcon,
 } from 'lucide-react';
 import { Logo } from './Logo';
 import {
@@ -68,6 +69,7 @@ import { AnalyticsView } from './AnalyticsView';
 import { CostDashboardView } from './CostDashboardView';
 import { AuditLogView } from './AuditLogModal';
 import { MemoryLabView } from './MemoryLabView';
+import { SlidesView } from './SlidesView';
 import { BackendStatusIndicator } from './BackendStatusIndicator';
 
 interface DashboardViewProps {
@@ -87,6 +89,7 @@ const TAB_LABELS: Record<DashboardTab, string> = {
   schedule: 'Schedule',
   notes: 'Notes & Action Items',
   recordings: 'Recordings',
+  slides: 'Slides & Presentations',
   transcripts: 'Transcripts & Captions',
   developer: 'Developer Platform',
   analytics: 'Meeting Analytics',
@@ -383,6 +386,20 @@ export function DashboardView({
           >
             <RecIcon />
             <span>Recordings</span>
+          </button>
+          <button
+            type="button"
+            aria-current={activeTab === 'slides' ? 'page' : undefined}
+            onClick={() => {
+              selectTab('slides');
+              setIsNavDrawerOpen(false);
+            }}
+            data-testid="sidebar-slides-btn"
+          >
+            <span>
+              <LayersIcon size={16} />
+            </span>
+            <span>Slides</span>
           </button>
           <button
             type="button"
@@ -760,6 +777,8 @@ export function DashboardView({
             <CostDashboardView onToast={onToast} />
           ) : activeTab === 'memory' ? (
             <MemoryLabView userId={user?.id} onToast={onToast} />
+          ) : activeTab === 'slides' ? (
+            <SlidesView onEnterRoom={onEnterRoom} onToast={onToast} />
           ) : activeTab === 'audit' ? (
             <AuditLogView userId={user?.id} />
           ) : activeTab === 'settings' ? (

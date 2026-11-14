@@ -20,6 +20,7 @@ export type DashboardTab =
   | 'schedule'
   | 'notes'
   | 'recordings'
+  | 'slides'
   | 'transcripts'
   | 'developer'
   | 'analytics'

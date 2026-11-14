@@ -12,6 +12,7 @@ import {
 } from '../lib/recordingsStore';
 import { copyToClipboard, type AuthUser } from '../types';
 import { RecIcon, CloseIcon, CheckIcon, LnkIcon } from './Icons';
+import { AsyncMeetingsPanel } from './AsyncMeetingsPanel';
 import {
   Video as VideoIcon,
   Clock as ClockIcon,
@@ -1038,6 +1039,11 @@ export function RecordingsView({
           </div>
         </div>
       )}
+
+      <AsyncMeetingsPanel
+        authorName={user?.displayName || 'Host'}
+        onToast={onToast}
+      />
     </div>
   );
 }

@@ -11,6 +11,7 @@ import {
   applyProviderConfigToConnectOptions,
   connectTransportWithTimeout,
   computeProximityAudioGain,
+  LocalDoubleEnderRecorder,
   speakTranslatedCaption,
   translateCaptionText,
   triggerHapticCue,
@@ -74,6 +75,8 @@ import {
 import { E2eeVerificationModal } from './E2eeVerificationModal';
 import { ReportAbuseModal } from './ReportAbuseModal';
 import { DeviceHandoffModal } from './DeviceHandoffModal';
+import { SlidesDeckModal, type SyncedSlideState } from './SlidesDeckModal';
+import { DialInModal } from './DialInModal';
 import {
   extractHandoffToken,
   getDeviceDescriptor,
@@ -886,6 +889,12 @@ export function MeetingRoomView({
   } | null>(null);
   // Phase 11: Seamless Device Handoff state
   const [showDeviceHandoffModal, setShowDeviceHandoffModal] = useState(false);
+  // Phase 14 Tier A: Slides as data, Dial-in, Local Double-Ender
+  const [showSlidesModal, setShowSlidesModal] = useState(false);
+  const [syncedSlide, setSyncedSlide] = useState<SyncedSlideState | null>(null);
+  const [showDialInModal, setShowDialInModal] = useState(false);
+  const [doubleEnderActive, setDoubleEnderActive] = useState(false);
+  const doubleEnderRef = useRef<LocalDoubleEnderRecorder | null>(null);
   const incomingHandoffToken = useMemo(() => {
     if (typeof window === 'undefined') return null;
     return extractHandoffToken(window.location.search);
@@ -2893,6 +2902,15 @@ export function MeetingRoomView({
 
     signaling.on('moderator.stats', (stats) => {
       setModeratorStats(stats);
+    });
+
+    signaling.on('slides.sync', (slide) => {
+      setSyncedSlide({
+        deckTitle: slide.title,
+        page: slide.currentPage,
+        totalPages: slide.pageCount,
+        dataUrl: slide.pageUrl,
+      });
     });
 
     signaling.on('space.positions', ({ positions }) => {
@@ -7094,6 +7112,119 @@ export function MeetingRoomView({
                     type="button"
                     className="call-more-menu-item"
                     onClick={() => {
+                      setShowSlidesModal(true);
+                      setShowMoreDesktopMenu(false);
+                    }}
+                    data-testid="desktop-menu-slides-btn"
+                  >
+                    <FileTextIcon
+                      size={16}
+                      style={{ color: 'var(--accent)' }}
+                    />
+                    <div className="menu-item-text">
+                      <span>Present Slides as Data</span>
+                      <small>Low-bandwidth synced PDF or slide pages</small>
+                    </div>
+                  </button>
+
+                  <button
+                    type="button"
+                    className="call-more-menu-item"
+                    onClick={() => {
+                      setShowDialInModal(true);
+                      setShowMoreDesktopMenu(false);
+                    }}
+                    data-testid="desktop-menu-dialin-btn"
+                  >
+                    <RadioIcon size={16} style={{ color: 'var(--accent)' }} />
+                    <div className="menu-item-text">
+                      <span>Dial-in &amp; Call Me</span>
+                      <small>Phone bridge PIN &amp; call-me-back</small>
+                    </div>
+                  </button>
+
+                  <button
+                    type="button"
+                    className="call-more-menu-item"
+                    onClick={() => {
+                      setShowMoreDesktopMenu(false);
+                      if (!doubleEnderActive) {
+                        const stream = localStreamRef.current;
+                        if (!stream) {
+                          onToast(
+                            'Enable mic or camera for local double-ender capture.',
+                          );
+                          return;
+                        }
+                        try {
+                          const rec = new LocalDoubleEnderRecorder();
+                          rec.start(stream);
+                          doubleEnderRef.current = rec;
+                          setDoubleEnderActive(true);
+                          onToast('Local double-ender ISO recording started.');
+                        } catch {
+                          onToast(
+                            'Local double-ender recording unavailable in this browser.',
+                          );
+                        }
+                      } else {
+                        const rec = doubleEnderRef.current;
+                        doubleEnderRef.current = null;
+                        setDoubleEnderActive(false);
+                        if (rec) {
+                          void rec.stop().then(async (blob) => {
+                            const baseUrl =
+                              (
+                                import.meta.env.VITE_SIGNALING_URL as
+                                  string | undefined
+                              )?.replace(/\/$/, '') ?? 'http://localhost:4000';
+                            await fetch(
+                              `${baseUrl}/rooms/${encodeURIComponent(roomCode)}/double-ender`,
+                              {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                  participantId:
+                                    signalingRef.current?.getSelfId() ??
+                                    'local',
+                                  displayName: displayName || 'Participant',
+                                  mimeType: blob.type || 'video/webm',
+                                  bytes: blob.size,
+                                  durationMs: 0,
+                                }),
+                              },
+                            ).catch(() => {});
+                            onToast(
+                              `Double-ender ISO track saved (${Math.round(blob.size / 1024)} KB).`,
+                            );
+                          });
+                        }
+                      }
+                    }}
+                    data-testid="desktop-menu-double-ender-btn"
+                  >
+                    <CircleIcon
+                      size={16}
+                      style={{
+                        color: doubleEnderActive ? '#ef4444' : 'var(--accent)',
+                      }}
+                    />
+                    <div className="menu-item-text">
+                      <span>
+                        {doubleEnderActive
+                          ? 'Stop Local Double-Ender'
+                          : 'Local Double-Ender ISO'}
+                      </span>
+                      <small>
+                        Record clean local track &amp; upload after call
+                      </small>
+                    </div>
+                  </button>
+
+                  <button
+                    type="button"
+                    className="call-more-menu-item"
+                    onClick={() => {
                       setReportingPeer(
                         remoteList[0]
                           ? {
@@ -8556,6 +8687,40 @@ export function MeetingRoomView({
           onToast(`Call transferred to ${targetDevice}. Goodbye!`);
           handleHangUp();
         }}
+      />
+
+      <SlidesDeckModal
+        isOpen={showSlidesModal}
+        onClose={() => setShowSlidesModal(false)}
+        syncedSlide={syncedSlide}
+        onBroadcastSlide={(slide) => {
+          setSyncedSlide(slide);
+          signalingRef.current?.send({
+            v: 1,
+            ts: Date.now(),
+            type: 'slides.sync',
+            payload: {
+              deckId:
+                slide.deckTitle.toLowerCase().replace(/[^a-z0-9]+/g, '-') ||
+                'deck',
+              title: slide.deckTitle,
+              pageCount: slide.totalPages,
+              currentPage: slide.page,
+              ...(slide.dataUrl ? { pageUrl: slide.dataUrl } : {}),
+            },
+          });
+        }}
+        onFallbackToScreenShare={() => {
+          void handleToggleScreenShare();
+        }}
+      />
+
+      <DialInModal
+        isOpen={showDialInModal}
+        onClose={() => setShowDialInModal(false)}
+        roomCode={roomCode}
+        displayName={displayName || user?.displayName || 'Participant'}
+        onToast={onToast}
       />
     </div>
   );
