@@ -902,6 +902,61 @@ export const clientMessageSchema = z.discriminatedUnion('type', [
     v: z.literal(1),
     id: z.string().uuid().optional(),
     ts: z.number().optional(),
+    type: z.literal('moderator.configure'),
+    payload: z.object({
+      enabled: z.boolean(),
+      talkTimeThresholdPct: z.number().min(50).max(95).optional(),
+      toxicityCheck: z.boolean().optional(),
+    }),
+  }),
+  z.object({
+    v: z.literal(1),
+    id: z.string().uuid().optional(),
+    ts: z.number().optional(),
+    type: z.literal('agenda.park_tangent'),
+    payload: z.object({
+      text: z.string().trim().min(1).max(1000),
+      agendaItemId: z.string().optional(),
+    }),
+  }),
+  z.object({
+    v: z.literal(1),
+    id: z.string().uuid().optional(),
+    ts: z.number().optional(),
+    type: z.literal('space.move'),
+    payload: z.object({
+      x: z.number().min(0).max(2000),
+      y: z.number().min(0).max(2000),
+    }),
+  }),
+  z.object({
+    v: z.literal(1),
+    id: z.string().uuid().optional(),
+    ts: z.number().optional(),
+    type: z.literal('avatar.landmarks'),
+    payload: z.object({
+      yaw: z.number().min(-180).max(180),
+      pitch: z.number().min(-180).max(180),
+      roll: z.number().min(-180).max(180),
+      mouthOpen: z.number().min(0).max(1),
+      blinkLeft: z.number().min(0).max(1),
+      blinkRight: z.number().min(0).max(1),
+    }),
+  }),
+  z.object({
+    v: z.literal(1),
+    id: z.string().uuid().optional(),
+    ts: z.number().optional(),
+    type: z.literal('xr.pose'),
+    payload: z.object({
+      position: z.tuple([z.number(), z.number(), z.number()]),
+      quaternion: z.tuple([z.number(), z.number(), z.number(), z.number()]),
+    }),
+  }),
+  z.object({
+    v: z.literal(1),
+    id: z.string().uuid().optional(),
+    ts: z.number().optional(),
     type: z.literal('ping'),
     payload: z.object({}),
   }),
@@ -1113,6 +1168,39 @@ export interface SignalingEvents {
     livekit?: LivekitConfig;
     jitsi?: JitsiConfig;
     agora?: AgoraConfig;
+  };
+  'moderator.nudge': {
+    id: string;
+    kind: 'talk_imbalance' | 'toxicity' | 'agenda_overrun' | 'agenda_drift';
+    message: string;
+    ts: number;
+    targetPeerId?: string;
+    suggestedAction?:
+      'invite_quiet' | 'mute' | 'park_tangent' | 'advance_agenda';
+  };
+  'moderator.stats': {
+    enabled: boolean;
+    talkTimeByPeer: Record<
+      string,
+      { displayName: string; seconds: number; sharePct: number }
+    >;
+  };
+  'space.positions': {
+    positions: Record<string, { x: number; y: number }>;
+  };
+  'avatar.landmarks': {
+    peerId: string;
+    yaw: number;
+    pitch: number;
+    roll: number;
+    mouthOpen: number;
+    blinkLeft: number;
+    blinkRight: number;
+  };
+  'xr.pose': {
+    peerId: string;
+    position: [number, number, number];
+    quaternion: [number, number, number, number];
   };
   'recording.started': {
     startedAt: number;

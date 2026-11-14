@@ -30,6 +30,12 @@ import {
   type MediaProviderEnvOptions,
 } from './mediaProviders.js';
 import {
+  generateMeetingArtifact,
+  type MeetingArtifactMode,
+} from './meetingArtifacts.js';
+import { MeetingMemoryGraph } from './memoryGraph.js';
+import { AiProxySession } from './aiProxy.js';
+import {
   startRoomCompositeRecording,
   stopRoomCompositeRecording,
   handleLiveKitWebhook,
@@ -124,6 +130,7 @@ export function buildSignalingApp(
 
   const roomManager = new RoomManager({ reclaimSlotMs });
   const persistence = new SignalingPersistence();
+  const memoryGraph = new MeetingMemoryGraph();
   const redis = new RedisAdapter({ redisUrl: options.redisUrl });
   const metrics: SignalingMetrics = {
     invalidFrames: 0,
@@ -416,11 +423,11 @@ export function buildSignalingApp(
           code: normalized,
           hasPasscode: false,
           waitingRoom: false,
-          transport: 'mesh',
+          transport: 'sfu',
           locked: false,
           full: false,
           participantCount: 0,
-          maxParticipants: 4,
+          maxParticipants: 100,
         });
       }
       return reply.code(200).send({
@@ -437,6 +444,118 @@ export function buildSignalingApp(
         participantCount: room.participantCount,
         maxParticipants: room.maxParticipants,
         ...(room.webinar.enabled ? { webinar: room.webinar } : {}),
+      });
+    },
+  );
+
+  app.post<{
+    Params: { code: string };
+    Body: {
+      mode?: MeetingArtifactMode;
+      transcriptLines?: Array<{ speaker: string; text: string; ts?: number }>;
+      notesContent?: string;
+    };
+  }>('/rooms/:code/artifacts', async (request, reply) => {
+    const normalized = normalizeRoomCode(request.params.code);
+    if (!normalized || !ROOM_CODE_REGEX.test(normalized)) {
+      return reply.code(400).send({
+        error: 'INVALID_ROOM_CODE',
+        message: 'Room code must match xxx-xxxx-xxx format.',
+      });
+    }
+    const room = roomManager.getRoom(normalized);
+    const mode: MeetingArtifactMode = request.body?.mode ?? 'spec';
+    const roomCaptions = room
+      ? room.intelligence.getRecentCaptions(60 * 60 * 1000).map((c) => ({
+          speaker: c.displayName,
+          text: c.text,
+          ts: c.ts,
+        }))
+      : [];
+    const artifact = generateMeetingArtifact({
+      roomCode: normalized,
+      title: room?.title,
+      mode,
+      transcriptLines: request.body?.transcriptLines ?? roomCaptions,
+      notesContent: request.body?.notesContent ?? room?.notesDoc.content,
+      whiteboardActions: room?.whiteboardHistory,
+      agenda: room?.meetingTimer.agenda,
+      parkedTangents: room?.intelligence.getParkedTangents(),
+    });
+    return reply.code(200).send(artifact);
+  });
+
+  app.post<{
+    Body: {
+      roomCode: string;
+      title?: string;
+      participantIds?: string[];
+      transcriptLines: Array<{ speaker: string; text: string; ts?: number }>;
+      notesContent?: string;
+    };
+  }>('/memory/index', async (request, reply) => {
+    const result = memoryGraph.indexMeeting({
+      roomCode: request.body.roomCode,
+      title: request.body.title,
+      participantIds: request.body.participantIds ?? [],
+      transcriptLines: request.body.transcriptLines ?? [],
+      notesContent: request.body.notesContent,
+    });
+    return reply.code(200).send(result);
+  });
+
+  app.get<{
+    Querystring: { q?: string; requesterId?: string; limit?: string };
+  }>('/memory/query', async (request, reply) => {
+    const q = request.query.q ?? '';
+    const matches = memoryGraph.query({
+      q,
+      requesterId: request.query.requesterId,
+      limit: request.query.limit ? Number(request.query.limit) : undefined,
+    });
+    return reply.code(200).send({ matches });
+  });
+
+  app.post<{
+    Params: { code: string };
+    Body: {
+      ownerDisplayName: string;
+      allowedTopics?: string[];
+      contextFacts?: Record<string, string>;
+    };
+  }>('/rooms/:code/proxy', async (request, reply) => {
+    const normalized = normalizeRoomCode(request.params.code);
+    if (!normalized || !ROOM_CODE_REGEX.test(normalized)) {
+      return reply.code(400).send({ error: 'INVALID_ROOM_CODE' });
+    }
+    const room = roomManager.getOrCreateRoom(normalized);
+    const proxy = new AiProxySession({
+      roomCode: normalized,
+      ownerDisplayName: request.body.ownerDisplayName,
+      allowedTopics: request.body.allowedTopics ?? [],
+      contextFacts: request.body.contextFacts ?? {},
+    });
+    room.aiProxies.set(proxy.id, proxy);
+    return reply.code(201).send({
+      id: proxy.id,
+      displayName: proxy.displayName,
+      roomCode: normalized,
+    });
+  });
+
+  app.get<{ Params: { code: string; proxyId: string } }>(
+    '/rooms/:code/proxy/:proxyId/debrief',
+    async (request, reply) => {
+      const normalized = normalizeRoomCode(request.params.code);
+      const room = normalized ? roomManager.getRoom(normalized) : undefined;
+      const proxy = room?.aiProxies.get(request.params.proxyId);
+      if (!proxy) {
+        return reply.code(404).send({ error: 'PROXY_NOT_FOUND' });
+      }
+      return reply.code(200).send({
+        id: proxy.id,
+        displayName: proxy.displayName,
+        debrief: proxy.debrief,
       });
     },
   );
@@ -1357,6 +1476,151 @@ export function buildSignalingApp(
             type: 'caption.cue',
             payload: cuePayload,
           });
+
+          const intel = room.intelligence.recordCaptionCue({
+            peerId: peer.id,
+            displayName: peer.displayName,
+            text: msg.payload.text,
+            isFinal: msg.payload.isFinal,
+            ts: now,
+            activePeerIds: room.listActivePeers().map((p) => p.id),
+            agenda: room.meetingTimer.agenda,
+          });
+
+          if (msg.payload.isFinal) {
+            room.sendToModerators({
+              v: 1,
+              ts: now,
+              type: 'moderator.stats',
+              payload: intel.stats,
+            });
+          }
+
+          for (const nudge of intel.nudges) {
+            room.sendToModerators({
+              v: 1,
+              ts: now,
+              type: 'moderator.nudge',
+              payload: nudge,
+            });
+          }
+
+          if (msg.payload.isFinal && room.aiProxies.size > 0) {
+            for (const proxy of room.aiProxies.values()) {
+              const reply = proxy.handleCaption({
+                speaker: peer.displayName,
+                text: msg.payload.text,
+                ts: now,
+              });
+              if (reply) {
+                const meta = room.nextChatMetadata();
+                const chatMsg = {
+                  id: meta.id,
+                  seq: meta.seq,
+                  from: proxy.id,
+                  displayName: proxy.displayName,
+                  text: reply.response,
+                  ts: meta.ts,
+                };
+                room.recordChatMessage(chatMsg);
+                room.broadcast({
+                  v: 1,
+                  ts: chatMsg.ts,
+                  type: 'chat.message',
+                  payload: chatMsg,
+                });
+              }
+            }
+          }
+          break;
+        }
+
+        case 'moderator.configure': {
+          if (peer.role !== 'host' && peer.role !== 'cohost') {
+            sendError(
+              ws,
+              'FORBIDDEN',
+              'Only hosts can configure moderator agent.',
+            );
+            break;
+          }
+          room.intelligence.configure(msg.payload);
+          room.sendToModerators({
+            v: 1,
+            ts: Date.now(),
+            type: 'moderator.stats',
+            payload: room.intelligence.getStats(),
+          });
+          break;
+        }
+
+        case 'agenda.park_tangent': {
+          if (peer.role !== 'host' && peer.role !== 'cohost') {
+            sendError(ws, 'FORBIDDEN', 'Only hosts can park agenda tangents.');
+            break;
+          }
+          room.intelligence.recordParkedTangent(msg.payload.text);
+          const prefix = room.notesDoc.content.trim()
+            ? `${room.notesDoc.content.trimEnd()}\n\n`
+            : '';
+          const updatedNotes = room.updateNotes(
+            `${prefix}- [Parked Tangent] ${msg.payload.text}`,
+            room.notesDoc.version + 1,
+            peer.displayName,
+          );
+          room.broadcast({
+            v: 1,
+            ts: Date.now(),
+            type: 'notes.updated',
+            payload: updatedNotes,
+          });
+          break;
+        }
+
+        case 'space.move': {
+          const positions = room.updatePeerPosition(
+            peer.id,
+            msg.payload.x,
+            msg.payload.y,
+          );
+          room.broadcast({
+            v: 1,
+            ts: Date.now(),
+            type: 'space.positions',
+            payload: { positions },
+          });
+          break;
+        }
+
+        case 'avatar.landmarks': {
+          room.broadcast(
+            {
+              v: 1,
+              ts: Date.now(),
+              type: 'avatar.landmarks',
+              payload: {
+                peerId: peer.id,
+                ...msg.payload,
+              },
+            },
+            peer.id,
+          );
+          break;
+        }
+
+        case 'xr.pose': {
+          room.broadcast(
+            {
+              v: 1,
+              ts: Date.now(),
+              type: 'xr.pose',
+              payload: {
+                peerId: peer.id,
+                ...msg.payload,
+              },
+            },
+            peer.id,
+          );
           break;
         }
 

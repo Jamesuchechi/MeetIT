@@ -356,21 +356,21 @@ Every phase has an **exit criteria** block. Do not start the next phase until ex
 
 Each bet starts as an `[R]` spike with a one-page writeup and a kill criterion.
 
-- [ ] [R] **Persistent virtual spaces:** drop-in "rooms" with proximity audio (walk up to people to talk), like a virtual office
-- [ ] [R] **3D / spatial meetings:** WebXR on Quest and Vision Pro with spatial audio, volumetric avatars
-- [ ] [R] **Photoreal avatars:** send a few kbps of face landmarks/Gaussian-splat parameters instead of video, near-zero bandwidth video presence
-- [ ] [R] **Neural audio codec:** ultra-low-bitrate speech (under 3 kbps) for terrible networks
-- [ ] [R] **AI proxy attendee:** an agent that attends, answers within your pre-approved context, and reports back
-- [ ] [R] **Real-time moderator agent:** detects harassment, off-topic drift, and talk-time imbalance; nudges host
-- [ ] [R] **Meeting memory graph:** cross-meeting knowledge base; "what did we decide about X across the last 12 meetings?"
-- [ ] [R] **Agenda-aware meetings:** AI keeps time, parks tangents, auto-generates follow-up agenda
-- [ ] [R] **Meeting-to-code/doc:** turn a design discussion directly into a PR draft, spec, or ticket tree
-- [ ] [R] **Holographic / lightfield telepresence** with commodity cameras
-- [ ] [R] **Decentralized mode:** fully peer-to-peer rooms with no central server (libp2p / WebTransport), self-sovereign identity
-- [ ] [R] **Offline-first mesh:** local-network calls over Wi-Fi Direct / Bluetooth when internet is down
-- [ ] [R] **Emotion and engagement analytics** (opt-in only, privacy-first, on-device) for presenters
-- [ ] [R] **Universal translator rooms:** every participant speaks and hears their own language with preserved voice and timing
-- [ ] [R] **Accessibility-first modes:** real-time sign-language avatar rendering, haptic cues for hard-of-hearing users, cognitive-load simplification
+- [x] [R] **Persistent virtual spaces:** drop-in "rooms" with proximity audio (walk up to people to talk), like a virtual office (`space.move`/`space.positions`, `computeProximityAudioGain`, SFU `setTrackVisibility`, 2D space canvas)
+- [~] [R] **3D / spatial meetings:** WebXR on Quest and Vision Pro with spatial audio, volumetric avatars (`xr.pose` protocol relay implemented; WebXR headset renderer pending)
+- [~] [R] **Photoreal avatars:** send a few kbps of face landmarks/Gaussian-splat parameters instead of video, near-zero bandwidth video presence (`avatar.landmarks` relay + 12-byte `encodeFaceLandmarks`/`decodeFaceLandmarks` implemented)
+- [~] [R] **Neural audio codec:** ultra-low-bitrate speech (under 3 kbps) for terrible networks (`packNeuralAudioFrame`/`unpackNeuralAudioFrame` <3 kbps framing implemented; WASM model weights pending)
+- [x] [R] **AI proxy attendee:** an agent that attends, answers within your pre-approved context, and reports back (`docs/spikes/phase13-ai-proxy-attendee.md`, `AiProxySession`, `/rooms/:code/proxy` + UI)
+- [x] [R] **Real-time moderator agent:** detects harassment, off-topic drift, and talk-time imbalance; nudges host (`docs/spikes/phase13-realtime-moderator-agent.md`, `RoomIntelligenceTracker`, `moderator.nudge`/`moderator.stats` + UI)
+- [x] [R] **Meeting memory graph:** cross-meeting knowledge base; "what did we decide about X across the last 12 meetings?" (`docs/spikes/phase13-meeting-memory-graph.md`, `0011_meeting_memory_graph.sql`, `MeetingMemoryGraph`, `/memory/index` & `/memory/query` + UI)
+- [x] [R] **Agenda-aware meetings:** AI keeps time, parks tangents, auto-generates follow-up agenda (`docs/spikes/phase13-agenda-aware-meetings.md`, `agenda.park_tangent`, overrun/drift detection, follow-up agenda draft + UI)
+- [x] [R] **Meeting-to-code/doc:** turn a design discussion directly into a PR draft, spec, or ticket tree (`docs/spikes/phase13-meeting-to-code-doc.md`, `generateMeetingArtifact`, `POST /rooms/:code/artifacts` + UI)
+- [~] [R] **Holographic / lightfield telepresence** with commodity cameras (`computeLightfieldViewOffset` parallax primitive implemented)
+- [~] [R] **Decentralized mode:** fully peer-to-peer rooms with no central server (libp2p / WebTransport), self-sovereign identity (`createDidKeyDescriptor` `did:key` primitive implemented)
+- [~] [R] **Offline-first mesh:** local-network calls over Wi-Fi Direct / Bluetooth when internet is down (`did:key` identity + local discovery spike; requires native wrapper)
+- [x] [R] **Emotion and engagement analytics** (opt-in only, privacy-first, on-device) for presenters (`computeOnDeviceEngagement` local-only scoring + opt-in UI toggle)
+- [~] [R] **Universal translator rooms:** every participant speaks and hears their own language with preserved voice and timing (`translateCaptionText` + language selector UI implemented; live TTS voice cloning pending)
+- [~] [R] **Accessibility-first modes:** real-time sign-language avatar rendering, haptic cues for hard-of-hearing users, cognitive-load simplification (`triggerHapticCue` + simplified mode toggle implemented; sign-language avatar pending)
 
 ---
 

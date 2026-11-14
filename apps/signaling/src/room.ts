@@ -1,5 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import type { WebSocket } from 'ws';
+import { RoomIntelligenceTracker } from './roomIntelligence.js';
+import type { AiProxySession } from './aiProxy.js';
 import {
   generateRoomCode,
   type AgendaItem,
@@ -156,6 +158,9 @@ export class Room {
     durationSeconds: 0,
     agenda: [],
   };
+  readonly intelligence = new RoomIntelligenceTracker();
+  readonly aiProxies = new Map<string, AiProxySession>();
+  readonly peerPositions = new Map<string, { x: number; y: number }>();
 
   // Phase 7 Webinar State
   webinar: WebinarState = {
@@ -434,6 +439,23 @@ export class Room {
 
   listActivePeers(): Peer[] {
     return Array.from(this.peers.values()).filter((p) => p.socket !== null);
+  }
+
+  sendToModerators(message: ServerMessage): void {
+    for (const peer of this.listActivePeers()) {
+      if (peer.role === 'host' || peer.role === 'cohost') {
+        peer.send(message);
+      }
+    }
+  }
+
+  updatePeerPosition(
+    peerId: string,
+    x: number,
+    y: number,
+  ): Record<string, { x: number; y: number }> {
+    this.peerPositions.set(peerId, { x, y });
+    return Object.fromEntries(this.peerPositions.entries());
   }
 
   broadcastWaitingRoomUpdate(): void {

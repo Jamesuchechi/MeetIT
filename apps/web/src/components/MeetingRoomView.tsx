@@ -10,6 +10,8 @@ import {
   createTransportForProvider,
   applyProviderConfigToConnectOptions,
   connectTransportWithTimeout,
+  computeProximityAudioGain,
+  triggerHapticCue,
   type MediaTransport,
   type BandwidthMode,
   type ConnectOptions,
@@ -36,6 +38,7 @@ import type {
   QaItem,
   ReactionEmoji,
   RoomPermissions,
+  SignalingEvents,
   WaitingPeer,
   WhiteboardAction,
   WebinarState,
@@ -52,6 +55,7 @@ import { FormItModal } from './FormItModal';
 import { QAPanel } from './QAPanel';
 import { WhiteboardModal } from './WhiteboardModal';
 import { SharedNotesPanel } from './SharedNotesPanel';
+import { Phase13IntelligenceModal } from './Phase13IntelligenceModal';
 import { TimerAgendaWidget } from './TimerAgendaWidget';
 import {
   VideoEffectsModal,
@@ -1173,6 +1177,20 @@ export function MeetingRoomView({
   const [showQAPanel, setShowQAPanel] = useState(false);
   const [showWhiteboardModal, setShowWhiteboardModal] = useState(false);
   const [showSharedNotesPanel, setShowSharedNotesPanel] = useState(false);
+  const [showIntelligenceModal, setShowIntelligenceModal] = useState(false);
+  const [moderatorNudges, setModeratorNudges] = useState<
+    Array<SignalingEvents['moderator.nudge']>
+  >([]);
+  const [moderatorStats, setModeratorStats] = useState<
+    SignalingEvents['moderator.stats'] | null
+  >(null);
+  const [spacePositions, setSpacePositions] = useState<
+    Record<string, { x: number; y: number }>
+  >({});
+  const [translatorLang, setTranslatorLang] = useState('en');
+  const [hapticsEnabled, setHapticsEnabled] = useState(false);
+  const [simplifiedMode, setSimplifiedMode] = useState(false);
+  const [engagementOptIn, setEngagementOptIn] = useState(false);
   const [showTimerConfigModal, setShowTimerConfigModal] = useState(false);
   const [showAppsModal, setShowAppsModal] = useState(false);
   const [activeMarketplaceApp, setActiveMarketplaceApp] =
@@ -2877,6 +2895,35 @@ export function MeetingRoomView({
           }
         }
       })();
+    });
+
+    signaling.on('moderator.nudge', (nudge) => {
+      setModeratorNudges((prev) => [nudge, ...prev].slice(0, 20));
+      onToast(nudge.message);
+      if (hapticsEnabled) {
+        triggerHapticCue('nudge');
+      }
+    });
+
+    signaling.on('moderator.stats', (stats) => {
+      setModeratorStats(stats);
+    });
+
+    signaling.on('space.positions', ({ positions }) => {
+      setSpacePositions(positions);
+      const myId = signaling.getSelfId();
+      const myPos = myId ? positions[myId] : undefined;
+      if (myPos && transportRef.current?.setTrackVisibility) {
+        for (const [peerId, peerPos] of Object.entries(positions)) {
+          if (peerId === myId) continue;
+          const prox = computeProximityAudioGain(myPos, peerPos);
+          void transportRef.current.setTrackVisibility(
+            peerId,
+            'camera',
+            prox.videoVisible,
+          );
+        }
+      }
     });
 
     signaling.on('peer.role.updated', ({ peerId, role }) => {
@@ -7390,6 +7437,30 @@ export function MeetingRoomView({
                     </div>
                   </button>
 
+                  {/* Phase 13 Room Intelligence */}
+                  <button
+                    type="button"
+                    className="call-more-menu-item"
+                    onClick={() => {
+                      setShowIntelligenceModal(true);
+                      setShowActivitiesPopover(false);
+                    }}
+                    data-testid="call-intelligence-btn"
+                  >
+                    <FileTextIcon size={16} className="menu-icon-accent" />
+                    <div className="menu-item-text">
+                      <span>
+                        Room Intelligence
+                        {moderatorNudges.length > 0
+                          ? ` (${moderatorNudges.length})`
+                          : ''}
+                      </span>
+                      <small>
+                        Moderator, Spec/PR export, Memory &amp; Proxy
+                      </small>
+                    </div>
+                  </button>
+
                   {/* Apps Marketplace */}
                   <button
                     type="button"
@@ -8430,6 +8501,58 @@ export function MeetingRoomView({
         onAttachToMeetingRecord={() => {
           onToast('Collaborative notes synced to meeting summary.');
         }}
+      />
+
+      <Phase13IntelligenceModal
+        isOpen={showIntelligenceModal}
+        onClose={() => setShowIntelligenceModal(false)}
+        roomCode={roomCode}
+        isHostOrCohost={selfRole === 'host' || selfRole === 'cohost'}
+        selfDisplayName={displayName || user?.displayName || 'Participant'}
+        selfId={signalingRef.current?.getSelfId() ?? user?.id ?? 'self'}
+        nudges={moderatorNudges}
+        stats={moderatorStats}
+        spacePositions={spacePositions}
+        translatorLang={translatorLang}
+        hapticsEnabled={hapticsEnabled}
+        simplifiedMode={simplifiedMode}
+        engagementOptIn={engagementOptIn}
+        onMoveInSpace={(x, y) => {
+          signalingRef.current?.send({
+            v: 1,
+            ts: Date.now(),
+            type: 'space.move',
+            payload: { x, y },
+          });
+        }}
+        onChangeTranslatorLang={(lang) => {
+          setTranslatorLang(lang);
+          onToast(`Translator language set to ${lang.toUpperCase()}.`);
+        }}
+        onToggleHaptics={setHapticsEnabled}
+        onToggleSimplifiedMode={setSimplifiedMode}
+        onToggleEngagementOptIn={setEngagementOptIn}
+        onConfigureModerator={(enabled) => {
+          signalingRef.current?.send({
+            v: 1,
+            ts: Date.now(),
+            type: 'moderator.configure',
+            payload: { enabled },
+          });
+        }}
+        onParkTangent={(text) => {
+          signalingRef.current?.send({
+            v: 1,
+            ts: Date.now(),
+            type: 'agenda.park_tangent',
+            payload: { text },
+          });
+          onToast('Parked tangent to shared notes.');
+        }}
+        onDismissNudge={(id) => {
+          setModeratorNudges((prev) => prev.filter((n) => n.id !== id));
+        }}
+        onToast={onToast}
       />
 
       {/* Phase 7 Webinar Modals & Panels */}
